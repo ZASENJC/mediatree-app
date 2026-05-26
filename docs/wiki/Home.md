@@ -16,6 +16,7 @@ Welcome to the MediaTree documentation. MediaTree is a self-hosted media library
 | [Subtitles](Subtitles) | Subtitle detection, rendering, and font management |
 | [API Reference](API-Reference) | Complete API endpoint documentation |
 | [Development](Development) | Local development setup and architecture |
+| [Android MD3 UI Guide](Android-MD3-UI-Guide) | Native Android Material Design 3 UI implementation guide |
 
 ## Architecture Overview
 

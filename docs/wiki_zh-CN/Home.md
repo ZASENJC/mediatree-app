@@ -13,6 +13,7 @@
 | [刮削器系统](Scrapers) | TMDB、Bangumi、Javdatabase 刮削系统 |
 | [Jellyfin 客户端](Jellyfin-Clients) | 接入 Jellyfin 兼容客户端 |
 | [开发指南](Development) | 本地开发环境和架构说明 |
+| [Android MD3 UI 指引](Android-MD3-UI-Guide) | 原生 Android 客户端 Material Design 3 UI 落地指引 |
 
 ## 架构概览
 
