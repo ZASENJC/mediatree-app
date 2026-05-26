@@ -1,0 +1,48 @@
+# MediaTree Android
+
+Native Android client for MediaTree.
+
+This project builds the Android app only. It connects to an existing MediaTree backend by server URL and does not bundle backend services, Python runtime, SQLite data, Docker assets, scanners, or scrapers into the APK.
+
+## Build
+
+From the repository root:
+
+```bash
+cd frontend
+npm run android:build
+```
+
+Or directly from this Android project:
+
+```bash
+./gradlew assembleDebug
+```
+
+If needed, configure Android tooling first:
+
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+```
+
+## Install
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+## Runtime
+
+On first launch, enter the MediaTree backend URL, for example:
+
+```text
+http://192.168.1.10:27580
+```
+
+The app uses the backend API for auth, library browsing, metadata, subtitles, streaming, and playback progress.
+
+## Player
+
+Playback is implemented with AndroidX Media3 ExoPlayer. Native playback libraries are bundled under `app/src/main/jniLibs/<abi>/` and should stay limited to client playback dependencies.

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MediaTree</string>
+    <string name="title_activity_main">MediaTree</string>
+    <string name="package_name">com.zasenjc.mediatree</string>
+    <string name="custom_url_scheme">com.zasenjc.mediatree</string>
+</resources>
