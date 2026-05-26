@@ -7,10 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "cap": "cap",
-    "android:sync": "npm run build && cap sync android",
-    "android:build": "npm run android:sync && sh scripts/build-android.sh",
-    "android:open": "cap open android"
+    "android:build": "sh scripts/build-android.sh"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",

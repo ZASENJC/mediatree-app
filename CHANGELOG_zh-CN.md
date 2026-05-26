@@ -6,6 +6,30 @@
 
 ---
 
+## 未发布
+
+### Android UI
+
+- 新增原生 Android Material 3 UI 改造，覆盖首页、浏览、收藏、设置和详情页
+- 新增混排收藏网格、海报/单集媒体卡、文件夹浏览卡，并更新详情页演员、剧集、剧照和工作人员信息区
+- 将底部导航和主要顶栏改为半透明 overlay，浏览媒体列表时随滚动渐隐并轻微滑出
+- 设置页新增后端连接、媒体库显示、扫描触发和本地 SMB 服务器草稿输入区块
+- 将 Android `versionName` 规范为 `0.1.00`
+
+### Android App
+
+- 新增 `frontend/android/` 原生 Android 工程，包含 Compose navigation、Media3 播放、API 模型、Session 存储、native playback libraries 和 Gradle wrapper
+
+### App 定位
+
+- 明确 `mediatree-app` 是 Android 客户端仓库，只连接已有 MediaTree 后端，不把后端服务打包进 APK
+- 将 `npm run android:build` 改为直接执行原生 Gradle app 构建，不再运行 `cap sync android`
+- 明确原生 Android 构建不需要 `npm install` 或 `node_modules`
+- 新增 Android 构建产物忽略规则，覆盖 Gradle 产物、`local.properties` 和复制的 Web assets
+- 重写 README 与 Android 说明，围绕仅构建 app、适配后端 API、APK 输出路径组织内容
+
+---
+
 ## v1.0.03 (2026-05-25)
 
 ### 应用包级更新

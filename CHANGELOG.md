@@ -6,6 +6,30 @@ All notable changes to MediaTree are documented here.
 
 ---
 
+## Unreleased
+
+### Android UI
+
+- Added a Material 3 native Android UI refresh for home, browse, favorites, settings, and detail screens
+- Added mixed favorite grids, poster/episode media cards, folder browsing cards, and updated detail sections for cast, episodes, stills, and staff
+- Reworked the bottom navigation and primary top bars as translucent overlays that fade and slide away while scrolling media lists
+- Added settings sections for backend connection, library display, scan trigger, and local SMB server draft input
+- Normalized Android `versionName` to `0.1.00`
+
+### Android App
+
+- Added the native Android project under `frontend/android/`, including Compose navigation, Media3 playback, API client models, session storage, native playback libraries, and Gradle wrapper
+
+### App Scope
+
+- Clarified that `mediatree-app` is an Android client repository and connects to an existing MediaTree backend instead of bundling backend services into the APK
+- Changed `npm run android:build` to run the native Gradle app build directly without `cap sync android`
+- Clarified that native Android builds do not require `npm install` or `node_modules`
+- Added Android build-output ignore rules for Gradle artifacts, `local.properties`, and copied web assets
+- Reworked README and Android documentation around app-only builds, backend API compatibility, and APK output
+
+---
+
 ## v1.0.03 (2026-05-25)
 
 ### App-Package Updates

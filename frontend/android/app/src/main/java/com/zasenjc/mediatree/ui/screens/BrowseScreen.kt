@@ -1,7 +1,9 @@
 package com.zasenjc.mediatree.ui.screens
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
@@ -35,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,6 +55,9 @@ import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.ui.components.FolderCard
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MoviePosterCard
+import com.zasenjc.mediatree.ui.components.SyncChromeWithListScroll
+import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
+import com.zasenjc.mediatree.ui.components.topChromeExitTransition
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -150,10 +157,19 @@ fun BrowseScreen(
     onNavigate: (String) -> Unit,
     onError: (Throwable) -> Unit,
     initialFolder: String,
+    chromeVisible: Boolean = true,
+    onChromeVisibleChange: (Boolean) -> Unit = {},
 ) {
     val vm: BrowseViewModel = viewModel(factory = viewModelFactory { BrowseViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    SyncChromeWithListScroll(listState, onChromeVisibleChange)
+
+    LaunchedEffect(Unit) {
+        onChromeVisibleChange(true)
+    }
 
     LaunchedEffect(session.activeLibrary, initialFolder) {
         vm.load(initialFolder, session.activeLibrary)
@@ -168,40 +184,22 @@ fun BrowseScreen(
     val filteredMovies = remember(state.movies, query) { state.movies.filterMoviesByQuery(query) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    if (initialFolder.isNotBlank()) {
-                        IconButton(onClick = {
-                            val parent = initialFolder.trimEnd('/').substringBeforeLast("/", missingDelimiterValue = "")
-                            if (parent.isNotBlank()) {
-                                onNavigate("browse?folder=${Uri.encode(parent)}")
-                            } else {
-                                onNavigate("browse")
-                            }
-                        }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回上级")
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-            )
-        },
         floatingActionButton = {
             FloatingActionButton(onClick = { vm.load(initialFolder, session.activeLibrary, state.sortMode) }) {
                 Icon(Icons.Default.Refresh, contentDescription = "刷新")
             }
         },
     ) { padding ->
-        when {
-            state.loading -> LoadingPane(Modifier.padding(padding))
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 92.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when {
+                state.loading -> LoadingPane(Modifier.fillMaxSize())
+                else -> {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, top = 82.dp, end = 16.dp, bottom = 112.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             BreadcrumbLine(activeLibrary = session.activeLibrary, folder = state.currentFolder)
@@ -268,6 +266,34 @@ fun BrowseScreen(
                         item { Spacer(Modifier.height(16.dp)) }
                     }
                 }
+            }
+            }
+            AnimatedVisibility(
+                visible = chromeVisible,
+                enter = topChromeEnterTransition(),
+                exit = topChromeExitTransition(),
+                modifier = Modifier.align(Alignment.TopCenter),
+            ) {
+                TopAppBar(
+                    title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = {
+                        if (initialFolder.isNotBlank()) {
+                            IconButton(onClick = {
+                                val parent = initialFolder.trimEnd('/').substringBeforeLast("/", missingDelimiterValue = "")
+                                if (parent.isNotBlank()) {
+                                    onNavigate("browse?folder=${Uri.encode(parent)}")
+                                } else {
+                                    onNavigate("browse")
+                                }
+                            }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回上级")
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                    ),
+                )
             }
         }
     }

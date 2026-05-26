@@ -1,5 +1,6 @@
 package com.zasenjc.mediatree.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,6 +13,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmarks
@@ -55,6 +57,9 @@ import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.ui.components.EpisodeLandscapeCard
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MoviePosterCard
+import com.zasenjc.mediatree.ui.components.SyncChromeWithGridScroll
+import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
+import com.zasenjc.mediatree.ui.components.topChromeExitTransition
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -112,6 +117,8 @@ fun FavoritesScreen(
     session: Session,
     onNavigate: (String) -> Unit,
     onError: (Throwable) -> Unit,
+    chromeVisible: Boolean = true,
+    onChromeVisibleChange: (Boolean) -> Unit = {},
 ) {
     val vm: FavoritesViewModel = viewModel(factory = viewModelFactory { FavoritesViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
@@ -119,8 +126,14 @@ fun FavoritesScreen(
     var query by remember { mutableStateOf("") }
     var searchVisible by remember { mutableStateOf(false) }
     var moreVisible by remember { mutableStateOf(false) }
+    val gridState = rememberLazyGridState()
 
-    LaunchedEffect(Unit) { vm.refresh() }
+    SyncChromeWithGridScroll(gridState, onChromeVisibleChange)
+
+    LaunchedEffect(Unit) {
+        onChromeVisibleChange(true)
+        vm.refresh()
+    }
 
     LaunchedEffect(state.error) {
         state.error?.let { onError(ApiException(0, it)) }
@@ -132,54 +145,19 @@ fun FavoritesScreen(
             .filterFavoritesQuery(query)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "mediatree",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                },
-                actions = {
-                    IconButton(onClick = { searchVisible = !searchVisible }) {
-                        Icon(Icons.Default.Search, contentDescription = "搜索")
-                    }
-                    IconButton(onClick = { }) {
-                        Icon(Icons.Default.Tune, contentDescription = "筛选")
-                    }
-                    Box {
-                        IconButton(onClick = { moreVisible = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "更多")
-                        }
-                        DropdownMenu(expanded = moreVisible, onDismissRequest = { moreVisible = false }) {
-                            DropdownMenuItem(
-                                text = { Text("刷新") },
-                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                onClick = {
-                                    moreVisible = false
-                                    vm.refresh()
-                                },
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-            )
-        },
-    ) { innerPadding ->
-        if (state.loading && state.movies.isEmpty()) {
-            LoadingPane(Modifier.padding(innerPadding))
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(142.dp),
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 92.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+    Scaffold { innerPadding ->
+        Box(Modifier.fillMaxSize().padding(innerPadding)) {
+            if (state.loading && state.movies.isEmpty()) {
+                LoadingPane(Modifier.fillMaxSize())
+            } else {
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Adaptive(142.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, top = 82.dp, end = 16.dp, bottom = 112.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(favoriteFilters) { item ->
@@ -240,6 +218,50 @@ fun FavoritesScreen(
                         }
                     }
                 }
+            }
+            }
+            AnimatedVisibility(
+                visible = chromeVisible,
+                enter = topChromeEnterTransition(),
+                exit = topChromeExitTransition(),
+                modifier = Modifier.align(Alignment.TopCenter),
+            ) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "mediatree",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    },
+                    actions = {
+                        IconButton(onClick = { searchVisible = !searchVisible }) {
+                            Icon(Icons.Default.Search, contentDescription = "搜索")
+                        }
+                        IconButton(onClick = { }) {
+                            Icon(Icons.Default.Tune, contentDescription = "筛选")
+                        }
+                        Box {
+                            IconButton(onClick = { moreVisible = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                            }
+                            DropdownMenu(expanded = moreVisible, onDismissRequest = { moreVisible = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("刷新") },
+                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                    onClick = {
+                                        moreVisible = false
+                                        vm.refresh()
+                                    },
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                    ),
+                )
             }
         }
     }

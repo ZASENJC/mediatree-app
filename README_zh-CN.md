@@ -1,176 +1,160 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ZASENJC/mediatree/main/frontend/public/icon.svg" alt="MediaTree" width="80" />
+  <img src="frontend/public/icon.svg" alt="MediaTree App" width="80" />
 </p>
 
-<h1 align="center">MediaTree</h1>
+<h1 align="center">MediaTree App</h1>
 
 <p align="center">
   <a href="README.md">English</a> | <strong>简体中文</strong>
 </p>
 
 <p align="center">
-  <em>一键部署的个人媒体库。<br>质感 UI，多源元数据刮削，ASS 特效字幕渲染，<br>电影、电视剧、动漫与 JAV — 一站管理。</em>
+  <em>MediaTree 的 Android 原生客户端。<br>只构建 app，只连接已有 MediaTree 后端，不在 APK 内打包后端服务。</em>
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZASENJC/mediatree/blob/main/CHANGELOG_zh-CN.md"><img src="https://img.shields.io/badge/版本-1.0.03-blue?style=flat-square" alt="Version"></a>
-  <a href="https://github.com/ZASENJC/mediatree/blob/main/LICENSE"><img src="https://img.shields.io/badge/许可证-MIT-green?style=flat-square" alt="License"></a>
-  <img src="https://img.shields.io/badge/python-3.12+-blue?style=flat-square&logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/react-18-61DAFB?style=flat-square&logo=react" alt="React">
-  <img src="https://img.shields.io/badge/docker-amd64|arm64-2496ED?style=flat-square&logo=docker" alt="Docker">
+  <a href="https://github.com/ZASENJC/mediatree-app/blob/main/CHANGELOG_zh-CN.md"><img src="https://img.shields.io/badge/版本-0.1.00-blue?style=flat-square" alt="Version"></a>
+  <a href="https://github.com/ZASENJC/mediatree-app/blob/main/LICENSE"><img src="https://img.shields.io/badge/许可证-MIT-green?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/android-native-3DDC84?style=flat-square&logo=android" alt="Android">
+  <img src="https://img.shields.io/badge/kotlin-compose-7F52FF?style=flat-square&logo=kotlin" alt="Kotlin">
 </p>
 
 ---
 
-## 界面预览
+## 项目定位
 
-![首页](https://img.qunq.de/file/1779640696711_home_no_text.png)
-*首页 — 卡片瀑布流媒体库*
+`mediatree-app` 是客户端 app 仓库，目标是构建 Android 原生客户端并适配 MediaTree 后端 API。
 
-![浏览](https://img.qunq.de/file/1779640700855_browser.png)
-*浏览页 — 文件夹树导航与季集切换*
-
-![播放器](https://img.qunq.de/file/1779640693184_movie.png)
-*播放页 — 流媒体播放 + 完整影片信息*
-
-![设置页](https://img.qunq.de/file/1779640699625_settings.png)
-*设置 — 刮削器配置、媒体库管理、备份与自更新*
+- app 通过用户填写的服务器地址连接已有 MediaTree 后端
+- APK 不内置 Python、FastAPI、SQLite 数据库、Docker 镜像或媒体扫描服务
+- 后端部署、媒体库扫描、刮削、转码、字幕发现和 Jellyfin 兼容接口仍由独立 MediaTree 服务提供
+- app 侧只负责登录、浏览、播放、收藏、进度同步、媒体库切换和移动端体验
 
 ---
 
-## 特性
+## 当前功能
 
-### 媒体库
-
-- 多库支持，每个库独立刮削器配置和访问密码
-- 递归扫描 + 文件监控自动增量更新
-- 文件夹树浏览器，支持季集标签切换
-- 源文件名 / 刮削标题 显示切换
-- 收藏、分类和排除文件夹
-
-### 刮削器
-
-- **TMDB** — 电影和电视剧元数据（演员、制作人、剧照、评论、关键词）
-- **Bangumi** — 中/日文动漫元数据
-- **Javdatabase** — JAV 番号元数据，支持模糊搜索回退
-- 插件架构 + 可配置智能回退链
-- 手动刮削，支持搜索选择和确认
-- 右键菜单批量文件夹刮削
-- 刮削缓存，可配置 TTL（24h–168h）
-
-### 视频播放器
-
-- ArtPlayer 5 定制 YouTube 风格控件
-- 直链播放 + HTTP Range 字节跳转
-- 按需 ffmpeg H.264 转码
-- 触摸手势 — 轻触、双击、滑动移动端控制
-- 键盘快捷键 — Space/K、方向键、F、M
-- VR/360° 视频（Three.js 等距矩形渲染）
-- 画中画 + 外部播放器（IINA、mpv、VLC）
-
-### 字幕系统
-
-- ASS/SSA 渲染（@jellyfin/libass-wasm，完整特效、字体、定位）
-- 外挂字幕自动匹配（文件名 + 语言后缀 + 集数）
-- CJK 回退字体（思源黑体 CN Bold），适配动漫字幕
-- SRT → WebVTT 原生转换（纯 Python，无 ffmpeg 依赖）
-- 编码自动检测（16 种编码 + charset-normalizer）
-- 用户字体上传和管理
-
-### Jellyfin 兼容
-
-36 个 Jellyfin 兼容 API 端点 — 可直接接入 **VidHub**、**Infuse**、**Kodi**、**VLC**、**IINA** 和 **mpv**。支持 Series → Season → Episode 文件夹层级、多客户端认证（MediaBrowser Token、X-Emby-Token、Bearer、api_key）、Emby 路径兼容和播放进度跟踪。
-
-### UI 设计
-
-玻璃态 + Apple 风格设计语言，定制 TailwindCSS 调色板。Liquid Glass 顶栏色散光晕、极光渐变背景、剧院模式环境光效、图片灯箱手势导航和响应式移动端布局。
-
-### 设置
-
-控制中心 — 逐库配置刮削器与访问密码、调整缓存 TTL（24h–168h）、绑定 TMDB API 密钥、一键备份还原数据库，以及轻量应用包更新与更新日志查看。
+- 原生 Kotlin + Jetpack Compose UI
+- Material 3 界面，半透明 overlay 顶栏和底栏会随滚动渐隐
+- 服务器地址配置、认证状态检测、登录和 token 持久化
+- 首页、文件夹浏览、混排收藏、详情和设置页
+- 多媒体库读取与当前媒体库切换
+- 搜索、排序、最近观看和文件夹入口
+- Media3 ExoPlayer 播放，支持 Bearer token 请求头
+- 外挂字幕轨道读取和选择
+- 播放进度定时上报、完播标记和收藏标签切换
+- 横屏沉浸播放、亮度/音量手势和基础播放控制
+- 设置页包含后端连接、扫描触发、媒体库显示和本地 SMB 服务器草稿输入
+- bundled native playback libraries 放在 `frontend/android/app/src/main/jniLibs/`
 
 ---
 
-## 快速开始
+## 后端要求
 
-```bash
-git clone https://github.com/ZASENJC/mediatree.git && cd mediatree
-cp .env.example .env
-# 编辑 .env — 设置 AUTH_USER、AUTH_PASS 和 MEDIA_VOLUMES
-docker compose up -d
-open http://localhost:27580
+请先单独部署或运行 MediaTree 后端服务，然后在 app 登录页填写服务器地址，例如：
+
+```text
+http://192.168.1.10:27580
 ```
 
-> **Docker Hub**: `docker pull zasenjc/mediatree:latest`
+app 当前依赖的主要 API 包括：
+
+- `/api/auth/status`
+- `/api/auth/login`
+- `/api/media-roots`
+- `/api/folders`
+- `/api/movies`
+- `/api/recent-watched`
+- `/api/favorites`
+- `/api/detail/{id}`
+- `/api/progress/{id}`
+- `/api/subtitle-tracks/{id}`
+- `/api/media-info/{id}`
+- `/api/movies/{id}/tags`
+- `/api/scan`
+- `/api/cover/{id}`
+- `/api/episode-still/{id}`
+- `/api/stream/{id}`
+- `/api/subtitle/{id}/{trackIndex}`
 
 ---
 
-## 更新策略
-
-设置页的普通 Web 更新默认下载 GitHub Release 中的小型应用包，并安装到 `./data` 数据卷，不需要挂载 `/var/run/docker.sock`。只有 Python 运行时、系统包、ffmpeg、字体等基础镜像层发生变化时，版本才会标记为“需要完整镜像更新”。
-
-完整镜像更新推荐手动执行：
+## 构建
 
 ```bash
-docker compose pull
-docker compose up -d
+git clone https://github.com/ZASENJC/mediatree-app.git
+cd mediatree-app/frontend
+npm run android:build
+```
+
+构建成功后 APK 位于：
+
+```text
+frontend/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+也可以直接进入 Android 工程构建：
+
+```bash
+cd frontend/android
+./gradlew assembleDebug
 ```
 
 ---
 
-## 配置
+## Android 环境
 
-**`AUTH_USER`** — 管理员用户名（设置后启用认证）
+构建脚本会尝试自动发现 `JAVA_HOME` 和 `ANDROID_HOME`。如果本机没有配置，请手动设置：
 
-**`AUTH_PASS`** — 管理员密码
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+```
 
-**`MEDIA_VOLUMES`** — 媒体目录：`/主机路径:/容器挂载点:ro`
+安装到已连接设备：
 
-**`DATA_DIR`** — 持久化数据（数据库、封面、字体）— 默认 `./data`
+```bash
+adb install -r frontend/android/app/build/outputs/apk/debug/app-debug.apk
+```
 
-**`HOST_PORT`** — 主机端口映射 — 默认 `27580`
+---
 
-**`SCAN_ON_STARTUP`** — 容器启动时自动扫描 — 默认 `true`
+## 目录说明
 
-**`TMDB_API_KEY`** — TMDB v3 API 密钥（可选）
-
-**`TMDB_ACCESS_TOKEN`** — TMDB v4 访问令牌（可选）
-
-**`JAVDB_ENABLED`** — 启用 JavDatabase 刮削器 — 默认 `true`
-
-完整配置项参见 `.env.example`。
+```text
+frontend/android/                                  Android 原生工程
+frontend/android/app/src/main/java/.../data/       API、Session 和数据模型
+frontend/android/app/src/main/java/.../ui/         Material 3 Compose UI、screen 和 navigation
+frontend/android/app/src/main/java/.../player/     原生播放器层
+frontend/android/app/src/main/jniLibs/             native playback libraries
+frontend/scripts/build-android.sh                  Android debug APK 构建脚本
+backend/                                          后端接口参考，不打包进 app
+```
 
 ---
 
 ## 技术栈
 
-**后端** — Python 3.12 · FastAPI · Uvicorn · httpx · aiosqlite · Pydantic v2 · ffmpeg
+**Android** — Kotlin · Jetpack Compose · Material 3 · Navigation Compose
 
-**前端** — React 18 · TypeScript 5 · TailwindCSS 3 · Vite · ArtPlayer 5 · Three.js
+**播放** — AndroidX Media3 ExoPlayer · bundled native playback libraries
 
-**字幕** — @jellyfin/libass-wasm · fonttools · charset-normalizer
+**网络** — OkHttp · kotlinx.serialization
 
-**数据库** — SQLite（WAL 模式，aiosqlite）
+**图片** — Coil
 
-**部署** — Docker 多阶段构建（node:20-alpine + python:3.12-slim）
-
-**平台支持** — linux/amd64 · linux/arm64
+**本地状态** — DataStore Preferences · AndroidX Security Crypto
 
 ---
 
-## 本地开发
+## 开发原则
 
-```bash
-# 后端（端口 80）
-cd backend && pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 80
-
-# 前端（端口 5173，反向代理 /api -> localhost:80）
-cd frontend && npm install && npm run dev
-
-# 测试
-cd backend && python -m unittest discover -s tests -p 'test_*.py'
-```
+- 只构建客户端 app，不把后端运行时、数据库或 Docker 相关内容放进 APK
+- 以后端现有 API 为合同，优先在 app 侧做兼容和降级
+- Android 构建入口是 `npm run android:build` 或 `frontend/android/gradlew assembleDebug`
+- 原生 Android 构建不需要 `npm install` 或 `node_modules`
+- 不再使用 `cap sync android` 作为 app 构建步骤
 
 ---
 
@@ -178,10 +162,10 @@ cd backend && python -m unittest discover -s tests -p 'test_*.py'
 
 | 文档 | 说明 |
 |---|---|
-| [CHANGELOG.md](CHANGELOG.md) | 版本历史和发布说明（英文） |
-| [CHANGELOG_zh-CN.md](CHANGELOG_zh-CN.md) | 版本历史（中文） |
-| [CLAUDE.md](CLAUDE.md) | AI 辅助开发指南 |
-| [Wiki](https://github.com/ZASENJC/mediatree/wiki) | 完整文档和指南 |
+| [README.md](README.md) | English README |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [CHANGELOG_zh-CN.md](CHANGELOG_zh-CN.md) | 中文版本历史 |
+| [AGENTS.md](AGENTS.md) | AI 辅助开发约束 |
 
 ---
 

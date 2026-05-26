@@ -1,5 +1,6 @@
 package com.zasenjc.mediatree.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -65,6 +67,9 @@ import com.zasenjc.mediatree.ui.components.EpisodeLandscapeCard
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MoviePosterCard
 import com.zasenjc.mediatree.ui.components.SectionHeader
+import com.zasenjc.mediatree.ui.components.SyncChromeWithListScroll
+import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
+import com.zasenjc.mediatree.ui.components.topChromeExitTransition
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -138,12 +143,21 @@ fun HomeScreen(
     session: Session,
     onNavigate: (String) -> Unit,
     onError: (Throwable) -> Unit,
+    chromeVisible: Boolean = true,
+    onChromeVisibleChange: (Boolean) -> Unit = {},
 ) {
     val vm: HomeViewModel = viewModel(factory = viewModelFactory { HomeViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
     var showSearch by remember { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
     var showMore by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+
+    SyncChromeWithListScroll(listState, onChromeVisibleChange)
+
+    LaunchedEffect(Unit) {
+        onChromeVisibleChange(true)
+    }
 
     LaunchedEffect(session.serverUrl, session.activeLibrary) {
         vm.load(session.activeLibrary)
@@ -153,68 +167,20 @@ fun HomeScreen(
         state.error?.let { onError(ApiException(0, it)) }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "mediatree",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                },
-                actions = {
-                    IconButton(onClick = { showSearch = true }) {
-                        Icon(Icons.Default.Search, contentDescription = "搜索")
-                    }
-                    Box {
-                        IconButton(onClick = { showSort = true }) {
-                            Icon(Icons.Default.Tune, contentDescription = "排序")
-                        }
-                        DropdownMenu(expanded = showSort, onDismissRequest = { showSort = false }) {
-                            sortOptions.forEach { (key, label) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        showSort = false
-                                        vm.load(session.activeLibrary, key)
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    Box {
-                        IconButton(onClick = { showMore = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "更多")
-                        }
-                        DropdownMenu(expanded = showMore, onDismissRequest = { showMore = false }) {
-                            DropdownMenuItem(
-                                text = { Text("刷新") },
-                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                onClick = {
-                                    showMore = false
-                                    vm.load(session.activeLibrary)
-                                },
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-            )
-        },
-    ) { padding ->
-        if (state.loading) {
-            LoadingPane(Modifier.padding(padding))
-        } else {
-            val movies = remember(state.libraryMovies, state.selectedFilter) {
-                state.libraryMovies.filterForHome(state.selectedFilter)
-            }
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-            ) {
+    Scaffold { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            if (state.loading) {
+                LoadingPane(Modifier.fillMaxSize())
+            } else {
+                val movies = remember(state.libraryMovies, state.selectedFilter) {
+                    state.libraryMovies.filterForHome(state.selectedFilter)
+                }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, top = 82.dp, end = 16.dp, bottom = 112.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                ) {
                 if (state.recent.isNotEmpty()) {
                     item { SectionHeader("继续观看") }
                     item {
@@ -263,6 +229,63 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
+            }
+            AnimatedVisibility(
+                visible = chromeVisible,
+                enter = topChromeEnterTransition(),
+                exit = topChromeExitTransition(),
+                modifier = Modifier.align(Alignment.TopCenter),
+            ) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "mediatree",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    },
+                    actions = {
+                        IconButton(onClick = { showSearch = true }) {
+                            Icon(Icons.Default.Search, contentDescription = "搜索")
+                        }
+                        Box {
+                            IconButton(onClick = { showSort = true }) {
+                                Icon(Icons.Default.Tune, contentDescription = "排序")
+                            }
+                            DropdownMenu(expanded = showSort, onDismissRequest = { showSort = false }) {
+                                sortOptions.forEach { (key, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            showSort = false
+                                            vm.load(session.activeLibrary, key)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        Box {
+                            IconButton(onClick = { showMore = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                            }
+                            DropdownMenu(expanded = showMore, onDismissRequest = { showMore = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("刷新") },
+                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                    onClick = {
+                                        showMore = false
+                                        vm.load(session.activeLibrary)
+                                    },
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                    ),
+                )
             }
         }
     }

@@ -8,3 +8,8 @@ frontend/dist/
 *.egg-info/
 docker-compose.yml
 frontend/tsconfig.tsbuildinfo
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/app/src/main/assets/public/
