@@ -74,11 +74,10 @@ fun MediaTreePlayer(
     val context = LocalContext.current
     val activity = context.findActivity()
 
-    // Build http factory + player together, keyed on token and streamUrl
+    // Build http factory + player together, keyed on token and streamUrl.
     val player = remember(token, streamUrl) {
-        Log.d(TAG, "Creating ExoPlayer for $streamUrl")
         val httpFactory = DefaultHttpDataSource.Factory().apply {
-            setDefaultRequestProperties(mapOf("Authorization" to "Bearer $token"))
+            setDefaultRequestProperties(authorizationHeaders(token))
         }
         val mediaFactory = DefaultMediaSourceFactory(httpFactory)
         ExoPlayer.Builder(context)
@@ -92,7 +91,7 @@ fun MediaTreePlayer(
 
     // Setup media source when streamUrl or subtitle changes
     DisposableEffect(streamUrl, selectedSubtitle) {
-        Log.d(TAG, "Preparing media source: $streamUrl subtitle=$selectedSubtitle")
+        Log.d(TAG, "Preparing media source subtitleSelected=${selectedSubtitle >= 0}")
         val subUrl = if (selectedSubtitle >= 0) subtitleUrlProvider(selectedSubtitle).takeIf { it.isNotBlank() } else null
         val mediaItem = MediaItem.Builder()
             .setUri(Uri.parse(streamUrl))
@@ -143,7 +142,7 @@ fun MediaTreePlayer(
                 }
             }
             override fun onPlayerError(error: PlaybackException) {
-                Log.e(TAG, "Player error: ${error.message}", error)
+                Log.e(TAG, "Player error code=${error.errorCodeName}")
             }
         }
         player.addListener(listener)
@@ -278,6 +277,11 @@ private fun formatTime(ms: Long): String {
     val sec = totalSec % 60
     return "${min}:${sec.toString().padStart(2, '0')}"
 }
+
+private fun authorizationHeaders(token: String): Map<String, String> =
+    token.takeIf { it.isNotBlank() }
+        ?.let { mapOf("Authorization" to "Bearer ".plus(it)) }
+        ?: emptyMap()
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this

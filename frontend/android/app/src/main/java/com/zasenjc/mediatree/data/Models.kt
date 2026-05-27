@@ -18,11 +18,75 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 
 @Serializable
-data class Session(
+enum class ProviderType {
+    MediaTree,
+    Jellyfin,
+    Emby,
+    WebDAV,
+    SMB,
+}
+
+@Serializable
+data class ServerProfile(
+    val id: String = DEFAULT_MEDIATREE_PROFILE_ID,
+    val type: ProviderType = ProviderType.MediaTree,
+    val name: String = type.name,
     val serverUrl: String = "",
     val token: String = "",
     val activeLibrary: String = "",
 )
+
+const val DEFAULT_MEDIATREE_PROFILE_ID = "mediatree-default"
+
+fun mediaTreeProfile(
+    serverUrl: String,
+    token: String = "",
+    activeLibrary: String = "",
+): ServerProfile = ServerProfile(
+    id = DEFAULT_MEDIATREE_PROFILE_ID,
+    type = ProviderType.MediaTree,
+    name = ProviderType.MediaTree.name,
+    serverUrl = serverUrl,
+    token = token,
+    activeLibrary = activeLibrary,
+)
+
+@Serializable
+data class Session(
+    val profiles: List<ServerProfile> = emptyList(),
+    val activeProfileId: String = DEFAULT_MEDIATREE_PROFILE_ID,
+    val serverUrl: String = profiles.activeProfile(activeProfileId)?.serverUrl.orEmpty(),
+    val token: String = profiles.activeProfile(activeProfileId)?.token.orEmpty(),
+    val activeLibrary: String = profiles.activeProfile(activeProfileId)?.activeLibrary.orEmpty(),
+) {
+    @kotlinx.serialization.Transient
+    val resolvedProfiles: List<ServerProfile> =
+        profiles
+            .ifEmpty {
+                if (serverUrl.isNotBlank() || token.isNotBlank() || activeLibrary.isNotBlank()) {
+                    listOf(mediaTreeProfile(serverUrl, token, activeLibrary))
+                } else {
+                    emptyList()
+                }
+            }
+            .map { profile ->
+                if (profile.id == activeProfileId && profile.type == ProviderType.MediaTree) {
+                    profile.copy(
+                        serverUrl = serverUrl.ifBlank { profile.serverUrl },
+                        token = token.ifBlank { profile.token },
+                        activeLibrary = activeLibrary.ifBlank { profile.activeLibrary },
+                    )
+                } else {
+                    profile
+                }
+            }
+
+    val activeProfile: ServerProfile?
+        get() = resolvedProfiles.activeProfile(activeProfileId)
+}
+
+private fun List<ServerProfile>.activeProfile(activeProfileId: String): ServerProfile? =
+    firstOrNull { it.id == activeProfileId } ?: firstOrNull()
 
 @Serializable
 data class AuthStatusDto(
@@ -114,9 +178,15 @@ data class MovieDto(
     @SerialName("tmdb_season") val tmdbSeason: Int? = null,
     @SerialName("tmdb_episode") val tmdbEpisode: Int? = null,
     @SerialName("episode_title") val episodeTitle: String? = null,
+    @SerialName("episode_number") val episodeNumber: Int? = null,
+    @SerialName("episode_label") val episodeLabel: String? = null,
     @SerialName("episode_overview") val episodeOverview: String? = null,
     @SerialName("episode_still") val episodeStill: String? = null,
     @SerialName("display_title") val displayTitle: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("file_size") val fileSize: Long? = null,
+    val size: Long? = null,
     @SerialName("playback_position") val playbackPosition: Double? = null,
     @SerialName("progress_percent") val progressPercent: Double? = null,
     @Serializable(with = PersonCreditListSerializer::class)

@@ -78,9 +78,17 @@ fun MediaTreeApp(deepLinkData: Uri? = null) {
     val context = LocalContext.current
     val container = remember { AppContainer(context) }
     var session by remember { mutableStateOf<Session?>(null) }
+    var startupError by remember { mutableStateOf<Throwable?>(null) }
 
     LaunchedEffect(container) {
-        container.sessionStore.sessionFlow.collect { session = it }
+        runCatching {
+            container.sessionStore.sessionFlow.collect { session = it }
+        }.onFailure { startupError = it }
+    }
+
+    if (startupError != null) {
+        CredentialStorageErrorPane(startupError!!)
+        return
     }
 
     val currentSession = session
@@ -89,6 +97,20 @@ fun MediaTreeApp(deepLinkData: Uri? = null) {
         return
     }
     MainShell(container = container, session = currentSession, deepLinkData = deepLinkData)
+}
+
+@Composable
+private fun CredentialStorageErrorPane(error: Throwable) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = error.message ?: "加密凭据存储不可用，无法安全保存登录凭据",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
