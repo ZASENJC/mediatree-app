@@ -22,17 +22,24 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -49,6 +56,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,7 +73,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.zasenjc.mediatree.data.ApiException
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.CrewCreditDto
 import com.zasenjc.mediatree.data.MediaInfoDto
@@ -79,6 +88,7 @@ import com.zasenjc.mediatree.ui.components.InfoBlock
 import com.zasenjc.mediatree.ui.components.InfoLine
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.SectionHeader
+import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -95,7 +105,7 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
         val resume: Double = 0.0,
         val subtitleTracks: List<SubtitleTrackDto> = emptyList(),
         val selectedSubtitle: Int = -1,
-        val error: String? = null,
+        val error: Throwable? = null,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -109,17 +119,17 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
                 val resume = container.api.progress(movieId).position
                 val subs = runCatching { container.api.subtitleTracks(movieId) }.getOrDefault(emptyList())
                 val mediaInfo = runCatching { container.api.mediaInfo(movieId) }.getOrNull()
-                val parentFolder = movie.path.substringBeforeLast("/", missingDelimiterValue = "")
-                val seriesItems = if (parentFolder.isBlank()) {
+                val seriesFolder = seriesFolderFor(movie)
+                val seriesItems = if (seriesFolder.isBlank()) {
                     emptyList()
                 } else {
                     runCatching {
                         container.api.movies(
-                            folder = parentFolder,
-                            sort = "release_date_asc",
-                            limit = 60,
-                            mediaRoot = movie.mediaRoot ?: mediaRoot,
-                        ).movies.sortedWith(compareBy<MovieDto> { it.tmdbSeason ?: 0 }.thenBy { it.tmdbEpisode ?: 0 }.thenBy { it.code })
+                            folder = seriesFolder,
+                            sort = "created_desc",
+                            limit = 500,
+                            mediaRoot = movie.mediaRoot?.takeIf { it.isNotBlank() } ?: mediaRoot,
+                        ).movies.sortedForEpisodes()
                     }.getOrDefault(emptyList())
                 }
                 _state.update {
@@ -133,7 +143,7 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
                     )
                 }
             } catch (e: Throwable) {
-                _state.update { it.copy(loading = false, error = e.message) }
+                _state.update { it.copy(loading = false, error = e) }
             }
         }
     }
@@ -200,10 +210,24 @@ fun DetailScreen(
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
-    LaunchedEffect(movieId, session.activeLibrary) { vm.load(movieId, session.activeLibrary) }
+    LaunchedEffect(movieId, session.serverUrl, session.activeLibrary) {
+        if (shouldLoadRemoteContent(session)) {
+            vm.load(movieId, session.activeLibrary)
+        }
+    }
 
     LaunchedEffect(state.error) {
-        state.error?.let { onError(ApiException(0, it)) }
+        state.error?.let(onError)
+    }
+
+    if (!shouldLoadRemoteContent(session)) {
+        LaunchedEffect(Unit) { onNavigate("settings") }
+        ErrorPane(
+            message = "请先在设置页连接 MediaTree 服务器",
+            onRetry = { onNavigate("settings") },
+            modifier = Modifier.fillMaxSize(),
+        )
+        return
     }
 
     if (isLandscape) {
@@ -226,7 +250,7 @@ fun DetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("影片页") },
+                title = {},
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
                 },
@@ -244,12 +268,16 @@ fun DetailScreen(
         when {
             state.loading -> LoadingPane(Modifier.padding(padding))
             state.movie == null -> ErrorPane(
-                message = state.error ?: "影片加载失败",
+                message = state.error?.message ?: "影片加载失败",
                 onRetry = { vm.load(movieId, session.activeLibrary) },
                 modifier = Modifier.padding(padding),
             )
             else -> {
                 val item = state.movie!!
+                var episodesExpanded by remember(item.id) { mutableStateOf(false) }
+                var selectedSeasonKey by remember(item.id, state.seriesItems) {
+                    mutableStateOf(seasonKey(item))
+                }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(padding),
                     contentPadding = PaddingValues(bottom = 28.dp),
@@ -281,21 +309,20 @@ fun DetailScreen(
                         MovieInfoHeader(
                             movie = item,
                             mediaInfo = state.mediaInfo,
+                            seriesItems = state.seriesItems,
+                            currentMovieId = item.id,
+                            serverUrl = session.serverUrl,
+                            episodesExpanded = episodesExpanded,
+                            selectedSeasonKey = selectedSeasonKey,
+                            onToggleEpisodes = { episodesExpanded = !episodesExpanded },
+                            onSelectSeason = { selectedSeasonKey = it },
+                            onNavigate = onNavigate,
                             onFavorite = vm::toggleFavorite,
                             onWatched = vm::markWatched,
                         )
                     }
                     item {
                         CastSection(movie = item, serverUrl = session.serverUrl)
-                    }
-                    if (state.seriesItems.isNotEmpty()) {
-                        item {
-                            SeriesSection(
-                                movies = state.seriesItems,
-                                currentMovieId = item.id,
-                                onNavigate = onNavigate,
-                            )
-                        }
                     }
                     item {
                         ThumbnailStrip(
@@ -353,17 +380,54 @@ private fun SubtitleSelector(
 private fun MovieInfoHeader(
     movie: MovieDto,
     mediaInfo: MediaInfoDto?,
+    seriesItems: List<MovieDto>,
+    currentMovieId: Int,
+    serverUrl: String,
+    episodesExpanded: Boolean,
+    selectedSeasonKey: Int,
+    onToggleEpisodes: () -> Unit,
+    onSelectSeason: (Int) -> Unit,
+    onNavigate: (String) -> Unit,
     onFavorite: () -> Unit,
     onWatched: () -> Unit,
 ) {
+    val seasonGroups = remember(seriesItems) { buildSeasonGroups(seriesItems) }
+    val selectedGroup = seasonGroups.firstOrNull { it.key == selectedSeasonKey } ?: seasonGroups.firstOrNull()
+    val canSelectEpisodes = seriesItems.size > 1
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = movie.title ?: movie.displayTitle ?: movie.code,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (canSelectEpisodes) Modifier.clickable(onClick = onToggleEpisodes) else Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = movie.title ?: movie.displayTitle ?: movie.code,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (canSelectEpisodes) {
+                Icon(
+                    imageVector = if (episodesExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (episodesExpanded) "收起集数" else "展开集数",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (episodesExpanded && canSelectEpisodes && selectedGroup != null) {
+            EpisodeSelector(
+                seasonGroups = seasonGroups,
+                selectedSeasonKey = selectedGroup.key,
+                currentMovieId = currentMovieId,
+                serverUrl = serverUrl,
+                onSelectSeason = onSelectSeason,
+                onNavigate = onNavigate,
+            )
+        }
         movie.episodeTitle?.takeIf { it.isNotBlank() }?.let {
             Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
         }
@@ -455,22 +519,42 @@ private fun PersonCard(person: PersonCreditDto, serverUrl: String) {
 }
 
 @Composable
-private fun SeriesSection(
-    movies: List<MovieDto>,
+private fun EpisodeSelector(
+    seasonGroups: List<SeasonGroup>,
+    selectedSeasonKey: Int,
     currentMovieId: Int,
+    serverUrl: String,
+    onSelectSeason: (Int) -> Unit,
     onNavigate: (String) -> Unit,
 ) {
-    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            SectionHeader("剧集")
-            AssistChip(onClick = {}, label = { Text("${movies.size} 集") })
+    val selectedGroup = seasonGroups.firstOrNull { it.key == selectedSeasonKey } ?: return
+    val selectedIndex = selectedGroup.episodes.indexOfFirst { it.id == currentMovieId }.coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
+    LaunchedEffect(selectedSeasonKey, currentMovieId) {
+        if (selectedIndex >= 0) listState.scrollToItem(selectedIndex)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SeasonPickerButton(
+                groups = seasonGroups,
+                selectedKey = selectedGroup.key,
+                onSelect = onSelectSeason,
+            )
+            AssistChip(onClick = {}, label = { Text("${selectedGroup.episodes.size} 集") })
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(movies, key = { it.id }) { movie ->
-                EpisodeMiniCard(
-                    movie = movie,
-                    selected = movie.id == currentMovieId,
-                    onClick = { onNavigate("detail/${movie.id}") },
+        LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(selectedGroup.episodes, key = { it.id }) { episode ->
+                EpisodeCoverCard(
+                    movie = episode,
+                    imageUrl = episodeStillImageUrl(serverUrl, episode),
+                    selected = episode.id == currentMovieId,
+                    onClick = {
+                        if (episode.id != currentMovieId) onNavigate("detail/${episode.id}")
+                    },
                 )
             }
         }
@@ -478,29 +562,104 @@ private fun SeriesSection(
 }
 
 @Composable
-private fun EpisodeMiniCard(movie: MovieDto, selected: Boolean, onClick: () -> Unit) {
-    ElevatedCard(
-        modifier = Modifier.width(112.dp).height(72.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
-    ) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                episodeCode(movie),
-                style = MaterialTheme.typography.labelLarge,
-                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-            )
-            Text(
-                movie.episodeTitle ?: movie.title ?: movie.code,
-                style = MaterialTheme.typography.labelSmall,
-                color = if (selected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+private fun SeasonPickerButton(
+    groups: List<SeasonGroup>,
+    selectedKey: Int,
+    onSelect: (Int) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = groups.firstOrNull { it.key == selectedKey } ?: groups.first()
+    Box {
+        AssistChip(
+            onClick = { if (groups.size > 1) expanded = true },
+            label = { Text(selected.label) },
+            trailingIcon = {
+                if (groups.size > 1) {
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                }
+            },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            groups.forEach { group ->
+                DropdownMenuItem(
+                    text = { Text(group.label) },
+                    onClick = {
+                        expanded = false
+                        onSelect(group.key)
+                    },
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun EpisodeCoverCard(
+    movie: MovieDto,
+    imageUrl: String?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.width(142.dp).clickable(onClick = onClick),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        ElevatedCard(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = if (selected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                },
+            ),
+        ) {
+            Box {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = movie.episodeTitle ?: movie.displayTitle ?: movie.title ?: movie.code,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f),
+                )
+                if (movie.tags.contains("watched")) {
+                    WatchFlag(Modifier.align(Alignment.TopEnd).padding(6.dp))
+                }
+            }
+        }
+        Text(
+            text = episodeCode(movie),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = movie.episodeTitle ?: movie.displayTitle ?: movie.title ?: movie.code,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun WatchFlag(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 10.dp, bottomEnd = 10.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        tonalElevation = 3.dp,
+    ) {
+        Icon(
+            Icons.Default.Flag,
+            contentDescription = "已观看",
+            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp).size(15.dp),
+        )
     }
 }
 
@@ -538,6 +697,72 @@ private fun CrewSection(crew: List<CrewCreditDto>) {
     InfoLine("工作人员", staff.joinToString(" / ") { "${it.name} (${it.job})" })
 }
 
+private data class SeasonGroup(
+    val key: Int,
+    val label: String,
+    val episodes: List<MovieDto>,
+)
+
+private fun buildSeasonGroups(movies: List<MovieDto>): List<SeasonGroup> =
+    movies
+        .sortedForEpisodes()
+        .groupBy { seasonKey(it) }
+        .toSortedMap()
+        .map { (key, episodes) ->
+            SeasonGroup(
+                key = key,
+                label = if (key > 0) "第 ${key} 季" else "全部剧集",
+                episodes = episodes,
+            )
+        }
+
+private fun episodeStillImageUrl(serverUrl: String, movie: MovieDto): String =
+    movie.episodeStill?.let { UrlUtils.resolveApiUrl(serverUrl, it) }
+        ?: "${UrlUtils.apiBase(serverUrl)}/episode-still/${movie.id}"
+
+private fun seriesFolderFor(movie: MovieDto): String {
+    val folder = movie.folderLevels.orEmpty()
+    if (folder.isBlank()) return ""
+    val isEpisode = movie.tmdbType == "tv" ||
+        movie.tmdbEpisode != null ||
+        movie.episodeTitle != null ||
+        movie.episodeNumber != null
+    val parts = folder.split("/").filter { it.isNotBlank() }
+    if (isEpisode && parts.size > 1 && isSeasonFolderName(parts.last())) {
+        return parts.dropLast(1).joinToString("/")
+    }
+    return folder
+}
+
+private fun List<MovieDto>.sortedForEpisodes(): List<MovieDto> =
+    sortedWith(
+        compareBy<MovieDto> { seasonKey(it) }
+            .thenBy { it.tmdbEpisode ?: it.episodeNumber ?: Int.MAX_VALUE }
+            .thenBy { it.code }
+            .thenBy { it.id },
+    )
+
+private fun seasonKey(movie: MovieDto): Int = movie.tmdbSeason ?: seasonNumberFromFolder(movie.folderLevels) ?: 0
+
+private fun seasonNumberFromFolder(folderLevels: String?): Int? {
+    val leaf = folderLevels
+        ?.split("/")
+        ?.lastOrNull { it.isNotBlank() }
+        ?.trim()
+        .orEmpty()
+    if (leaf.isBlank()) return null
+    val patterns = listOf(
+        Regex("""^S\s*(\d{1,2})$""", RegexOption.IGNORE_CASE),
+        Regex("""^Season\s*(\d{1,2})$""", RegexOption.IGNORE_CASE),
+        Regex("""^第\s*(\d{1,2})\s*[季期部]?$"""),
+    )
+    return patterns.firstNotNullOfOrNull { pattern ->
+        pattern.matchEntire(leaf)?.groupValues?.getOrNull(1)?.toIntOrNull()
+    }
+}
+
+private fun isSeasonFolderName(value: String): Boolean = seasonNumberFromFolder(value) != null
+
 private fun castPeople(movie: MovieDto): List<PersonCreditDto> {
     if (movie.cast.isNotEmpty()) return movie.cast
     return movie.actress
@@ -558,6 +783,10 @@ private fun directorText(movie: MovieDto): String {
 private fun episodeCode(movie: MovieDto): String {
     return if (movie.tmdbSeason != null || movie.tmdbEpisode != null) {
         "S${(movie.tmdbSeason ?: 0).toString().padStart(2, '0')}E${(movie.tmdbEpisode ?: 0).toString().padStart(2, '0')}"
+    } else if (!movie.episodeLabel.isNullOrBlank()) {
+        movie.episodeLabel
+    } else if (movie.episodeNumber != null) {
+        "EP${movie.episodeNumber.toString().padStart(2, '0')}"
     } else {
         movie.code
     }

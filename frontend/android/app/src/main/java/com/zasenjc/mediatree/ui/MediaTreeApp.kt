@@ -2,6 +2,14 @@ package com.zasenjc.mediatree.ui
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +24,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,9 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -49,44 +61,37 @@ import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.bottomChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.bottomChromeExitTransition
+import com.zasenjc.mediatree.ui.navigation.TopDestination
 import com.zasenjc.mediatree.ui.navigation.topDestinations
 import com.zasenjc.mediatree.ui.screens.BrowseScreen
 import com.zasenjc.mediatree.ui.screens.DetailScreen
 import com.zasenjc.mediatree.ui.screens.FavoritesScreen
 import com.zasenjc.mediatree.ui.screens.HomeScreen
-import com.zasenjc.mediatree.ui.screens.LoginScreen
 import com.zasenjc.mediatree.ui.screens.SettingsScreen
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+
+private val Md3StandardEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
 @Composable
 fun MediaTreeApp(deepLinkData: Uri? = null) {
     val context = LocalContext.current
     val container = remember { AppContainer(context) }
-    val session by container.sessionStore.sessionFlow.collectAsStateWithLifecycle(initialValue = Session())
-    var checkingAuth by remember(session.serverUrl, session.token) { mutableStateOf(session.serverUrl.isNotBlank() && session.token.isBlank()) }
-    var needsLogin by remember(session.serverUrl, session.token) { mutableStateOf(session.serverUrl.isBlank()) }
+    var session by remember { mutableStateOf<Session?>(null) }
 
-    LaunchedEffect(session.serverUrl, session.token) {
-        if (session.serverUrl.isBlank()) {
-            checkingAuth = false
-            needsLogin = true
-        } else if (session.token.isBlank()) {
-            checkingAuth = true
-            needsLogin = runCatching { container.api.authStatus(session.serverUrl).needAuth }.getOrDefault(true)
-            checkingAuth = false
-        } else {
-            checkingAuth = false
-            needsLogin = false
-        }
+    LaunchedEffect(container) {
+        container.sessionStore.sessionFlow.collect { session = it }
     }
 
-    when {
-        checkingAuth -> LoadingPane()
-        needsLogin -> LoginScreen(container = container, initialServerUrl = session.serverUrl)
-        else -> MainShell(container = container, session = session, deepLinkData = deepLinkData)
+    val currentSession = session
+    if (currentSession == null) {
+        LoadingPane()
+        return
     }
+    MainShell(container = container, session = currentSession, deepLinkData = deepLinkData)
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MainShell(container: AppContainer, session: Session, deepLinkData: Uri? = null) {
     val navController = rememberNavController()
@@ -95,27 +100,71 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     val scope = rememberCoroutineScope()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route.orEmpty()
+    val pagerState = rememberPagerState(
+        initialPage = initialTopDestinationPage(session),
+        pageCount = { topDestinations.size },
+    )
+    var browseFolder by remember { mutableStateOf("") }
     var chromeVisible by remember { mutableStateOf(true) }
-    val onError: (Throwable) -> Unit = { err ->
-        scope.launch {
-            val message = if (err is ApiException && err.statusCode == 401) {
-                container.sessionStore.clearToken()
-                "登录已过期，请重新登录"
-            } else {
-                err.message ?: "请求失败"
-            }
-            snackbarHostState.showSnackbar(message)
-        }
-    }
 
     LaunchedEffect(currentRoute) {
         chromeVisible = true
     }
 
-    LaunchedEffect(initialMovieId) {
+    fun navigateTopDestination(route: String) {
+        val page = topDestinations.indexOfFirst { it.route == route }
+        if (page >= 0) {
+            scope.launch {
+                pagerState.animateScrollToPage(
+                    page = page,
+                    animationSpec = tween(durationMillis = 360, easing = Md3StandardEasing),
+                )
+            }
+        }
+    }
+
+    fun navigateToReconnectSettings() {
+        navController.popBackStack("main", inclusive = false)
+        navigateTopDestination("settings")
+    }
+
+    val onError: (Throwable) -> Unit = { err ->
+        scope.launch {
+            val result = handleConnectionError(session, err)
+            if (result.clearToken) {
+                container.sessionStore.clearToken()
+            }
+            if (result.navigateRoute == "settings") {
+                navigateToReconnectSettings()
+            }
+            snackbarHostState.showSnackbar(result.message)
+        }
+    }
+
+    fun handleAppNavigate(route: String) {
+        when {
+            route.startsWith("detail/") -> navController.navigate(route) { launchSingleTop = true }
+            route == "browse" -> {
+                browseFolder = ""
+                navigateTopDestination("browse")
+            }
+            route.startsWith("browse?folder=") -> {
+                browseFolder = Uri.decode(route.removePrefix("browse?folder="))
+                navigateTopDestination("browse")
+            }
+            topDestinations.any { it.route == route } -> navigateTopDestination(route)
+            else -> navController.navigate(route) { launchSingleTop = true }
+        }
+    }
+
+    LaunchedEffect(initialMovieId, session.serverUrl) {
         if (initialMovieId != null) {
-            navController.navigate("detail/$initialMovieId") {
-                launchSingleTop = true
+            if (shouldLoadRemoteContent(session)) {
+                navController.navigate("detail/$initialMovieId") {
+                    launchSingleTop = true
+                }
+            } else {
+                navigateToReconnectSettings()
             }
         }
     }
@@ -127,54 +176,48 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         ) { padding ->
             NavHost(
                 navController = navController,
-                startDestination = "home",
-                modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
+                startDestination = "main",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .consumeWindowInsets(padding),
             ) {
-                composable("home") {
-                    HomeScreen(
-                        container = container,
-                        session = session,
-                        onNavigate = { navController.navigate(it) { launchSingleTop = true } },
-                        onError = onError,
-                        chromeVisible = chromeVisible,
-                        onChromeVisibleChange = { chromeVisible = it },
-                    )
-                }
-                composable("browse") {
-                    BrowseScreen(
-                        container = container,
-                        session = session,
-                        onNavigate = { navController.navigate(it) { launchSingleTop = true } },
-                        onError = onError,
-                        initialFolder = "",
-                        chromeVisible = chromeVisible,
-                        onChromeVisibleChange = { chromeVisible = it },
-                    )
-                }
-                composable("browse?folder={folder}") { entry ->
-                    val folder = entry.arguments?.getString("folder").orEmpty()
-                    BrowseScreen(
-                        container = container,
-                        session = session,
-                        onNavigate = { navController.navigate(it) { launchSingleTop = true } },
-                        onError = onError,
-                        initialFolder = folder,
-                        chromeVisible = chromeVisible,
-                        onChromeVisibleChange = { chromeVisible = it },
-                    )
-                }
-                composable("favorites") {
-                    FavoritesScreen(
-                        container = container,
-                        session = session,
-                        onNavigate = { navController.navigate(it) { launchSingleTop = true } },
-                        onError = onError,
-                        chromeVisible = chromeVisible,
-                        onChromeVisibleChange = { chromeVisible = it },
-                    )
-                }
-                composable("settings") {
-                    SettingsScreen(container, session, onError)
+                composable("main") {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        beyondViewportPageCount = 1,
+                        key = { page -> topDestinations[page].route },
+                    ) { page ->
+                        when (topDestinations[page].route) {
+                            "home" -> HomeScreen(
+                                container = container,
+                                session = session,
+                                onNavigate = ::handleAppNavigate,
+                                onError = onError,
+                                chromeVisible = chromeVisible,
+                                onChromeVisibleChange = { chromeVisible = it },
+                            )
+                            "browse" -> BrowseScreen(
+                                container = container,
+                                session = session,
+                                onNavigate = ::handleAppNavigate,
+                                onError = onError,
+                                initialFolder = browseFolder,
+                                chromeVisible = chromeVisible,
+                                onChromeVisibleChange = { chromeVisible = it },
+                            )
+                            "favorites" -> FavoritesScreen(
+                                container = container,
+                                session = session,
+                                onNavigate = ::handleAppNavigate,
+                                onError = onError,
+                                chromeVisible = chromeVisible,
+                                onChromeVisibleChange = { chromeVisible = it },
+                            )
+                            "settings" -> SettingsScreen(container, session, onError)
+                        }
+                    }
                 }
                 composable(
                     route = "detail/{movieId}",
@@ -185,7 +228,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                         session = session,
                         movieId = entry.arguments?.getInt("movieId") ?: 0,
                         onBack = { navController.popBackStack() },
-                        onNavigate = { navController.navigate(it) { launchSingleTop = true } },
+                        onNavigate = ::handleAppNavigate,
                         onError = onError,
                     )
                 }
@@ -198,13 +241,9 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             FrostedBottomNavigationBar(
-                currentRoute = currentRoute,
-                onNavigate = { route ->
-                    navController.navigate(route) {
-                        popUpTo("home")
-                        launchSingleTop = true
-                    }
-                },
+                currentPage = pagerState.currentPage,
+                pageOffsetFraction = pagerState.currentPageOffsetFraction,
+                onNavigate = ::navigateTopDestination,
             )
         }
     }
@@ -212,7 +251,8 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
 
 @Composable
 private fun FrostedBottomNavigationBar(
-    currentRoute: String,
+    currentPage: Int,
+    pageOffsetFraction: Float,
     onNavigate: (String) -> Unit,
 ) {
     Surface(
@@ -222,8 +262,8 @@ private fun FrostedBottomNavigationBar(
             .padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 14.dp),
         shape = RoundedCornerShape(38.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.86f),
-        tonalElevation = 4.dp,
-        shadowElevation = 4.dp,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier
@@ -233,66 +273,103 @@ private fun FrostedBottomNavigationBar(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            topDestinations.forEach { item ->
-                val selected = currentRoute == item.route || (currentRoute.isBlank() && item.route == "home")
-                val contentColor = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-                val baseModifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-
-                if (selected) {
-                    Surface(
-                        modifier = baseModifier.clickable { onNavigate(item.route) },
-                        shape = RoundedCornerShape(32.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f),
-                        tonalElevation = 2.dp,
-                        shadowElevation = 4.dp,
-                    ) {
-                        BottomNavItemContent(
-                            selected = true,
-                            label = item.label,
-                            icon = item.selectedIcon,
-                            contentColor = contentColor,
-                        )
-                    }
-                } else {
-                    BottomNavItemContent(
-                        modifier = baseModifier
-                            .clip(RoundedCornerShape(32.dp))
-                            .clickable { onNavigate(item.route) },
-                        selected = false,
-                        label = item.label,
-                        icon = item.unselectedIcon,
-                        contentColor = contentColor,
-                    )
-                }
+            topDestinations.forEachIndexed { index, item ->
+                val pageDistance = (currentPage - index) + pageOffsetFraction
+                val selectedAmount = (1f - abs(pageDistance)).coerceIn(0f, 1f)
+                BottomNavItem(
+                    item = item,
+                    selectedAmount = selectedAmount,
+                    onClick = { onNavigate(item.route) },
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun BottomNavItemContent(
-    selected: Boolean,
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentColor: androidx.compose.ui.graphics.Color,
+private fun BottomNavItem(
+    item: TopDestination,
+    selectedAmount: Float,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = tween(durationMillis = if (pressed) 70 else 120, easing = FastOutSlowInEasing),
+        label = "bottomNavScale",
+    )
+    val indicatorScale = 0.58f + 0.42f * selectedAmount
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(32.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(32.dp))
+                .graphicsLayer {
+                    alpha = selectedAmount
+                    scaleX = indicatorScale
+                    scaleY = 0.96f + 0.04f * selectedAmount
+                }
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)),
+        )
+        BottomNavItemContent(
+            selectedAmount = selectedAmount,
+            label = item.label,
+            selectedIcon = item.selectedIcon,
+            unselectedIcon = item.unselectedIcon,
+        )
+    }
+}
+
+@Composable
+private fun BottomNavItemContent(
+    selectedAmount: Float,
+    label: String,
+    selectedIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    unselectedIcon: androidx.compose.ui.graphics.vector.ImageVector,
+) {
+    val selectedColor = MaterialTheme.colorScheme.onPrimaryContainer
+    val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val contentColor = lerp(unselectedColor, selectedColor, selectedAmount)
     Column(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(icon, contentDescription = label, tint = contentColor)
+        Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+            Icon(
+                unselectedIcon,
+                contentDescription = label,
+                tint = unselectedColor.copy(alpha = 1f - selectedAmount),
+                modifier = Modifier.fillMaxSize(),
+            )
+            Icon(
+                selectedIcon,
+                contentDescription = label,
+                tint = selectedColor.copy(alpha = selectedAmount),
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         Text(
             label,
             color = contentColor,
-            style = if (selected) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall,
         )
     }
 }
@@ -305,4 +382,35 @@ private fun detailMovieIdFromUri(uri: Uri?): Int? {
         segments.firstOrNull() == "detail" -> segments.getOrNull(1)?.toIntOrNull()
         else -> null
     }
+}
+
+data class ConnectionErrorResult(
+    val session: Session,
+    val clearToken: Boolean,
+    val navigateRoute: String?,
+    val message: String,
+)
+
+fun initialTopDestinationPage(session: Session): Int {
+    if (session.serverUrl.isNotBlank()) return 0
+    return topDestinations.indexOfFirst { it.route == "settings" }.coerceAtLeast(0)
+}
+
+fun shouldLoadRemoteContent(session: Session): Boolean = session.serverUrl.isNotBlank()
+
+fun handleConnectionError(session: Session, throwable: Throwable): ConnectionErrorResult {
+    if (throwable is ApiException && throwable.statusCode == 401) {
+        return ConnectionErrorResult(
+            session = session.copy(token = ""),
+            clearToken = true,
+            navigateRoute = "settings",
+            message = "登录已过期，请重新登录",
+        )
+    }
+    return ConnectionErrorResult(
+        session = session,
+        clearToken = false,
+        navigateRoute = null,
+        message = throwable.message ?: "请求失败",
+    )
 }

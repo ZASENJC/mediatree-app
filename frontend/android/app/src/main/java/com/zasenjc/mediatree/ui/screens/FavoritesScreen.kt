@@ -49,7 +49,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.zasenjc.mediatree.data.ApiException
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.Session
@@ -60,6 +59,7 @@ import com.zasenjc.mediatree.ui.components.MoviePosterCard
 import com.zasenjc.mediatree.ui.components.SyncChromeWithGridScroll
 import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.topChromeExitTransition
+import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -74,7 +74,7 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
         val loading: Boolean = false,
         val movies: List<MovieDto> = emptyList(),
         val total: Int = 0,
-        val error: String? = null,
+        val error: Throwable? = null,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -104,7 +104,7 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
                     )
                 }
             } catch (e: Throwable) {
-                _state.update { it.copy(loading = false, error = e.message) }
+                _state.update { it.copy(loading = false, error = e) }
             }
         }
     }
@@ -132,11 +132,16 @@ fun FavoritesScreen(
 
     LaunchedEffect(Unit) {
         onChromeVisibleChange(true)
-        vm.refresh()
+    }
+
+    LaunchedEffect(session.serverUrl) {
+        if (shouldLoadRemoteContent(session)) {
+            vm.refresh()
+        }
     }
 
     LaunchedEffect(state.error) {
-        state.error?.let { onError(ApiException(0, it)) }
+        state.error?.let(onError)
     }
 
     val movies = remember(state.movies, filter, query) {
@@ -147,7 +152,9 @@ fun FavoritesScreen(
 
     Scaffold { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            if (state.loading && state.movies.isEmpty()) {
+            if (!shouldLoadRemoteContent(session)) {
+                FavoriteEmptyState("请先在设置页连接 MediaTree 服务器")
+            } else if (state.loading && state.movies.isEmpty()) {
                 LoadingPane(Modifier.fillMaxSize())
             } else {
                 LazyVerticalGrid(
@@ -208,7 +215,14 @@ fun FavoritesScreen(
                     }
                     if (state.movies.size < state.total) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
-                            Button(onClick = vm::loadMore, modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = {
+                                    if (shouldLoadRemoteContent(session)) {
+                                        vm.loadMore()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
                                 if (state.loading) {
                                     CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
                                 } else {
@@ -252,7 +266,9 @@ fun FavoritesScreen(
                                     leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
                                     onClick = {
                                         moreVisible = false
-                                        vm.refresh()
+                                        if (shouldLoadRemoteContent(session)) {
+                                            vm.refresh()
+                                        }
                                     },
                                 )
                             }
@@ -268,7 +284,7 @@ fun FavoritesScreen(
 }
 
 @Composable
-private fun FavoriteEmptyState() {
+private fun FavoriteEmptyState(text: String = "还没有收藏") {
     Box(
         modifier = Modifier.fillMaxWidth().height(220.dp),
         contentAlignment = Alignment.Center,
@@ -283,7 +299,7 @@ private fun FavoriteEmptyState() {
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.height(42.dp),
             )
-            Text("还没有收藏", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

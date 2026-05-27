@@ -64,6 +64,7 @@ import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.MediaRootDto
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.viewModelFactory
+import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -213,7 +214,9 @@ fun SettingsScreen(
 
     LaunchedEffect(session.serverUrl) {
         vm.initServerInput(session.serverUrl)
-        vm.loadRoots()
+        if (shouldLoadRemoteContent(session)) {
+            vm.loadRoots()
+        }
     }
 
     LaunchedEffect(state.error) {
@@ -246,7 +249,15 @@ fun SettingsScreen(
                         ConnectionStatusChip(session)
                         AssistChip(
                             onClick = {},
-                            label = { Text(if (session.token.isBlank()) "已连接" else "已登录") },
+                            label = {
+                                Text(
+                                    when {
+                                        session.serverUrl.isBlank() -> "未连接"
+                                        session.token.isBlank() -> "已连接"
+                                        else -> "已登录"
+                                    },
+                                )
+                            },
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
