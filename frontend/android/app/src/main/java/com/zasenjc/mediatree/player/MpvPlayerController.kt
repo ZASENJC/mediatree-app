@@ -82,10 +82,11 @@ class MpvPlayerController(
         initialized = true
     }
 
-    fun attachSurface(surface: Any) {
+    fun attachSurface(surface: Any, width: Int = 0, height: Int = 0) {
         initialize()
         backend.attachSurface(surface)
         surfaceAttached = true
+        setSurfaceSize(width, height)
         flushPendingLoad()
     }
 
@@ -163,6 +164,12 @@ class MpvPlayerController(
         if (!initialized) return
         if (aspectRatio.isBlank()) return
         backend.setPropertyString("video-aspect-override", aspectRatio)
+    }
+
+    fun setSurfaceSize(width: Int, height: Int) {
+        if (!initialized) return
+        if (width <= 0 || height <= 0) return
+        backend.setPropertyString("android-surface-size", "${width}x$height")
     }
 
     fun selectSubtitle(subtitleUri: String) {

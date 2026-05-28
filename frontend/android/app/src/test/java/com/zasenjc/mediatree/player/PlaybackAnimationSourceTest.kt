@@ -16,6 +16,8 @@ class PlaybackAnimationSourceTest {
 
         assertTrue(playerView.contains("import android.view.SurfaceView"))
         assertTrue(playerView.contains("SurfaceHolder.Callback"))
+        assertTrue(playerView.contains("override fun surfaceChanged"))
+        assertTrue(playerView.contains("setSurfaceSize(width, height)"))
         assertFalse(playerView.contains("TextureView"))
         assertFalse(playerView.contains("SurfaceTexture"))
     }

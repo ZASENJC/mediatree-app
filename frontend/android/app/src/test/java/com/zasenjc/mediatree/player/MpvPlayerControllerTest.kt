@@ -138,6 +138,25 @@ class MpvPlayerControllerTest {
     }
 
     @Test
+    fun surfaceSizeUpdatesAndroidSurfaceSizeProperty() {
+        val backend = RecordingMpvBackend()
+        val controller = MpvPlayerController(appContext, backend)
+
+        controller.attachSurface(Any(), width = 1920, height = 1080)
+        controller.setSurfaceSize(width = 1280, height = 720)
+        controller.setSurfaceSize(width = 0, height = 720)
+        controller.setSurfaceSize(width = 1280, height = -1)
+
+        assertEquals(
+            listOf(
+                "android-surface-size" to "1920x1080",
+                "android-surface-size" to "1280x720",
+            ),
+            backend.stringProperties,
+        )
+    }
+
+    @Test
     fun releaseStopsPlaybackBeforeDestroyingMpv() {
         val backend = RecordingMpvBackend()
         val controller = MpvPlayerController(appContext, backend)

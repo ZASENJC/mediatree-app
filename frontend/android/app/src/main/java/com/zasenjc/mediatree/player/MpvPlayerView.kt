@@ -29,7 +29,9 @@ class MpvPlayerView @JvmOverloads constructor(
         attachCurrentSurface(controller)
     }
 
-    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = Unit
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        attachedController?.setSurfaceSize(width, height)
+    }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         detachCurrentSurface()
@@ -44,7 +46,7 @@ class MpvPlayerView @JvmOverloads constructor(
         if (target == null || attachedController === target) return
         val surface = holder.surface ?: return
         if (!surface.isValid) return
-        target.attachSurface(surface)
+        target.attachSurface(surface, width = width, height = height)
         attachedController = target
     }
 
