@@ -29,6 +29,12 @@ enum class ClientStorageType {
 }
 
 @Serializable
+enum class ClientStorageAuthType {
+    Basic,
+    Bearer,
+}
+
+@Serializable
 data class ClientStorageSource(
     val id: String,
     val type: ClientStorageType,
@@ -37,6 +43,7 @@ data class ClientStorageSource(
     val path: String = "",
     val username: String = "",
     val secret: String = "",
+    val authType: ClientStorageAuthType = ClientStorageAuthType.Basic,
     val enabled: Boolean = true,
 )
 
@@ -48,6 +55,7 @@ data class ClientStorageSourceMetadata(
     val endpoint: String,
     val path: String = "",
     val username: String = "",
+    val authType: ClientStorageAuthType = ClientStorageAuthType.Basic,
     val enabled: Boolean = true,
 ) {
     fun withSecret(secret: String): ClientStorageSource = ClientStorageSource(
@@ -58,6 +66,7 @@ data class ClientStorageSourceMetadata(
         path = path,
         username = username,
         secret = secret,
+        authType = authType,
         enabled = enabled,
     )
 
@@ -69,6 +78,7 @@ data class ClientStorageSourceMetadata(
             endpoint = source.endpoint,
             path = source.path,
             username = source.username,
+            authType = source.authType,
             enabled = source.enabled,
         )
     }

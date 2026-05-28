@@ -61,6 +61,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zasenjc.mediatree.data.ApiException
 import com.zasenjc.mediatree.data.AppContainer
+import com.zasenjc.mediatree.data.ClientStorageAuthType
 import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.ClientStorageType
 import com.zasenjc.mediatree.data.MediaRootDto
@@ -91,6 +92,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         val webDavUrl: String = "",
         val webDavUsername: String = "",
         val webDavPassword: String = "",
+        val webDavAuthType: ClientStorageAuthType = ClientStorageAuthType.Basic,
         val webDavEnabled: Boolean = true,
         val smbName: String = "SMB",
         val smbAddress: String = "smb://192.168.1.10",
@@ -125,6 +127,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun onWebDavUrlChange(value: String) = _state.update { it.copy(webDavUrl = value) }
     fun onWebDavUsernameChange(value: String) = _state.update { it.copy(webDavUsername = value) }
     fun onWebDavPasswordChange(value: String) = _state.update { it.copy(webDavPassword = value) }
+    fun onWebDavAuthTypeChange(value: ClientStorageAuthType) = _state.update { it.copy(webDavAuthType = value) }
     fun onWebDavEnabledChange(value: Boolean) = _state.update { it.copy(webDavEnabled = value) }
     fun onSmbNameChange(value: String) = _state.update { it.copy(smbName = value) }
     fun onSmbAddressChange(value: String) = _state.update { it.copy(smbAddress = value) }
@@ -203,6 +206,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                     url = state.webDavUrl,
                     username = state.webDavUsername,
                     password = state.webDavPassword,
+                    authType = state.webDavAuthType,
                     enabled = state.webDavEnabled,
                 )
             }
@@ -259,6 +263,7 @@ fun SettingsScreen(
     container: AppContainer,
     session: Session,
     onError: (Throwable) -> Unit,
+    onOpenClientStorageSource: (String) -> Unit = {},
 ) {
     val vm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
@@ -377,6 +382,15 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        ClientStorageAuthType.entries.forEach { authType ->
+                            FilterChip(
+                                selected = state.webDavAuthType == authType,
+                                onClick = { vm.onWebDavAuthTypeChange(authType) },
+                                label = { Text(if (authType == ClientStorageAuthType.Basic) "Basic" else "Bearer") },
+                            )
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = state.webDavUsername,
@@ -480,6 +494,11 @@ fun SettingsScreen(
                                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                         if (source.enabled) {
                                             Icon(Icons.Default.CheckCircle, contentDescription = "已启用")
+                                        }
+                                        if (source.type == ClientStorageType.WebDAV) {
+                                            TextButton(onClick = { onOpenClientStorageSource("webdav/${source.id}") }) {
+                                                Text("浏览")
+                                            }
                                         }
                                         IconButton(onClick = { vm.deleteClientStorageSource(source.id) }) {
                                             Icon(Icons.Default.Delete, contentDescription = "删除存储源")

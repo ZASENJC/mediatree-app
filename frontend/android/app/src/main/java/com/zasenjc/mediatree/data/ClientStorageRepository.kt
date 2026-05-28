@@ -6,12 +6,15 @@ import java.util.UUID
 class ClientStorageRepository(private val store: ClientStorageStore) {
     val sourcesFlow: Flow<List<ClientStorageSource>> = store.sourcesFlow
 
+    suspend fun load(): List<ClientStorageSource> = store.load()
+
     suspend fun saveWebDav(
         id: String = newId(),
         name: String,
         url: String,
         username: String,
         password: String,
+        authType: ClientStorageAuthType = ClientStorageAuthType.Basic,
         enabled: Boolean = true,
     ): ClientStorageSource {
         val endpoint = url.trim()
@@ -23,6 +26,7 @@ class ClientStorageRepository(private val store: ClientStorageStore) {
             endpoint = endpoint,
             username = username.trim(),
             secret = password,
+            authType = authType,
             enabled = enabled,
         )
         store.save(source)

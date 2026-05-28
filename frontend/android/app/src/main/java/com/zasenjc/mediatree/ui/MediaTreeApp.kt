@@ -68,6 +68,8 @@ import com.zasenjc.mediatree.ui.screens.DetailScreen
 import com.zasenjc.mediatree.ui.screens.FavoritesScreen
 import com.zasenjc.mediatree.ui.screens.HomeScreen
 import com.zasenjc.mediatree.ui.screens.SettingsScreen
+import com.zasenjc.mediatree.ui.screens.WebDavBrowseScreen
+import com.zasenjc.mediatree.ui.screens.WebDavPlayerScreen
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -237,7 +239,12 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 chromeVisible = chromeVisible,
                                 onChromeVisibleChange = { chromeVisible = it },
                             )
-                            "settings" -> SettingsScreen(container, session, onError)
+                            "settings" -> SettingsScreen(
+                                container = container,
+                                session = session,
+                                onError = onError,
+                                onOpenClientStorageSource = ::handleAppNavigate,
+                            )
                         }
                     }
                 }
@@ -251,6 +258,43 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                         movieId = entry.arguments?.getInt("movieId") ?: 0,
                         onBack = { navController.popBackStack() },
                         onNavigate = ::handleAppNavigate,
+                        onError = onError,
+                    )
+                }
+                composable(
+                    route = "webdav/{sourceId}?path={path}",
+                    arguments = listOf(
+                        navArgument("sourceId") { type = NavType.StringType },
+                        navArgument("path") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        },
+                    ),
+                ) { entry ->
+                    WebDavBrowseScreen(
+                        container = container,
+                        sourceId = entry.arguments?.getString("sourceId").orEmpty(),
+                        path = entry.arguments?.getString("path").orEmpty(),
+                        onBack = { navController.popBackStack() },
+                        onNavigate = ::handleAppNavigate,
+                        onError = onError,
+                    )
+                }
+                composable(
+                    route = "webdavPlayer/{sourceId}?path={path}",
+                    arguments = listOf(
+                        navArgument("sourceId") { type = NavType.StringType },
+                        navArgument("path") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        },
+                    ),
+                ) { entry ->
+                    WebDavPlayerScreen(
+                        container = container,
+                        sourceId = entry.arguments?.getString("sourceId").orEmpty(),
+                        path = entry.arguments?.getString("path").orEmpty(),
+                        onBack = { navController.popBackStack() },
                         onError = onError,
                     )
                 }

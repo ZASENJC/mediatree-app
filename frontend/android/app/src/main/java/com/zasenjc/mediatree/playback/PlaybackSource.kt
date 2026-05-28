@@ -1,6 +1,8 @@
 package com.zasenjc.mediatree.playback
 
 import com.zasenjc.mediatree.data.SubtitleTrackDto
+import com.zasenjc.mediatree.data.ClientStorageSource
+import com.zasenjc.mediatree.data.WebDavClient
 import com.zasenjc.mediatree.util.UrlUtils
 
 sealed interface PlaybackSource {
@@ -25,6 +27,16 @@ sealed interface PlaybackSource {
                 subtitleUriForTrack = { trackIndex -> "$apiBase/subtitle/$movieId/$trackIndex" },
             )
         }
+
+        fun webDav(
+            source: ClientStorageSource,
+            path: String,
+            subtitleTracks: List<PlaybackSubtitleTrack> = emptyList(),
+        ): WebDavPlaybackSource = WebDavPlaybackSource(
+            uri = WebDavClient.buildResourceUrl(source, path),
+            headers = WebDavClient.authorizationHeaders(source),
+            subtitleTracks = subtitleTracks,
+        )
     }
 }
 
