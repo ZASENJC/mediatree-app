@@ -82,6 +82,8 @@ import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.SubtitleTrackDto
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.player.MediaTreePlayer
+import com.zasenjc.mediatree.playback.PlaybackSource
+import com.zasenjc.mediatree.playback.toPlaybackSubtitleTrack
 import com.zasenjc.mediatree.ui.components.ErrorPane
 import com.zasenjc.mediatree.ui.components.FullscreenSystemBarsEffect
 import com.zasenjc.mediatree.ui.components.InfoBlock
@@ -230,15 +232,21 @@ fun DetailScreen(
         return
     }
 
+    val playbackSource: PlaybackSource = remember(session.serverUrl, session.token, movieId, state.subtitleTracks) {
+        PlaybackSource.mediaTree(
+            serverUrl = session.serverUrl,
+            movieId = movieId,
+            token = session.token,
+            subtitleTracks = state.subtitleTracks.map { it.toPlaybackSubtitleTrack() },
+        )
+    }
+
     if (isLandscape) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             MediaTreePlayer(
-                streamUrl = container.api.streamUrl(session.serverUrl, movieId),
-                token = session.token,
+                playbackSource = playbackSource,
                 startPosition = state.resume,
-                subtitleTracks = state.subtitleTracks,
                 selectedSubtitle = state.selectedSubtitle,
-                subtitleUrlProvider = { idx -> container.api.subtitleUrl(session.serverUrl, movieId, idx) },
                 onProgressUpdate = { pos, dur -> vm.saveProgress(movieId, pos, dur) },
                 onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(movieId, pos, dur) },
                 modifier = Modifier.fillMaxSize(),
@@ -285,12 +293,9 @@ fun DetailScreen(
                 ) {
                     item {
                         MediaTreePlayer(
-                            streamUrl = container.api.streamUrl(session.serverUrl, movieId),
-                            token = session.token,
+                            playbackSource = playbackSource,
                             startPosition = state.resume,
-                            subtitleTracks = state.subtitleTracks,
                             selectedSubtitle = state.selectedSubtitle,
-                            subtitleUrlProvider = { idx -> container.api.subtitleUrl(session.serverUrl, movieId, idx) },
                             onProgressUpdate = { pos, dur -> vm.saveProgress(movieId, pos, dur) },
                             onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(movieId, pos, dur) },
                             modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),

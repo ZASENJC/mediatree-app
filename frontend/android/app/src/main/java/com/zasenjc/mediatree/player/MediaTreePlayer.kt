@@ -53,7 +53,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.zasenjc.mediatree.data.SubtitleTrackDto
+import com.zasenjc.mediatree.playback.PlaybackSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -61,12 +61,9 @@ private const val TAG = "MediaTreePlayer"
 
 @Composable
 fun MediaTreePlayer(
-    streamUrl: String,
-    token: String,
+    playbackSource: PlaybackSource,
     startPosition: Double,
-    subtitleTracks: List<SubtitleTrackDto> = emptyList(),
     selectedSubtitle: Int = -1,
-    subtitleUrlProvider: (Int) -> String = { "" },
     onProgressUpdate: (position: Double, duration: Double) -> Unit = { _, _ -> },
     onPlaybackComplete: (position: Double, duration: Double) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
@@ -74,10 +71,10 @@ fun MediaTreePlayer(
     val context = LocalContext.current
     val activity = context.findActivity()
 
-    // Build http factory + player together, keyed on token and streamUrl.
-    val player = remember(token, streamUrl) {
+    // Build http factory + player together, keyed on playback source.
+    val player = remember(playbackSource) {
         val httpFactory = DefaultHttpDataSource.Factory().apply {
-            setDefaultRequestProperties(authorizationHeaders(token))
+            setDefaultRequestProperties(playbackSource.headers)
         }
         val mediaFactory = DefaultMediaSourceFactory(httpFactory)
         ExoPlayer.Builder(context)
@@ -89,12 +86,16 @@ fun MediaTreePlayer(
     var hudMessage by remember { mutableStateOf("") }
     var showOverlay by remember { mutableStateOf(false) }
 
-    // Setup media source when streamUrl or subtitle changes
-    DisposableEffect(streamUrl, selectedSubtitle) {
+    // Setup media source when playback source or subtitle changes.
+    DisposableEffect(playbackSource, selectedSubtitle) {
         Log.d(TAG, "Preparing media source subtitleSelected=${selectedSubtitle >= 0}")
-        val subUrl = if (selectedSubtitle >= 0) subtitleUrlProvider(selectedSubtitle).takeIf { it.isNotBlank() } else null
+        val subUrl = if (selectedSubtitle >= 0) {
+            playbackSource.subtitleUri(selectedSubtitle)?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
         val mediaItem = MediaItem.Builder()
-            .setUri(Uri.parse(streamUrl))
+            .setUri(Uri.parse(playbackSource.uri))
             .apply {
                 if (subUrl != null) {
                     setSubtitleConfigurations(listOf(
@@ -121,8 +122,8 @@ fun MediaTreePlayer(
         }
     }
 
-    // Clean up player when streamUrl changes or composable leaves
-    DisposableEffect(streamUrl) {
+    // Clean up player when playback source changes or composable leaves.
+    DisposableEffect(playbackSource) {
         onDispose {
             Log.d(TAG, "Releasing player")
             player.stop()
@@ -277,11 +278,6 @@ private fun formatTime(ms: Long): String {
     val sec = totalSec % 60
     return "${min}:${sec.toString().padStart(2, '0')}"
 }
-
-private fun authorizationHeaders(token: String): Map<String, String> =
-    token.takeIf { it.isNotBlank() }
-        ?.let { mapOf("Authorization" to "Bearer ".plus(it)) }
-        ?: emptyMap()
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
