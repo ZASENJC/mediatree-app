@@ -22,6 +22,10 @@ All notable changes to MediaTree are documented here.
 
 ### App Scope
 
+- Removed backend, Docker/deployment, legacy React/Vite frontend, and server wiki files from Git tracking so the repository now tracks app code only
+- Moved local backend/reference, generated data, old web frontend, and local agent/config files under ignored `_reference/` directories
+- Added ignore rules that keep local backend/reference files available without reintroducing them to the app Git tree
+- Updated the release workflow to build and publish the Android APK instead of packaging backend and web frontend update archives
 - Clarified that `mediatree-app` is an Android client repository and connects to an existing MediaTree backend instead of bundling backend services into the APK
 - Changed `npm run android:build` to run the native Gradle app build directly without `cap sync android`
 - Clarified that native Android builds do not require `npm install` or `node_modules`

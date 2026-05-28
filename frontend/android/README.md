@@ -9,8 +9,7 @@ This project builds the Android app only. It connects to an existing MediaTree b
 From the repository root:
 
 ```bash
-cd frontend
-npm run android:build
+sh frontend/scripts/build-android.sh
 ```
 
 Or directly from this Android project:

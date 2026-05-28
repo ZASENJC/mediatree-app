@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <em>Native Android client for MediaTree.<br>Builds the app only, connects to an existing MediaTree backend, and does not bundle backend services into the APK.</em>
+  <em>Native Android media client.<br>Builds the app only, can connect to an existing MediaTree backend, and does not bundle backend services into the APK.</em>
 </p>
 
 <p align="center">
@@ -23,12 +23,13 @@
 
 ## Scope
 
-`mediatree-app` is the client app repository. Its job is to build the Android app and adapt to the MediaTree backend API.
+`mediatree-app` is the standalone client app repository. Its job is to build the Android app and provide a player/media-library experience, with MediaTree backend compatibility handled by server URL.
 
-- The app connects to an existing MediaTree backend by server URL
+- The app can connect to an existing MediaTree backend by server URL
 - The APK does not bundle Python, FastAPI, SQLite databases, Docker images, scanners, or scraper services
-- Backend deployment, scanning, scraping, transcoding, subtitle discovery, and Jellyfin-compatible APIs remain in the standalone MediaTree service
+- Backend deployment, scanning, scraping, transcoding, subtitle discovery, and Jellyfin-compatible APIs remain server-side
 - The app focuses on login, browsing, playback, favorites, progress sync, library switching, and mobile UX
+- This Git tree tracks app code only; local backend/reference files belong under ignored `_reference/`
 
 ---
 
@@ -83,8 +84,8 @@ Main API endpoints currently used by the app:
 
 ```bash
 git clone https://github.com/ZASENJC/mediatree-app.git
-cd mediatree-app/frontend
-npm run android:build
+cd mediatree-app
+sh frontend/scripts/build-android.sh
 ```
 
 The debug APK is generated at:
@@ -129,7 +130,7 @@ frontend/android/app/src/main/java/.../ui/         Material 3 Compose UI, screen
 frontend/android/app/src/main/java/.../player/     Native playback layer
 frontend/android/app/src/main/jniLibs/             Native playback libraries
 frontend/scripts/build-android.sh                  Debug APK build script
-backend/                                           Backend API reference only; not bundled into the app
+frontend/public/icon.svg                           Repository icon
 ```
 
 ---
@@ -152,9 +153,11 @@ backend/                                           Backend API reference only; n
 
 - Build the client app only; do not place backend runtime, databases, or Docker assets into the APK
 - Treat the existing backend API as the contract and prefer compatibility work on the app side
-- Use `npm run android:build` or `frontend/android/gradlew assembleDebug` as the Android build entry point
-- Native Android builds do not require `npm install` or `node_modules`
+- Use `sh frontend/scripts/build-android.sh` or `frontend/android/gradlew assembleDebug` as the Android build entry point
+- Native Android builds do not require `npm install`, `node_modules`, Vite, or Capacitor sync
 - Do not use `cap sync android` as part of the app build
+- Keep backend, Docker, deployment, database, and legacy web frontend files out of Git tracking; if present locally, keep them under `_reference/`
+- Existing local MediaTree reference files are kept in `_reference/mediatree/`; future upstream clones can be placed under `_reference/mediatree-upstream/`
 
 ---
 

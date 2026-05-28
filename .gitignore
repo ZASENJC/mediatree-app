@@ -3,11 +3,43 @@ data/
 __pycache__/
 .env
 .DS_Store
+.claude/
 node_modules/
-frontend/dist/
 *.egg-info/
+
+# Local reference area for upstream MediaTree clones, old backend/web files,
+# generated data, and agent/editor configs. Keep this out of the app Git tree.
+_reference/
+
+# Local backend/deployment reference files kept out of the app repository.
+backend/
+docker/
+Dockerfile
+.dockerignore
 docker-compose.yml
+docker-compose.example.yml
+.env.example
+VERSION
+CLAUDE.md
+docs/wiki/
+docs/wiki_zh-CN/
+
+# Legacy web frontend kept locally only for reference.
+frontend/src/
+frontend/dist/
+frontend/node_modules/
+frontend/index.html
+frontend/package.json
+frontend/package-lock.json
+frontend/postcss.config.js
+frontend/tailwind.config.js
+frontend/tsconfig.json
 frontend/tsconfig.tsbuildinfo
+frontend/vite.config.ts
+frontend/capacitor.config.ts
+frontend/public/fonts/
+
+# Android build output and local SDK configuration.
 frontend/android/.gradle/
 frontend/android/local.properties
 frontend/android/build/

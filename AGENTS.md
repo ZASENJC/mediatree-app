@@ -6,8 +6,8 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 - This repository is for `mediatree-app`, the Android client app for MediaTree.
 - Build the app only. Do not package, embed, start, or ship the backend inside the APK.
-- The app adapts to an existing MediaTree backend API by server URL. Backend deployment, media scanning, scraping, transcoding, database storage, and Jellyfin compatibility remain server-side.
-- The `backend/` directory may be used as API reference context only. Do not modify backend code unless the user explicitly asks for backend changes.
+- The app adapts to existing media-server APIs by server URL, starting with MediaTree backend compatibility. Backend deployment, media scanning, scraping, transcoding, database storage, and Jellyfin compatibility remain server-side.
+- The Git tree should contain app code only. Local backend/upstream reference files belong under ignored `_reference/` directories, and must not be added back to Git or modified unless the user explicitly asks for backend changes.
 - Avoid adding Docker image build/push workflows for app releases. App release artifacts should be APK/AAB or app-specific assets.
 
 ## Push Workflow
@@ -29,7 +29,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ```bash
 # Build native Android debug APK
-cd frontend && npm run android:build
+sh frontend/scripts/build-android.sh
 
 # Build directly from Gradle
 cd frontend/android && ./gradlew assembleDebug
@@ -44,18 +44,9 @@ The debug APK is generated at:
 frontend/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Optional Web Checks
-
-Use these only when touching the shared web frontend or TypeScript assets:
-
-```bash
-cd frontend && npm install
-cd frontend && npm run build
-```
-
 ### Backend Reference Checks
 
-The backend is not part of the app package. Run backend tests only when a task explicitly touches backend compatibility assumptions or backend reference code:
+The backend is not part of the app package or Git tree. If a local reference checkout exists under `_reference/`, run backend tests only when a task explicitly touches backend compatibility assumptions or backend reference code:
 
 ```bash
 cd backend && PYTHONPATH=. python -m unittest discover -s tests -p 'test_*.py'
@@ -113,6 +104,7 @@ Prefer app-side compatibility for response shape differences. If an API mismatch
 - Android builds must not include backend source, Python dependencies, SQLite data, Docker compose files, or server runtime artifacts.
 - `frontend/scripts/build-android.sh` is the app build entry point and should run Gradle only.
 - Do not use `cap sync android` as part of the app build. This native app does not require copying Vite web assets into the Android package.
+- Keep backend, Docker, deployment, database, and legacy web frontend files out of Git tracking. If present locally, keep them under `_reference/` and use them only as reference.
 - Keep generated build output ignored: `frontend/android/build/`, `frontend/android/app/build/`, `.gradle/`, `local.properties`, and copied web assets.
 
 ## Where To Modify For Common Tasks
@@ -138,12 +130,6 @@ cd frontend/android && ./gradlew assembleDebug
 
 ```bash
 cd frontend/android && ./gradlew testDebugUnitTest
-```
-
-- If TypeScript or web files are changed, also run:
-
-```bash
-cd frontend && npm run build
 ```
 
 ## Notes

@@ -22,6 +22,10 @@
 
 ### App 定位
 
+- 将后端、Docker/部署、旧 React/Vite 前端和服务端 wiki 文件移出 Git 跟踪，使仓库只跟踪 app 代码
+- 将本地后端/参考、生成数据、旧 Web 前端和本地 agent/config 文件移动到被忽略的 `_reference/` 目录
+- 新增忽略规则，允许本地继续保留后端/参考文件，同时避免重新进入 app Git 树
+- 更新发布 workflow，改为构建并发布 Android APK，不再打包后端和 Web 前端更新包
 - 明确 `mediatree-app` 是 Android 客户端仓库，只连接已有 MediaTree 后端，不把后端服务打包进 APK
 - 将 `npm run android:build` 改为直接执行原生 Gradle app 构建，不再运行 `cap sync android`
 - 明确原生 Android 构建不需要 `npm install` 或 `node_modules`

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <em>MediaTree 的 Android 原生客户端。<br>只构建 app，只连接已有 MediaTree 后端，不在 APK 内打包后端服务。</em>
+  <em>Android 原生媒体客户端。<br>只构建 app，可连接已有 MediaTree 后端，不在 APK 内打包后端服务。</em>
 </p>
 
 <p align="center">
@@ -23,12 +23,13 @@
 
 ## 项目定位
 
-`mediatree-app` 是客户端 app 仓库，目标是构建 Android 原生客户端并适配 MediaTree 后端 API。
+`mediatree-app` 是独立客户端 app 仓库，目标是构建 Android 原生播放器/媒体库管理体验，并通过服务器地址兼容 MediaTree 后端 API。
 
-- app 通过用户填写的服务器地址连接已有 MediaTree 后端
+- app 可通过用户填写的服务器地址连接已有 MediaTree 后端
 - APK 不内置 Python、FastAPI、SQLite 数据库、Docker 镜像或媒体扫描服务
-- 后端部署、媒体库扫描、刮削、转码、字幕发现和 Jellyfin 兼容接口仍由独立 MediaTree 服务提供
+- 后端部署、媒体库扫描、刮削、转码、字幕发现和 Jellyfin 兼容接口仍由服务端提供
 - app 侧只负责登录、浏览、播放、收藏、进度同步、媒体库切换和移动端体验
+- Git 树只跟踪 app 内容；本地后端/参考文件统一放在被忽略的 `_reference/` 下
 
 ---
 
@@ -83,8 +84,8 @@ app 当前依赖的主要 API 包括：
 
 ```bash
 git clone https://github.com/ZASENJC/mediatree-app.git
-cd mediatree-app/frontend
-npm run android:build
+cd mediatree-app
+sh frontend/scripts/build-android.sh
 ```
 
 构建成功后 APK 位于：
@@ -129,7 +130,7 @@ frontend/android/app/src/main/java/.../ui/         Material 3 Compose UI、scree
 frontend/android/app/src/main/java/.../player/     原生播放器层
 frontend/android/app/src/main/jniLibs/             native playback libraries
 frontend/scripts/build-android.sh                  Android debug APK 构建脚本
-backend/                                          后端接口参考，不打包进 app
+frontend/public/icon.svg                           仓库图标
 ```
 
 ---
@@ -152,9 +153,11 @@ backend/                                          后端接口参考，不打包
 
 - 只构建客户端 app，不把后端运行时、数据库或 Docker 相关内容放进 APK
 - 以后端现有 API 为合同，优先在 app 侧做兼容和降级
-- Android 构建入口是 `npm run android:build` 或 `frontend/android/gradlew assembleDebug`
-- 原生 Android 构建不需要 `npm install` 或 `node_modules`
+- Android 构建入口是 `sh frontend/scripts/build-android.sh` 或 `frontend/android/gradlew assembleDebug`
+- 原生 Android 构建不需要 `npm install`、`node_modules`、Vite 或 Capacitor sync
 - 不再使用 `cap sync android` 作为 app 构建步骤
+- 后端、Docker、部署、数据库和旧 Web 前端文件不要进入 Git 跟踪；如果本地存在，统一放在 `_reference/` 下
+- 当前本地 MediaTree 参考文件放在 `_reference/mediatree/`；后续上游更新可手动 clone 到 `_reference/mediatree-upstream/`
 
 ---
 
