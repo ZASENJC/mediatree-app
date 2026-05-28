@@ -4,6 +4,15 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +65,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -92,11 +102,14 @@ import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.SectionHeader
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+private const val ExitPlayerReleaseDelayMillis = 120L
 
 class DetailViewModel(private val container: AppContainer) : ViewModel() {
     data class UiState(
@@ -189,7 +202,7 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun DetailScreen(
     container: AppContainer,
@@ -203,23 +216,45 @@ fun DetailScreen(
     val activity = context.findActivity()
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    var activeMovieId by remember(movieId) { mutableStateOf(movieId) }
+    var leavingDetail by remember { mutableStateOf(false) }
 
     val vm: DetailViewModel = viewModel(factory = viewModelFactory { DetailViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
+    val contentSnapshots = remember { mutableStateMapOf<Int, DetailViewModel.UiState>() }
 
-    FullscreenSystemBarsEffect(isLandscape)
-    BackHandler(enabled = isLandscape) {
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    fun leaveDetail() {
+        leavingDetail = true
     }
 
-    LaunchedEffect(movieId, session.serverUrl, session.activeLibrary) {
+    FullscreenSystemBarsEffect(isLandscape)
+    BackHandler {
+        if (isLandscape) {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else {
+            leaveDetail()
+        }
+    }
+
+    LaunchedEffect(leavingDetail) {
+        if (leavingDetail) {
+            delay(ExitPlayerReleaseDelayMillis)
+            onBack()
+        }
+    }
+
+    LaunchedEffect(activeMovieId, session.serverUrl, session.activeLibrary) {
         if (shouldLoadRemoteContent(session)) {
-            vm.load(movieId, session.activeLibrary)
+            vm.load(activeMovieId, session.activeLibrary)
         }
     }
 
     LaunchedEffect(state.error) {
         state.error?.let(onError)
+    }
+
+    LaunchedEffect(state.movie?.id, state) {
+        state.movie?.let { contentSnapshots[it.id] = state }
     }
 
     if (!shouldLoadRemoteContent(session)) {
@@ -232,25 +267,33 @@ fun DetailScreen(
         return
     }
 
-    val playbackSource: PlaybackSource = remember(session.serverUrl, session.token, movieId, state.subtitleTracks) {
+    val playbackSource: PlaybackSource = remember(session.serverUrl, session.token, activeMovieId, state.subtitleTracks) {
         PlaybackSource.mediaTree(
             serverUrl = session.serverUrl,
-            movieId = movieId,
+            movieId = activeMovieId,
             token = session.token,
             subtitleTracks = state.subtitleTracks.map { it.toPlaybackSubtitleTrack() },
         )
     }
 
+    val onSelectEpisode: (Int) -> Unit = { episodeId ->
+        if (episodeId != activeMovieId) {
+            activeMovieId = episodeId
+        }
+    }
+
     if (isLandscape) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            MediaTreePlayer(
-                playbackSource = playbackSource,
-                startPosition = state.resume,
-                selectedSubtitle = state.selectedSubtitle,
-                onProgressUpdate = { pos, dur -> vm.saveProgress(movieId, pos, dur) },
-                onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(movieId, pos, dur) },
-                modifier = Modifier.fillMaxSize(),
-            )
+            if (!leavingDetail) {
+                MediaTreePlayer(
+                    playbackSource = playbackSource,
+                    startPosition = state.resume,
+                    selectedSubtitle = state.selectedSubtitle,
+                    onProgressUpdate = { pos, dur -> vm.saveProgress(activeMovieId, pos, dur) },
+                    onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(activeMovieId, pos, dur) },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
         return
     }
@@ -260,7 +303,9 @@ fun DetailScreen(
             TopAppBar(
                 title = {},
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") }
+                    IconButton(onClick = ::leaveDetail) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
                 },
                 actions = {
                     IconButton(onClick = {
@@ -274,7 +319,7 @@ fun DetailScreen(
         },
     ) { padding ->
         when {
-            state.loading -> LoadingPane(Modifier.padding(padding))
+            state.loading && state.movie == null -> LoadingPane(Modifier.padding(padding))
             state.movie == null -> ErrorPane(
                 message = state.error?.message ?: "影片加载失败",
                 onRetry = { vm.load(movieId, session.activeLibrary) },
@@ -282,24 +327,29 @@ fun DetailScreen(
             )
             else -> {
                 val item = state.movie!!
-                var episodesExpanded by remember(item.id) { mutableStateOf(false) }
-                var selectedSeasonKey by remember(item.id, state.seriesItems) {
-                    mutableStateOf(seasonKey(item))
-                }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(padding),
                     contentPadding = PaddingValues(bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     item {
-                        MediaTreePlayer(
-                            playbackSource = playbackSource,
-                            startPosition = state.resume,
-                            selectedSubtitle = state.selectedSubtitle,
-                            onProgressUpdate = { pos, dur -> vm.saveProgress(movieId, pos, dur) },
-                            onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(movieId, pos, dur) },
-                            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f)
+                                .background(MaterialTheme.colorScheme.scrim),
+                        ) {
+                            if (!leavingDetail) {
+                                MediaTreePlayer(
+                                    playbackSource = playbackSource,
+                                    startPosition = state.resume,
+                                    selectedSubtitle = state.selectedSubtitle,
+                                    onProgressUpdate = { pos, dur -> vm.saveProgress(item.id, pos, dur) },
+                                    onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(item.id, pos, dur) },
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
                     }
                     if (state.subtitleTracks.isNotEmpty()) {
                         item {
@@ -311,43 +361,84 @@ fun DetailScreen(
                         }
                     }
                     item {
-                        MovieInfoHeader(
-                            movie = item,
-                            mediaInfo = state.mediaInfo,
-                            seriesItems = state.seriesItems,
-                            currentMovieId = item.id,
-                            serverUrl = session.serverUrl,
-                            episodesExpanded = episodesExpanded,
-                            selectedSeasonKey = selectedSeasonKey,
-                            onToggleEpisodes = { episodesExpanded = !episodesExpanded },
-                            onSelectSeason = { selectedSeasonKey = it },
-                            onNavigate = onNavigate,
-                            onFavorite = vm::toggleFavorite,
-                            onWatched = vm::markWatched,
-                        )
-                    }
-                    item {
-                        CastSection(movie = item, serverUrl = session.serverUrl)
-                    }
-                    item {
-                        ThumbnailStrip(
-                            movie = item,
-                            serverUrl = session.serverUrl,
-                            fallbackStill = container.api.episodeStillUrl(session.serverUrl, item.id),
-                        )
-                    }
-                    item {
-                        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            InfoBlock("简介", item.episodeOverview ?: item.overview ?: "暂无简介")
-                            InfoLine("导演", directorText(item))
-                            InfoLine("类型", item.genre.orEmpty())
-                            InfoLine("片商", item.studio ?: item.studios.orEmpty())
-                            InfoLine("目录", item.folderLevels.orEmpty())
-                            CrewSection(item.crew)
+                        AnimatedContent(
+                            targetState = state.movie!!.id,
+                            transitionSpec = { detailEpisodeContentTransform() },
+                            label = "detailMetadataContent",
+                        ) { contentMovieId ->
+                            val targetState = contentSnapshots[contentMovieId] ?: state
+                            val targetMovie = targetState.movie!!
+                            DetailMetadataContent(
+                                container = container,
+                                session = session,
+                                state = targetState,
+                                movie = targetMovie,
+                                onSelectEpisode = onSelectEpisode,
+                                onNavigate = onNavigate,
+                                onFavorite = vm::toggleFavorite,
+                                onWatched = vm::markWatched,
+                            )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+private fun detailEpisodeContentTransform(): ContentTransform =
+    (
+        fadeIn(animationSpec = tween(durationMillis = 180)) +
+            slideInHorizontally(animationSpec = tween(durationMillis = 260)) { it / 8 }
+        ).togetherWith(
+            fadeOut(animationSpec = tween(durationMillis = 120)) +
+                slideOutHorizontally(animationSpec = tween(durationMillis = 220)) { -it / 12 },
+        )
+
+@Composable
+private fun DetailMetadataContent(
+    container: AppContainer,
+    session: Session,
+    state: DetailViewModel.UiState,
+    movie: MovieDto,
+    onSelectEpisode: (Int) -> Unit,
+    onNavigate: (String) -> Unit,
+    onFavorite: () -> Unit,
+    onWatched: () -> Unit,
+) {
+    var episodesExpanded by remember(movie.id) { mutableStateOf(false) }
+    var selectedSeasonKey by remember(movie.id, state.seriesItems) {
+        mutableStateOf(seasonKey(movie))
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        MovieInfoHeader(
+            movie = movie,
+            mediaInfo = state.mediaInfo,
+            seriesItems = state.seriesItems,
+            currentMovieId = movie.id,
+            serverUrl = session.serverUrl,
+            episodesExpanded = episodesExpanded,
+            selectedSeasonKey = selectedSeasonKey,
+            onToggleEpisodes = { episodesExpanded = !episodesExpanded },
+            onSelectSeason = { selectedSeasonKey = it },
+            onSelectEpisode = onSelectEpisode,
+            onNavigate = onNavigate,
+            onFavorite = onFavorite,
+            onWatched = onWatched,
+        )
+        CastSection(movie = movie, serverUrl = session.serverUrl)
+        ThumbnailStrip(
+            movie = movie,
+            serverUrl = session.serverUrl,
+            fallbackStill = container.api.episodeStillUrl(session.serverUrl, movie.id),
+        )
+        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            InfoBlock("简介", movie.episodeOverview ?: movie.overview ?: "暂无简介")
+            InfoLine("导演", directorText(movie))
+            InfoLine("类型", movie.genre.orEmpty())
+            InfoLine("片商", movie.studio ?: movie.studios.orEmpty())
+            InfoLine("目录", movie.folderLevels.orEmpty())
+            CrewSection(movie.crew)
         }
     }
 }
@@ -392,6 +483,7 @@ private fun MovieInfoHeader(
     selectedSeasonKey: Int,
     onToggleEpisodes: () -> Unit,
     onSelectSeason: (Int) -> Unit,
+    onSelectEpisode: (Int) -> Unit,
     onNavigate: (String) -> Unit,
     onFavorite: () -> Unit,
     onWatched: () -> Unit,
@@ -430,7 +522,7 @@ private fun MovieInfoHeader(
                 currentMovieId = currentMovieId,
                 serverUrl = serverUrl,
                 onSelectSeason = onSelectSeason,
-                onNavigate = onNavigate,
+                onSelectEpisode = onSelectEpisode,
             )
         }
         movie.episodeTitle?.takeIf { it.isNotBlank() }?.let {
@@ -530,7 +622,7 @@ private fun EpisodeSelector(
     currentMovieId: Int,
     serverUrl: String,
     onSelectSeason: (Int) -> Unit,
-    onNavigate: (String) -> Unit,
+    onSelectEpisode: (Int) -> Unit,
 ) {
     val selectedGroup = seasonGroups.firstOrNull { it.key == selectedSeasonKey } ?: return
     val selectedIndex = selectedGroup.episodes.indexOfFirst { it.id == currentMovieId }.coerceAtLeast(0)
@@ -558,7 +650,7 @@ private fun EpisodeSelector(
                     imageUrl = episodeStillImageUrl(serverUrl, episode),
                     selected = episode.id == currentMovieId,
                     onClick = {
-                        if (episode.id != currentMovieId) onNavigate("detail/${episode.id}")
+                        if (episode.id != currentMovieId) onSelectEpisode(episode.id)
                     },
                 )
             }

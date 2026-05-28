@@ -108,27 +108,33 @@ class MpvPlayerController(
     }
 
     fun play() {
+        if (!initialized) return
         backend.setPropertyBoolean("pause", false)
     }
 
     fun pause() {
+        if (!initialized) return
         backend.setPropertyBoolean("pause", true)
     }
 
     fun seekTo(seconds: Double) {
+        if (!initialized) return
         backend.command(arrayOf("seek", seconds.toString(), "absolute", "exact"))
     }
 
     fun seekBy(deltaSeconds: Double) {
+        if (!initialized) return
         backend.command(arrayOf("seek", deltaSeconds.toString(), "relative", "exact"))
     }
 
     fun selectSubtitle(subtitleUri: String) {
+        if (!initialized) return
         if (subtitleUri.isBlank()) return
         backend.command(arrayOf("sub-add", subtitleUri, "select"))
     }
 
     fun clearSubtitle() {
+        if (!initialized) return
         backend.command(arrayOf("sub-remove"))
     }
 
@@ -146,11 +152,11 @@ class MpvPlayerController(
         backend.setPropertyString("vo", "null")
     }
 
-    fun positionSeconds(): Double = backend.getPropertyDouble("time-pos")
+    fun positionSeconds(): Double = if (initialized) backend.getPropertyDouble("time-pos") else 0.0
 
-    fun durationSeconds(): Double = backend.getPropertyDouble("duration")
+    fun durationSeconds(): Double = if (initialized) backend.getPropertyDouble("duration") else 0.0
 
-    fun isEnded(): Boolean = backend.getPropertyBoolean("eof-reached")
+    fun isEnded(): Boolean = initialized && backend.getPropertyBoolean("eof-reached")
 
     fun release() {
         if (!initialized) return

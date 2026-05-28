@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.media.AudioManager
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -44,6 +46,9 @@ import com.zasenjc.mediatree.playback.PlaybackSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
+private const val SourceSwapCurtainFadeInMillis = 120
+private const val SourceSwapCurtainFadeOutMillis = 220
+
 @Composable
 fun MediaTreePlayer(
     playbackSource: PlaybackSource,
@@ -56,7 +61,7 @@ fun MediaTreePlayer(
     val context = LocalContext.current
     val activity = context.findActivity()
     val appContext = context.applicationContext
-    val controller = remember(playbackSource) { MpvPlayerController(appContext) }
+    val controller = remember(appContext) { MpvPlayerController(appContext) }
 
     var isPlaying by remember { mutableStateOf(false) }
     var positionSeconds by remember { mutableDoubleStateOf(startPosition.coerceAtLeast(0.0)) }
@@ -64,8 +69,28 @@ fun MediaTreePlayer(
     var completedReported by remember(playbackSource) { mutableStateOf(false) }
     var hudMessage by remember { mutableStateOf("") }
     var showOverlay by remember { mutableStateOf(false) }
+    var curtainVisible by remember { mutableStateOf(true) }
+    val curtainAlpha by animateFloatAsState(
+        targetValue = if (curtainVisible) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (curtainVisible) {
+                SourceSwapCurtainFadeInMillis
+            } else {
+                SourceSwapCurtainFadeOutMillis
+            },
+        ),
+        label = "sourceSwapCurtainAlpha",
+    )
 
-    DisposableEffect(playbackSource) {
+    DisposableEffect(controller) {
+        onDispose {
+            controller.release()
+        }
+    }
+
+    LaunchedEffect(playbackSource) {
+        curtainVisible = true
+        delay(SourceSwapCurtainFadeInMillis.toLong())
         controller.loadUrl(
             url = playbackSource.uri,
             headers = playbackSource.headers,
@@ -73,10 +98,7 @@ fun MediaTreePlayer(
         )
         controller.play()
         isPlaying = true
-
-        onDispose {
-            controller.release()
-        }
+        curtainVisible = false
     }
 
     DisposableEffect(playbackSource, selectedSubtitle) {
@@ -147,6 +169,14 @@ fun MediaTreePlayer(
             factory = { MpvPlayerView(it).apply { this.controller = controller } },
             update = { view -> view.controller = controller },
         )
+
+        if (curtainAlpha > 0.01f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = curtainAlpha)),
+            )
+        }
 
         if (hudMessage.isNotBlank()) {
             LaunchedEffect(hudMessage) {

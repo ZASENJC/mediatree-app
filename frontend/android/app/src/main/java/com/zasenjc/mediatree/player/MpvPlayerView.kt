@@ -41,8 +41,9 @@ class MpvPlayerView @JvmOverloads constructor(
     }
 
     private fun attachCurrentSurface(target: MpvPlayerController?) {
+        if (target == null || attachedController === target) return
         val surface = holder.surface ?: return
-        if (!surface.isValid || target == null || attachedController === target) return
+        if (!surface.isValid) return
         target.attachSurface(surface)
         attachedController = target
     }

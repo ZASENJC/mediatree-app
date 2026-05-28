@@ -63,6 +63,7 @@ class MpvPlayerControllerTest {
         val backend = RecordingMpvBackend()
         val controller = MpvPlayerController(appContext, backend)
 
+        controller.attachSurface(Any())
         controller.play()
         controller.pause()
         controller.seekTo(90.0)
@@ -157,6 +158,7 @@ class MpvPlayerControllerTest {
             booleanValues["eof-reached"] = true
         }
         val controller = MpvPlayerController(appContext, backend)
+        controller.attachSurface(Any())
 
         assertEquals(15.25, controller.positionSeconds(), 0.001)
         assertEquals(120.0, controller.durationSeconds(), 0.001)
@@ -168,6 +170,7 @@ class MpvPlayerControllerTest {
         val backend = RecordingMpvBackend()
         val controller = MpvPlayerController(appContext, backend)
 
+        controller.attachSurface(Any())
         controller.selectSubtitle("http://media.local/api/subtitle/42/3")
         controller.clearSubtitle()
 
@@ -178,6 +181,38 @@ class MpvPlayerControllerTest {
             ),
             backend.commands,
         )
+    }
+
+    @Test
+    fun playbackCallsAfterReleaseDoNotTouchNativeBackend() {
+        val backend = RecordingMpvBackend().apply {
+            doubleProperties["time-pos"] = 15.25
+            doubleProperties["duration"] = 120.0
+            booleanValues["eof-reached"] = true
+        }
+        val controller = MpvPlayerController(appContext, backend)
+
+        controller.attachSurface(Any())
+        controller.loadUrl(url = "http://media.local/api/stream/42")
+        controller.release()
+        backend.commands.clear()
+        backend.booleanProperties.clear()
+        backend.doublePropertyReads.clear()
+        backend.booleanPropertyReads.clear()
+
+        controller.play()
+        controller.pause()
+        controller.seekBy(10.0)
+        controller.selectSubtitle("http://media.local/api/subtitle/42/3")
+        controller.clearSubtitle()
+
+        assertEquals(0.0, controller.positionSeconds(), 0.001)
+        assertEquals(0.0, controller.durationSeconds(), 0.001)
+        assertFalse(controller.isEnded())
+        assertEquals(emptyList<List<String>>(), backend.commands)
+        assertEquals(emptyList<Pair<String, Boolean>>(), backend.booleanProperties)
+        assertEquals(emptyList<String>(), backend.doublePropertyReads)
+        assertEquals(emptyList<String>(), backend.booleanPropertyReads)
     }
 
     @Test
@@ -229,6 +264,8 @@ class MpvPlayerControllerTest {
         val stringProperties = mutableListOf<Pair<String, String>>()
         val doubleProperties = mutableMapOf<String, Double>()
         val booleanValues = mutableMapOf<String, Boolean>()
+        val doublePropertyReads = mutableListOf<String>()
+        val booleanPropertyReads = mutableListOf<String>()
         var created = false
         var createdContext: Any? = null
         var initialized = false
@@ -266,9 +303,15 @@ class MpvPlayerControllerTest {
             stringProperties += name to value
         }
 
-        override fun getPropertyDouble(name: String): Double = doubleProperties[name] ?: 0.0
+        override fun getPropertyDouble(name: String): Double {
+            doublePropertyReads += name
+            return doubleProperties[name] ?: 0.0
+        }
 
-        override fun getPropertyBoolean(name: String): Boolean = booleanValues[name] ?: false
+        override fun getPropertyBoolean(name: String): Boolean {
+            booleanPropertyReads += name
+            return booleanValues[name] ?: false
+        }
 
         override fun attachSurface(surface: Any) {
             attachedSurface = surface
