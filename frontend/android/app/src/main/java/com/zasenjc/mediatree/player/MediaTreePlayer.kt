@@ -7,21 +7,36 @@ import android.media.AudioManager
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.SyncProblem
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -39,15 +54,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.zasenjc.mediatree.playback.PlaybackSource
+import com.zasenjc.mediatree.playback.PlaybackSubtitleTrack
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 private const val SourceSwapCurtainFadeInMillis = 120
 private const val SourceSwapCurtainFadeOutMillis = 220
+private const val OverlayAutoHideMillis = 3_500L
+private const val HudAutoHideMillis = 1_500L
+
+private val PlayerSpeeds = listOf(0.75, 1.0, 1.25, 1.5, 2.0)
+private val AspectRatioOptions = listOf(
+    PlayerMenuOption("no", "默认"),
+    PlayerMenuOption("16:9", "16:9"),
+    PlayerMenuOption("4:3", "4:3"),
+    PlayerMenuOption("2.35:1", "2.35:1"),
+)
 
 @Composable
 fun MediaTreePlayer(
@@ -69,6 +96,12 @@ fun MediaTreePlayer(
     var completedReported by remember(playbackSource) { mutableStateOf(false) }
     var hudMessage by remember { mutableStateOf("") }
     var showOverlay by remember { mutableStateOf(false) }
+    var playerLocked by remember { mutableStateOf(false) }
+    var playbackSpeed by remember { mutableDoubleStateOf(1.0) }
+    var selectedAspectRatio by remember { mutableStateOf("no") }
+    var selectedAudioTrackId by remember { mutableStateOf("") }
+    var audioTracks by remember { mutableStateOf<List<MpvTrackOption>>(emptyList()) }
+    var playbackError by remember { mutableStateOf<String?>(null) }
     var curtainVisible by remember { mutableStateOf(true) }
     val curtainAlpha by animateFloatAsState(
         targetValue = if (curtainVisible) 1f else 0f,
@@ -90,28 +123,36 @@ fun MediaTreePlayer(
 
     LaunchedEffect(playbackSource) {
         curtainVisible = true
+        playbackError = null
         delay(SourceSwapCurtainFadeInMillis.toLong())
-        controller.loadUrl(
-            url = playbackSource.uri,
-            headers = playbackSource.headers,
-            startPositionSeconds = startPosition,
-        )
-        controller.play()
-        isPlaying = true
+        runCatching {
+            controller.loadUrl(
+                url = playbackSource.uri,
+                headers = playbackSource.headers,
+                startPositionSeconds = startPosition,
+            )
+            controller.play()
+            isPlaying = true
+        }.onFailure {
+            playbackError = it.message ?: "播放器启动失败"
+            isPlaying = false
+        }
         curtainVisible = false
     }
 
-    DisposableEffect(playbackSource, selectedSubtitle) {
+    DisposableEffect(controller, playbackSource, selectedSubtitle) {
         val subtitleUri = if (selectedSubtitle >= 0) {
             playbackSource.subtitleUri(selectedSubtitle)?.takeIf { it.isNotBlank() }
         } else {
             null
         }
-        if (subtitleUri == null) {
-            controller.clearSubtitle()
-        } else {
-            controller.selectSubtitle(subtitleUri)
-        }
+        runCatching {
+            if (subtitleUri == null) {
+                controller.clearSubtitle()
+            } else {
+                controller.selectSubtitle(subtitleUri)
+            }
+        }.onFailure { playbackError = it.message ?: "字幕切换失败" }
         onDispose { }
     }
 
@@ -120,6 +161,8 @@ fun MediaTreePlayer(
             delay(1_000)
             positionSeconds = controller.positionSeconds().coerceAtLeast(0.0)
             durationSeconds = controller.durationSeconds().coerceAtLeast(0.0)
+            playbackError = controller.lastError() ?: playbackError
+            audioTracks = controller.audioTrackOptions()
             if (!completedReported && controller.isEnded()) {
                 completedReported = true
                 onPlaybackComplete(positionSeconds, durationSeconds)
@@ -139,8 +182,9 @@ fun MediaTreePlayer(
     Box(
         modifier = modifier
             .background(Color.Black)
-            .pointerInput(Unit) {
+            .pointerInput(playerLocked) {
                 detectVerticalDragGestures { change, dragAmount ->
+                    if (playerLocked) return@detectVerticalDragGestures
                     val halfWidth = size.width / 2f
                     val ratio = (dragAmount / size.height).coerceIn(-0.5f, 0.5f)
                     if (change.position.x < halfWidth) {
@@ -160,8 +204,20 @@ fun MediaTreePlayer(
                     }
                 }
             }
-            .pointerInput(Unit) {
-                detectTapGestures { showOverlay = !showOverlay }
+            .pointerInput(playerLocked) {
+                detectTapGestures(
+                    onTap = { showOverlay = !showOverlay },
+                    onDoubleTap = { offset ->
+                        if (playerLocked) {
+                            showOverlay = true
+                            return@detectTapGestures
+                        }
+                        val seekDelta = if (offset.x < size.width / 2f) -10.0 else 10.0
+                        controller.seekBy(seekDelta)
+                        hudMessage = if (seekDelta < 0) "快退 10 秒" else "快进 10 秒"
+                        showOverlay = true
+                    },
+                )
             },
     ) {
         AndroidView(
@@ -180,40 +236,39 @@ fun MediaTreePlayer(
 
         if (hudMessage.isNotBlank()) {
             LaunchedEffect(hudMessage) {
-                delay(1500)
+                delay(HudAutoHideMillis)
                 hudMessage = ""
             }
         }
 
         if (showOverlay) {
-            LaunchedEffect(showOverlay) {
-                delay(3000)
-                showOverlay = false
+            LaunchedEffect(showOverlay, playerLocked) {
+                if (!playerLocked) {
+                    delay(OverlayAutoHideMillis)
+                    showOverlay = false
+                }
             }
 
-            Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp).padding(horizontal = 24.dp).fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
-                    Text(formatTime(positionSeconds), color = Color.White, fontSize = 12.sp)
-                    Text(formatTime(durationSeconds), color = Color.White, fontSize = 12.sp)
-                }
-                LinearProgressIndicator(
-                    progress = {
-                        if (durationSeconds > 0) (positionSeconds / durationSeconds).toFloat().coerceIn(0f, 1f) else 0f
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.3f),
-                )
-            }
-
-            Row(
-                modifier = Modifier.align(Alignment.Center),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { controller.seekBy(-10.0) }) {
-                    Icon(Icons.Default.Replay10, contentDescription = "快退10秒", tint = Color.White, modifier = Modifier.size(36.dp))
-                }
-                IconButton(onClick = {
+            PlayerControlsOverlay(
+                isPlaying = isPlaying,
+                playerLocked = playerLocked,
+                positionSeconds = positionSeconds,
+                durationSeconds = durationSeconds,
+                playbackSpeed = playbackSpeed,
+                selectedSubtitle = selectedSubtitle,
+                subtitleTracks = playbackSource.subtitleTracks,
+                audioTracks = audioTracks,
+                selectedAudioTrackId = selectedAudioTrackId,
+                selectedAspectRatio = selectedAspectRatio,
+                onToggleLock = {
+                    playerLocked = !playerLocked
+                    showOverlay = true
+                },
+                onSeekBy = { delta ->
+                    controller.seekBy(delta)
+                    hudMessage = if (delta < 0) "快退 ${(-delta).toInt()} 秒" else "快进 ${delta.toInt()} 秒"
+                },
+                onTogglePlay = {
                     if (isPlaying) {
                         controller.pause()
                         isPlaying = false
@@ -221,34 +276,361 @@ fun MediaTreePlayer(
                         controller.play()
                         isPlaying = true
                     }
-                }) {
+                },
+                onSpeedChange = { speed ->
+                    playbackSpeed = speed
+                    controller.setPlaybackSpeed(speed)
+                    hudMessage = "${speed.formatSpeed()}x"
+                    showOverlay = true
+                },
+                onSubtitleChange = { option ->
+                    if (option == null) {
+                        controller.clearSubtitle()
+                        hudMessage = "字幕关闭"
+                    } else {
+                        playbackSource.subtitleUri(option.index)?.takeIf { it.isNotBlank() }?.let(controller::selectSubtitle)
+                        hudMessage = option.subtitleLabel()
+                    }
+                    showOverlay = true
+                },
+                onAudioTrackChange = { option ->
+                    selectedAudioTrackId = option.id
+                    controller.selectAudioTrack(option.id)
+                    hudMessage = option.label
+                    showOverlay = true
+                },
+                onAspectRatioChange = { option ->
+                    selectedAspectRatio = option.id
+                    controller.setAspectRatio(option.id)
+                    hudMessage = "画面 ${option.label}"
+                    showOverlay = true
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        if (playerLocked && !showOverlay) {
+            PlayerLock(playerLocked = playerLocked) {
+                playerLocked = false
+                showOverlay = true
+                hudMessage = "控制已解锁"
+            }
+        }
+
+        if (hudMessage.isNotBlank()) {
+            Text(
+                hudMessage,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .background(Color.Black.copy(alpha = 0.66f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                color = Color.White,
+                fontSize = 14.sp,
+            )
+        }
+
+        playbackError?.let { message ->
+            PlayerErrorOverlay(message = message, onDismiss = { playbackError = null })
+        }
+    }
+}
+
+@Composable
+private fun PlayerControlsOverlay(
+    isPlaying: Boolean,
+    playerLocked: Boolean,
+    positionSeconds: Double,
+    durationSeconds: Double,
+    playbackSpeed: Double,
+    selectedSubtitle: Int,
+    subtitleTracks: List<PlaybackSubtitleTrack>,
+    audioTracks: List<MpvTrackOption>,
+    selectedAudioTrackId: String,
+    selectedAspectRatio: String,
+    onToggleLock: () -> Unit,
+    onSeekBy: (Double) -> Unit,
+    onTogglePlay: () -> Unit,
+    onSpeedChange: (Double) -> Unit,
+    onSubtitleChange: (PlaybackSubtitleTrack?) -> Unit,
+    onAudioTrackChange: (MpvTrackOption) -> Unit,
+    onAspectRatioChange: (PlayerMenuOption) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.background(Color.Black.copy(alpha = 0.28f))) {
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LockButton(playerLocked = playerLocked, onToggleLock = onToggleLock)
+        }
+
+        if (!playerLocked) {
+            Row(
+                modifier = Modifier.align(Alignment.Center),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                IconButton(onClick = { onSeekBy(-10.0) }) {
+                    Icon(Icons.Default.Replay10, contentDescription = "快退10秒", tint = Color.White, modifier = Modifier.size(38.dp))
+                }
+                IconButton(onClick = onTogglePlay) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) "暂停" else "播放",
                         tint = Color.White,
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(52.dp),
                     )
                 }
-                IconButton(onClick = { controller.seekBy(10.0) }) {
-                    Icon(Icons.Default.Forward10, contentDescription = "快进10秒", tint = Color.White, modifier = Modifier.size(36.dp))
+                IconButton(onClick = { onSeekBy(10.0) }) {
+                    Icon(Icons.Default.Forward10, contentDescription = "快进10秒", tint = Color.White, modifier = Modifier.size(38.dp))
                 }
             }
 
-            if (hudMessage.isNotBlank()) {
-                Text(
-                    hudMessage,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(bottom = 80.dp)
-                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+            Column(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 18.dp, vertical = 18.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(formatTime(positionSeconds), color = Color.White, fontSize = 12.sp)
+                    Text(formatTime(durationSeconds), color = Color.White, fontSize = 12.sp)
+                }
+                LinearProgressIndicator(
+                    progress = {
+                        if (durationSeconds > 0) (positionSeconds / durationSeconds).toFloat().coerceIn(0f, 1f) else 0f
+                    },
+                    modifier = Modifier.fillMaxWidth(),
                     color = Color.White,
-                    fontSize = 14.sp,
+                    trackColor = Color.White.copy(alpha = 0.28f),
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PlaybackSpeedMenu(selectedSpeed = playbackSpeed, onSpeedChange = onSpeedChange)
+                    SubtitleTrackMenu(
+                        selectedSubtitle = selectedSubtitle,
+                        tracks = subtitleTracks,
+                        onSubtitleChange = onSubtitleChange,
+                    )
+                    AudioTrackMenu(
+                        selectedAudioTrackId = selectedAudioTrackId,
+                        tracks = audioTracks,
+                        onAudioTrackChange = onAudioTrackChange,
+                    )
+                    AspectRatioMenu(selectedAspectRatio = selectedAspectRatio, onAspectRatioChange = onAspectRatioChange)
+                }
             }
         }
     }
 }
+
+@Composable
+private fun LockButton(playerLocked: Boolean, onToggleLock: () -> Unit) {
+    IconButton(
+        onClick = onToggleLock,
+        modifier = Modifier.background(Color.Black.copy(alpha = 0.48f), RoundedCornerShape(26.dp)),
+    ) {
+        Icon(
+            if (playerLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+            contentDescription = if (playerLocked) "解锁播放器" else "锁定播放器",
+            tint = Color.White,
+        )
+    }
+}
+
+@Composable
+private fun PlayerLock(playerLocked: Boolean, onToggle: () -> Unit) {
+    if (playerLocked) {
+        Box(Modifier.fillMaxSize()) {
+            LockButton(
+                playerLocked = true,
+                onToggleLock = onToggle,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaybackSpeedMenu(selectedSpeed: Double, onSpeedChange: (Double) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    PlayerMenuChip(
+        icon = { Icon(Icons.Default.Speed, contentDescription = null) },
+        label = "${selectedSpeed.formatSpeed()}x",
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        PlayerSpeeds.forEach { speed ->
+            DropdownMenuItem(
+                text = { Text("${speed.formatSpeed()}x") },
+                onClick = {
+                    expanded = false
+                    onSpeedChange(speed)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubtitleTrackMenu(
+    selectedSubtitle: Int,
+    tracks: List<PlaybackSubtitleTrack>,
+    onSubtitleChange: (PlaybackSubtitleTrack?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = tracks.firstOrNull { it.index == selectedSubtitle }?.subtitleLabel() ?: "字幕"
+    PlayerMenuChip(
+        icon = { Icon(Icons.Default.Subtitles, contentDescription = null) },
+        label = label,
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        DropdownMenuItem(
+            text = { Text("关闭字幕") },
+            onClick = {
+                expanded = false
+                onSubtitleChange(null)
+            },
+        )
+        tracks.forEach { track ->
+            DropdownMenuItem(
+                text = { Text(track.subtitleLabel()) },
+                onClick = {
+                    expanded = false
+                    onSubtitleChange(track)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AudioTrackMenu(
+    selectedAudioTrackId: String,
+    tracks: List<MpvTrackOption>,
+    onAudioTrackChange: (MpvTrackOption) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = tracks.firstOrNull { it.id == selectedAudioTrackId }?.label ?: "音轨"
+    PlayerMenuChip(
+        icon = { Icon(Icons.Default.Audiotrack, contentDescription = null) },
+        label = label,
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        enabled = tracks.isNotEmpty(),
+    ) {
+        tracks.forEach { track ->
+            DropdownMenuItem(
+                text = { Text(track.label) },
+                onClick = {
+                    expanded = false
+                    onAudioTrackChange(track)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AspectRatioMenu(
+    selectedAspectRatio: String,
+    onAspectRatioChange: (PlayerMenuOption) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = AspectRatioOptions.firstOrNull { it.id == selectedAspectRatio }?.label ?: "默认"
+    PlayerMenuChip(
+        icon = { Icon(Icons.Default.AspectRatio, contentDescription = null) },
+        label = label,
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        AspectRatioOptions.forEach { option ->
+            DropdownMenuItem(
+                text = { Text(option.label) },
+                onClick = {
+                    expanded = false
+                    onAspectRatioChange(option)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayerMenuChip(
+    icon: @Composable () -> Unit,
+    label: String,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    Box {
+        AssistChip(
+            enabled = enabled,
+            onClick = { onExpandedChange(true) },
+            leadingIcon = icon,
+            label = {
+                Text(
+                    label,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { onExpandedChange(false) },
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun PlayerErrorOverlay(message: String, onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.58f))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.SyncProblem, contentDescription = null, tint = Color.White)
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text("播放异常", color = Color.White, fontSize = 14.sp)
+                Spacer(Modifier.height(2.dp))
+                Text(message, color = Color.White.copy(alpha = 0.78f), fontSize = 12.sp, maxLines = 3)
+            }
+        }
+    }
+}
+
+private data class PlayerMenuOption(
+    val id: String,
+    val label: String,
+)
+
+private fun PlaybackSubtitleTrack.subtitleLabel(): String =
+    title.ifBlank { language.ifBlank { "字幕 $index" } }
+
+private fun Double.formatSpeed(): String =
+    if (this % 1.0 == 0.0) toInt().toString() else toString().trimEnd('0').trimEnd('.')
 
 private fun formatTime(seconds: Double): String {
     val totalSec = seconds.toLong().coerceAtLeast(0)

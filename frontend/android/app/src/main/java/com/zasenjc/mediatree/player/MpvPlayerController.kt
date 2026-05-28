@@ -10,8 +10,11 @@ interface MpvBackend {
     fun destroy()
     fun command(args: Array<String>)
     fun setOptionString(name: String, value: String)
+    fun getPropertyInt(name: String): Int
     fun getPropertyDouble(name: String): Double
     fun getPropertyBoolean(name: String): Boolean
+    fun getPropertyString(name: String): String?
+    fun setPropertyDouble(name: String, value: Double)
     fun setPropertyBoolean(name: String, value: Boolean)
     fun setPropertyString(name: String, value: String)
     fun attachSurface(surface: Any)
@@ -29,9 +32,15 @@ object NativeMpvBackend : MpvBackend {
 
     override fun setOptionString(name: String, value: String) = MPVLib.setOptionString(name, value)
 
+    override fun getPropertyInt(name: String): Int = MPVLib.getPropertyInt(name)
+
     override fun getPropertyDouble(name: String): Double = MPVLib.getPropertyDouble(name)
 
     override fun getPropertyBoolean(name: String): Boolean = MPVLib.getPropertyBoolean(name)
+
+    override fun getPropertyString(name: String): String? = MPVLib.getPropertyString(name)
+
+    override fun setPropertyDouble(name: String, value: Double) = MPVLib.setPropertyDouble(name, value)
 
     override fun setPropertyBoolean(name: String, value: Boolean) = MPVLib.setPropertyBoolean(name, value)
 
@@ -43,6 +52,11 @@ object NativeMpvBackend : MpvBackend {
 
     override fun detachSurface() = MPVLib.detachSurface()
 }
+
+data class MpvTrackOption(
+    val id: String,
+    val label: String,
+)
 
 class MpvPlayerController(
     private val appContext: Any,
@@ -127,6 +141,23 @@ class MpvPlayerController(
         backend.command(arrayOf("seek", deltaSeconds.toString(), "relative", "exact"))
     }
 
+    fun setPlaybackSpeed(speed: Double) {
+        if (!initialized) return
+        backend.setPropertyDouble("speed", speed.coerceIn(0.25, 3.0))
+    }
+
+    fun selectAudioTrack(trackId: String) {
+        if (!initialized) return
+        if (trackId.isBlank()) return
+        backend.setPropertyString("aid", trackId)
+    }
+
+    fun setAspectRatio(aspectRatio: String) {
+        if (!initialized) return
+        if (aspectRatio.isBlank()) return
+        backend.setPropertyString("video-aspect-override", aspectRatio)
+    }
+
     fun selectSubtitle(subtitleUri: String) {
         if (!initialized) return
         if (subtitleUri.isBlank()) return
@@ -158,6 +189,21 @@ class MpvPlayerController(
 
     fun isEnded(): Boolean = initialized && backend.getPropertyBoolean("eof-reached")
 
+    fun lastError(): String? =
+        if (initialized) backend.getPropertyString("error-string")?.takeIf { it.isNotBlank() } else null
+
+    fun audioTrackOptions(): List<MpvTrackOption> {
+        if (!initialized) return emptyList()
+        val count = backend.getPropertyInt("track-list/count").coerceAtLeast(0)
+        return (0 until count).mapNotNull { index ->
+            if (backend.getPropertyString("track-list/$index/type") != "audio") return@mapNotNull null
+            val id = backend.getPropertyInt("track-list/$index/id").takeIf { it > 0 }?.toString() ?: return@mapNotNull null
+            val title = backend.getPropertyString("track-list/$index/title").orEmpty()
+            val language = backend.getPropertyString("track-list/$index/lang").orEmpty()
+            MpvTrackOption(id = id, label = audioTrackLabel(id, title, language))
+        }
+    }
+
     fun release() {
         if (!initialized) return
         stopLoadedFile()
@@ -175,3 +221,8 @@ class MpvPlayerController(
 
 private fun Map<String, String>.toHeaderFields(): String =
     entries.joinToString(",") { (name, value) -> "$name: $value" }
+
+private fun audioTrackLabel(id: String, title: String, language: String): String {
+    val base = title.ifBlank { "音轨 $id" }
+    return if (language.isBlank()) base else "$base ($language)"
+}

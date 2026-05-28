@@ -68,10 +68,21 @@ class MpvPlayerControllerTest {
         controller.pause()
         controller.seekTo(90.0)
         controller.seekBy(-10.0)
+        controller.setPlaybackSpeed(1.25)
+        controller.selectAudioTrack("2")
+        controller.setAspectRatio("16:9")
 
         assertEquals(
             listOf("pause" to false, "pause" to true),
             backend.booleanProperties,
+        )
+        assertEquals(listOf("speed" to 1.25), backend.doublePropertiesSet)
+        assertEquals(
+            listOf(
+                "aid" to "2",
+                "video-aspect-override" to "16:9",
+            ),
+            backend.stringProperties,
         )
         assertEquals(
             listOf(
@@ -166,6 +177,35 @@ class MpvPlayerControllerTest {
     }
 
     @Test
+    fun audioTrackOptionsReadMpvTrackList() {
+        val backend = RecordingMpvBackend().apply {
+            intValues["track-list/count"] = 4
+            stringValues["track-list/0/type"] = "video"
+            intValues["track-list/0/id"] = 1
+            stringValues["track-list/1/type"] = "audio"
+            intValues["track-list/1/id"] = 2
+            stringValues["track-list/1/title"] = "Japanese 5.1"
+            stringValues["track-list/1/lang"] = "jpn"
+            stringValues["track-list/2/type"] = "sub"
+            intValues["track-list/2/id"] = 3
+            stringValues["track-list/3/type"] = "audio"
+            intValues["track-list/3/id"] = 4
+            stringValues["track-list/3/lang"] = "eng"
+        }
+        val controller = MpvPlayerController(appContext, backend)
+
+        controller.attachSurface(Any())
+
+        assertEquals(
+            listOf(
+                MpvTrackOption(id = "2", label = "Japanese 5.1 (jpn)"),
+                MpvTrackOption(id = "4", label = "音轨 4 (eng)"),
+            ),
+            controller.audioTrackOptions(),
+        )
+    }
+
+    @Test
     fun subtitleSelectionAddsAndClearsExternalSubtitle() {
         val backend = RecordingMpvBackend()
         val controller = MpvPlayerController(appContext, backend)
@@ -197,12 +237,17 @@ class MpvPlayerControllerTest {
         controller.release()
         backend.commands.clear()
         backend.booleanProperties.clear()
+        backend.doublePropertiesSet.clear()
+        backend.stringProperties.clear()
         backend.doublePropertyReads.clear()
         backend.booleanPropertyReads.clear()
 
         controller.play()
         controller.pause()
         controller.seekBy(10.0)
+        controller.setPlaybackSpeed(1.5)
+        controller.selectAudioTrack("1")
+        controller.setAspectRatio("4:3")
         controller.selectSubtitle("http://media.local/api/subtitle/42/3")
         controller.clearSubtitle()
 
@@ -211,6 +256,8 @@ class MpvPlayerControllerTest {
         assertFalse(controller.isEnded())
         assertEquals(emptyList<List<String>>(), backend.commands)
         assertEquals(emptyList<Pair<String, Boolean>>(), backend.booleanProperties)
+        assertEquals(emptyList<Pair<String, Double>>(), backend.doublePropertiesSet)
+        assertEquals(emptyList<Pair<String, String>>(), backend.stringProperties)
         assertEquals(emptyList<String>(), backend.doublePropertyReads)
         assertEquals(emptyList<String>(), backend.booleanPropertyReads)
     }
@@ -261,9 +308,12 @@ class MpvPlayerControllerTest {
         val options = mutableListOf<Pair<String, String>>()
         val commands = mutableListOf<List<String>>()
         val booleanProperties = mutableListOf<Pair<String, Boolean>>()
+        val doublePropertiesSet = mutableListOf<Pair<String, Double>>()
         val stringProperties = mutableListOf<Pair<String, String>>()
         val doubleProperties = mutableMapOf<String, Double>()
         val booleanValues = mutableMapOf<String, Boolean>()
+        val intValues = mutableMapOf<String, Int>()
+        val stringValues = mutableMapOf<String, String>()
         val doublePropertyReads = mutableListOf<String>()
         val booleanPropertyReads = mutableListOf<String>()
         var created = false
@@ -302,6 +352,14 @@ class MpvPlayerControllerTest {
         override fun setPropertyString(name: String, value: String) {
             stringProperties += name to value
         }
+
+        override fun setPropertyDouble(name: String, value: Double) {
+            doublePropertiesSet += name to value
+        }
+
+        override fun getPropertyInt(name: String): Int = intValues[name] ?: 0
+
+        override fun getPropertyString(name: String): String? = stringValues[name]
 
         override fun getPropertyDouble(name: String): Double {
             doublePropertyReads += name
