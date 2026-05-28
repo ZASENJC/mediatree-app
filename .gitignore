@@ -1,4 +1,6 @@
 data/
+!frontend/android/app/src/main/java/com/zasenjc/mediatree/data/
+!frontend/android/app/src/main/java/com/zasenjc/mediatree/data/*.kt
 *.pyc
 __pycache__/
 .env

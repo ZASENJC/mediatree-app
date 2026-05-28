@@ -17,10 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -61,11 +61,14 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zasenjc.mediatree.data.ApiException
 import com.zasenjc.mediatree.data.AppContainer
+import com.zasenjc.mediatree.data.ClientStorageSource
+import com.zasenjc.mediatree.data.ClientStorageType
 import com.zasenjc.mediatree.data.MediaRootDto
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,13 +76,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private val libraryViews = listOf("全部媒体库", "电影库", "剧集库")
-
-data class SmbServerUi(
-    val address: String,
-    val sharePath: String,
-    val username: String,
-    val enabled: Boolean,
-)
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     data class UiState(
@@ -90,17 +86,31 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         val scanning: Boolean = false,
         val message: String = "",
         val error: String? = null,
+        val clientStorageSources: List<ClientStorageSource> = emptyList(),
+        val webDavName: String = "WebDAV",
+        val webDavUrl: String = "",
+        val webDavUsername: String = "",
+        val webDavPassword: String = "",
+        val webDavEnabled: Boolean = true,
+        val smbName: String = "SMB",
         val smbAddress: String = "smb://192.168.1.10",
         val smbSharePath: String = "/Media",
         val smbUsername: String = "",
         val smbPassword: String = "",
         val smbEnabled: Boolean = true,
-        val smbServers: List<SmbServerUi> = emptyList(),
         val libraryView: String = "全部媒体库",
     )
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            container.clientStorageRepository.sourcesFlow.collect { sources ->
+                _state.update { it.copy(clientStorageSources = sources) }
+            }
+        }
+    }
 
     fun initServerInput(serverUrl: String) {
         if (_state.value.serverInput.isBlank() || _state.value.serverInput != serverUrl) {
@@ -111,6 +121,12 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun onServerInputChange(value: String) = _state.update { it.copy(serverInput = value, message = "") }
     fun onUsernameChange(value: String) = _state.update { it.copy(username = value) }
     fun onPasswordChange(value: String) = _state.update { it.copy(password = value) }
+    fun onWebDavNameChange(value: String) = _state.update { it.copy(webDavName = value) }
+    fun onWebDavUrlChange(value: String) = _state.update { it.copy(webDavUrl = value) }
+    fun onWebDavUsernameChange(value: String) = _state.update { it.copy(webDavUsername = value) }
+    fun onWebDavPasswordChange(value: String) = _state.update { it.copy(webDavPassword = value) }
+    fun onWebDavEnabledChange(value: Boolean) = _state.update { it.copy(webDavEnabled = value) }
+    fun onSmbNameChange(value: String) = _state.update { it.copy(smbName = value) }
     fun onSmbAddressChange(value: String) = _state.update { it.copy(smbAddress = value) }
     fun onSmbSharePathChange(value: String) = _state.update { it.copy(smbSharePath = value) }
     fun onSmbUsernameChange(value: String) = _state.update { it.copy(smbUsername = value) }
@@ -178,24 +194,61 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun addSmbServer() {
+    fun saveWebDavSource() {
         val state = _state.value
-        if (state.smbAddress.isBlank() || state.smbSharePath.isBlank()) {
-            _state.update { it.copy(error = "请填写 SMB 地址和共享路径") }
-            return
+        viewModelScope.launch {
+            kotlin.runCatching {
+                container.clientStorageRepository.saveWebDav(
+                    name = state.webDavName,
+                    url = state.webDavUrl,
+                    username = state.webDavUsername,
+                    password = state.webDavPassword,
+                    enabled = state.webDavEnabled,
+                )
+            }
+                .onSuccess {
+                    _state.update { current ->
+                        current.copy(
+                            message = "WebDAV 存储源已保存",
+                            error = null,
+                            webDavPassword = "",
+                        )
+                    }
+                }
+                .onFailure { throwable -> _state.update { it.copy(error = throwable.message) } }
         }
-        val server = SmbServerUi(
-            address = state.smbAddress,
-            sharePath = state.smbSharePath,
-            username = state.smbUsername,
-            enabled = state.smbEnabled,
-        )
-        _state.update {
-            it.copy(
-                smbServers = it.smbServers + server,
-                message = "SMB 服务器已加入本地草稿",
-                smbSharePath = "",
-            )
+    }
+
+    fun saveSmbSource() {
+        val state = _state.value
+        viewModelScope.launch {
+            kotlin.runCatching {
+                container.clientStorageRepository.saveSmb(
+                    name = state.smbName,
+                    server = state.smbAddress,
+                    sharePath = state.smbSharePath,
+                    username = state.smbUsername,
+                    password = state.smbPassword,
+                    enabled = state.smbEnabled,
+                )
+            }
+                .onSuccess {
+                    _state.update { current ->
+                        current.copy(
+                            message = "SMB 存储源已保存",
+                            error = null,
+                            smbPassword = "",
+                        )
+                    }
+                }
+                .onFailure { throwable -> _state.update { it.copy(error = throwable.message) } }
+        }
+    }
+
+    fun deleteClientStorageSource(sourceId: String) {
+        viewModelScope.launch {
+            container.clientStorageRepository.delete(sourceId)
+            _state.update { it.copy(message = "存储源已删除", error = null) }
         }
     }
 }
@@ -210,6 +263,7 @@ fun SettingsScreen(
     val vm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
     var passwordVisible by remember { mutableStateOf(false) }
+    var webDavPasswordVisible by remember { mutableStateOf(false) }
     var smbPasswordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(session.serverUrl) {
@@ -301,18 +355,77 @@ fun SettingsScreen(
                 }
             }
             item {
-                SettingsSectionCard(title = "SMB 服务器", icon = Icons.Default.SettingsEthernet) {
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                SettingsSectionCard(title = "客户端存储源", icon = Icons.Default.Storage) {
+                    Text("WebDAV", style = MaterialTheme.typography.titleSmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = state.webDavName,
+                            onValueChange = vm::onWebDavNameChange,
+                            label = { Text("名称") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+                            Text("启用", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            Switch(checked = state.webDavEnabled, onCheckedChange = vm::onWebDavEnabledChange)
+                        }
+                    }
+                    OutlinedTextField(
+                        value = state.webDavUrl,
+                        onValueChange = vm::onWebDavUrlChange,
+                        label = { Text("WebDAV 地址") },
                         modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("启用 SMB 服务器", style = MaterialTheme.typography.bodyMedium)
-                        Switch(checked = state.smbEnabled, onCheckedChange = vm::onSmbEnabledChange)
+                        singleLine = true,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = state.webDavUsername,
+                            onValueChange = vm::onWebDavUsernameChange,
+                            label = { Text("用户名") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = state.webDavPassword,
+                            onValueChange = vm::onWebDavPasswordChange,
+                            label = { Text("密码或 Token") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            visualTransformation = if (webDavPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { webDavPasswordVisible = !webDavPasswordVisible }) {
+                                    Icon(
+                                        if (webDavPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = "切换 WebDAV 密钥显示",
+                                    )
+                                }
+                            },
+                        )
+                    }
+                    Button(onClick = vm::saveWebDavSource, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("保存 WebDAV")
+                    }
+
+                    Text("SMB", style = MaterialTheme.typography.titleSmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = state.smbName,
+                            onValueChange = vm::onSmbNameChange,
+                            label = { Text("名称") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+                            Text("启用", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            Switch(checked = state.smbEnabled, onCheckedChange = vm::onSmbEnabledChange)
+                        }
                     }
                     OutlinedTextField(
                         value = state.smbAddress,
                         onValueChange = vm::onSmbAddressChange,
-                        label = { Text("服务器地址") },
+                        label = { Text("SMB 地址") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -342,28 +455,36 @@ fun SettingsScreen(
                                 IconButton(onClick = { smbPasswordVisible = !smbPasswordVisible }) {
                                     Icon(
                                         if (smbPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = "切换密码显示",
+                                        contentDescription = "切换 SMB 密码显示",
                                     )
                                 }
                             },
                         )
                     }
-                    Button(onClick = vm::addSmbServer, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = vm::saveSmbSource, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("添加 SMB 服务器")
+                        Text("保存 SMB")
                     }
-                    state.smbServers.forEach { server ->
+
+                    state.clientStorageSources.forEach { source ->
                         ElevatedCard(
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                         ) {
                             ListItem(
-                                headlineContent = { Text(server.sharePath.ifBlank { server.address }) },
-                                supportingContent = { Text("${server.address} · ${server.username.ifBlank { "匿名" }}") },
+                                headlineContent = { Text(source.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                supportingContent = { Text(source.storageSummary(), maxLines = 2, overflow = TextOverflow.Ellipsis) },
                                 leadingContent = { Icon(Icons.Default.Storage, contentDescription = null) },
                                 trailingContent = {
-                                    if (server.enabled) Icon(Icons.Default.CheckCircle, contentDescription = "已启用")
+                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        if (source.enabled) {
+                                            Icon(Icons.Default.CheckCircle, contentDescription = "已启用")
+                                        }
+                                        IconButton(onClick = { vm.deleteClientStorageSource(source.id) }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "删除存储源")
+                                        }
+                                    }
                                 },
                             )
                         }
@@ -468,4 +589,15 @@ private fun List<MediaRootDto>.filterForLibraryView(view: String): List<MediaRoo
     "电影库" -> filter { it.label.contains("movie", true) || it.path.contains("movie", true) }
     "剧集库" -> filter { it.label.contains("tv", true) || it.path.contains("tv", true) || it.label.contains("show", true) }
     else -> this
+}
+
+private fun ClientStorageSource.storageSummary(): String {
+    val provider = when (type) {
+        ClientStorageType.WebDAV -> "WebDAV"
+        ClientStorageType.SMB -> "SMB"
+    }
+    val location = listOf(endpoint, path)
+        .filter { it.isNotBlank() }
+        .joinToString(" ")
+    return "$provider · $location · ${username.ifBlank { "匿名" }}"
 }
