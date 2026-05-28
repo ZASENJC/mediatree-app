@@ -1,14 +1,18 @@
 package `is`.xyz.mpv
 
+import android.content.Context
+import android.util.Log
 import android.view.Surface
 
 object MPVLib {
+    private const val TAG = "MPVLib"
+
     init {
         System.loadLibrary("mpv")
         System.loadLibrary("player")
     }
 
-    external fun create()
+    external fun create(context: Context)
     external fun init()
     external fun destroy()
     external fun command(args: Array<String>)
@@ -25,4 +29,20 @@ object MPVLib {
     external fun setPropertyString(name: String, value: String)
     external fun observeProperty(name: String, format: Int)
     external fun grabThumbnail(width: Int): ByteArray?
+
+    @JvmStatic fun eventProperty(name: String) = Unit
+
+    @JvmStatic fun eventProperty(name: String, value: Boolean) = Unit
+
+    @JvmStatic fun eventProperty(name: String, value: Long) = Unit
+
+    @JvmStatic fun eventProperty(name: String, value: Double) = Unit
+
+    @JvmStatic fun eventProperty(name: String, value: String?) = Unit
+
+    @JvmStatic fun event(eventId: Int) = Unit
+
+    @JvmStatic fun logMessage(prefix: String, level: Int, text: String) {
+        Log.d(TAG, "[$prefix/$level] $text")
+    }
 }

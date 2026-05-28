@@ -9,13 +9,15 @@ class MpvPlayerView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
 ) : SurfaceView(context, attrs), SurfaceHolder.Callback {
+    private var attachedController: MpvPlayerController? = null
+
     var controller: MpvPlayerController? = null
         set(value) {
             if (field === value) return
-            field?.detachSurface()
+            detachCurrentSurface()
             field = value
             if (holder.surface?.isValid == true) {
-                value?.attachSurface(holder.surface)
+                attachCurrentSurface(value)
             }
         }
 
@@ -24,17 +26,29 @@ class MpvPlayerView @JvmOverloads constructor(
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
-        controller?.attachSurface(holder.surface)
+        attachCurrentSurface(controller)
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = Unit
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
-        controller?.detachSurface()
+        detachCurrentSurface()
     }
 
     override fun onDetachedFromWindow() {
-        controller?.detachSurface()
+        detachCurrentSurface()
         super.onDetachedFromWindow()
+    }
+
+    private fun attachCurrentSurface(target: MpvPlayerController?) {
+        val surface = holder.surface ?: return
+        if (!surface.isValid || target == null || attachedController === target) return
+        target.attachSurface(surface)
+        attachedController = target
+    }
+
+    private fun detachCurrentSurface() {
+        attachedController?.detachSurface()
+        attachedController = null
     }
 }
