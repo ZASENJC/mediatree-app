@@ -51,7 +51,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -92,6 +91,7 @@ import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.SubtitleTrackDto
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.player.MediaTreePlayer
+import com.zasenjc.mediatree.player.PlaybackPositionSnapshot
 import com.zasenjc.mediatree.playback.PlaybackSource
 import com.zasenjc.mediatree.playback.toPlaybackSubtitleTrack
 import com.zasenjc.mediatree.ui.components.ErrorPane
@@ -218,19 +218,28 @@ fun DetailScreen(
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     var activeMovieId by remember(movieId) { mutableStateOf(movieId) }
     var leavingDetail by remember { mutableStateOf(false) }
+    val playbackPositions = remember { mutableStateMapOf<Int, Double>() }
+    var playbackPositionSnapshot by remember { mutableStateOf<(() -> PlaybackPositionSnapshot?)?>(null) }
 
     val vm: DetailViewModel = viewModel(factory = viewModelFactory { DetailViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
     val contentSnapshots = remember { mutableStateMapOf<Int, DetailViewModel.UiState>() }
+    val activeMovie = state.movie?.takeIf { it.id == activeMovieId }
 
     fun leaveDetail() {
         leavingDetail = true
     }
 
+    fun capturePlaybackPosition() {
+        val snapshot = playbackPositionSnapshot?.invoke() ?: return
+        playbackPositions[activeMovieId] = snapshot.positionSeconds
+    }
+
     FullscreenSystemBarsEffect(isLandscape)
     BackHandler {
         if (isLandscape) {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            capturePlaybackPosition()
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
         } else {
             leaveDetail()
         }
@@ -244,6 +253,7 @@ fun DetailScreen(
     }
 
     LaunchedEffect(activeMovieId, session.serverUrl, session.activeLibrary) {
+        playbackPositionSnapshot = null
         if (shouldLoadRemoteContent(session)) {
             vm.load(activeMovieId, session.activeLibrary)
         }
@@ -282,105 +292,110 @@ fun DetailScreen(
         }
     }
 
-    if (isLandscape) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            if (!leavingDetail) {
-                MediaTreePlayer(
-                    playbackSource = playbackSource,
-                    startPosition = state.resume,
-                    selectedSubtitle = state.selectedSubtitle,
-                    onProgressUpdate = { pos, dur -> vm.saveProgress(activeMovieId, pos, dur) },
-                    onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(activeMovieId, pos, dur) },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-        return
-    }
-
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {},
-                navigationIcon = {
-                    IconButton(onClick = ::leaveDetail) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    }) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "横屏播放")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-            )
+            if (!isLandscape) {
+                TopAppBar(
+                    title = {},
+                    navigationIcon = {
+                        IconButton(onClick = ::leaveDetail) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "横屏播放")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+                )
+            }
         },
     ) { padding ->
-        when {
-            state.loading && state.movie == null -> LoadingPane(Modifier.padding(padding))
-            state.movie == null -> ErrorPane(
-                message = state.error?.message ?: "影片加载失败",
-                onRetry = { vm.load(movieId, session.activeLibrary) },
-                modifier = Modifier.padding(padding),
-            )
-            else -> {
-                val item = state.movie!!
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    item {
-                        Box(
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (isLandscape) Modifier else Modifier.padding(padding))
+                .background(MaterialTheme.colorScheme.background),
+        ) {
+            when {
+                state.loading && activeMovie == null -> LoadingPane()
+                activeMovie == null -> ErrorPane(
+                    message = state.error?.message ?: "影片加载失败",
+                    onRetry = { vm.load(activeMovieId, session.activeLibrary) },
+                )
+                !isLandscape -> {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Spacer(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(16f / 9f)
                                 .background(MaterialTheme.colorScheme.scrim),
+                        )
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 28.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            if (!leavingDetail) {
-                                MediaTreePlayer(
-                                    playbackSource = playbackSource,
-                                    startPosition = state.resume,
-                                    selectedSubtitle = state.selectedSubtitle,
-                                    onProgressUpdate = { pos, dur -> vm.saveProgress(item.id, pos, dur) },
-                                    onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(item.id, pos, dur) },
-                                    modifier = Modifier.fillMaxSize(),
-                                )
+                            item {
+                                AnimatedContent(
+                                    targetState = activeMovie.id,
+                                    transitionSpec = { detailEpisodeContentTransform() },
+                                    label = "detailMetadataContent",
+                                ) { contentMovieId ->
+                                    val targetState = contentSnapshots[contentMovieId] ?: state
+                                    val targetMovie = targetState.movie!!
+                                    DetailMetadataContent(
+                                        container = container,
+                                        session = session,
+                                        state = targetState,
+                                        movie = targetMovie,
+                                        onSelectEpisode = onSelectEpisode,
+                                        onNavigate = onNavigate,
+                                        onFavorite = vm::toggleFavorite,
+                                        onWatched = vm::markWatched,
+                                    )
+                                }
                             }
                         }
                     }
-                    if (state.subtitleTracks.isNotEmpty()) {
-                        item {
-                            SubtitleSelector(
-                                tracks = state.subtitleTracks,
-                                selectedSubtitle = state.selectedSubtitle,
-                                onSelect = vm::selectSubtitle,
-                            )
-                        }
-                    }
-                    item {
-                        AnimatedContent(
-                            targetState = state.movie!!.id,
-                            transitionSpec = { detailEpisodeContentTransform() },
-                            label = "detailMetadataContent",
-                        ) { contentMovieId ->
-                            val targetState = contentSnapshots[contentMovieId] ?: state
-                            val targetMovie = targetState.movie!!
-                            DetailMetadataContent(
-                                container = container,
-                                session = session,
-                                state = targetState,
-                                movie = targetMovie,
-                                onSelectEpisode = onSelectEpisode,
-                                onNavigate = onNavigate,
-                                onFavorite = vm::toggleFavorite,
-                                onWatched = vm::markWatched,
-                            )
-                        }
-                    }
                 }
+            }
+
+            if (activeMovie != null && !leavingDetail) {
+                val playerModifier = if (isLandscape) {
+                    Modifier
+                        .fillMaxSize()
+                        .align(Alignment.Center)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .align(Alignment.TopCenter)
+                }
+                MediaTreePlayer(
+                    playbackSource = playbackSource,
+                    startPosition = playbackPositions[activeMovieId] ?: state.resume,
+                    selectedSubtitle = state.selectedSubtitle,
+                    onPlaybackPositionChange = { pos, _ -> playbackPositions[activeMovieId] = pos },
+                    onPlaybackPositionSnapshot = { playbackPositionSnapshot = it },
+                    onProgressUpdate = { pos, dur -> vm.saveProgress(activeMovieId, pos, dur) },
+                    onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(activeMovieId, pos, dur) },
+                    isFullscreen = isLandscape,
+                    showFullscreenButton = true,
+                    showAspectRatioControls = isLandscape,
+                    onFullscreenRequest = {
+                        capturePlaybackPosition()
+                        activity?.requestedOrientation = if (isLandscape) {
+                            ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                        } else {
+                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        }
+                    },
+                    modifier = playerModifier,
+                )
             }
         }
     }
@@ -439,35 +454,6 @@ private fun DetailMetadataContent(
             InfoLine("片商", movie.studio ?: movie.studios.orEmpty())
             InfoLine("目录", movie.folderLevels.orEmpty())
             CrewSection(movie.crew)
-        }
-    }
-}
-
-@Composable
-private fun SubtitleSelector(
-    tracks: List<SubtitleTrackDto>,
-    selectedSubtitle: Int,
-    onSelect: (Int) -> Unit,
-) {
-    LazyRow(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item {
-            FilterChip(
-                selected = selectedSubtitle == -1,
-                onClick = { onSelect(-1) },
-                label = { Text("关闭字幕") },
-            )
-        }
-        items(tracks) { track ->
-            FilterChip(
-                selected = selectedSubtitle == track.index,
-                onClick = { onSelect(track.index) },
-                label = {
-                    Text(track.title.ifBlank { track.language.ifBlank { "轨道 ${track.index}" } })
-                },
-            )
         }
     }
 }

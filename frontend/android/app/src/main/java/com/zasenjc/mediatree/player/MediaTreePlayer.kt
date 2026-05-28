@@ -25,12 +25,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.SyncProblem
@@ -67,6 +67,7 @@ private const val SourceSwapCurtainFadeInMillis = 120
 private const val SourceSwapCurtainFadeOutMillis = 220
 private const val OverlayAutoHideMillis = 3_500L
 private const val HudAutoHideMillis = 1_500L
+private const val LockedButtonAutoHideMillis = 5_000L
 
 private val PlayerSpeeds = listOf(0.75, 1.0, 1.25, 1.5, 2.0)
 private val AspectRatioOptions = listOf(
@@ -76,6 +77,27 @@ private val AspectRatioOptions = listOf(
     PlayerMenuOption("2.35:1", "2.35:1"),
 )
 
+enum class PlayerDoubleTapAction {
+    Rewind,
+    TogglePlay,
+    Forward,
+}
+
+fun playerDoubleTapAction(tapX: Float, width: Int): PlayerDoubleTapAction {
+    if (width <= 0) return PlayerDoubleTapAction.TogglePlay
+    val sideZone = width * 0.3f
+    return when {
+        tapX < sideZone -> PlayerDoubleTapAction.Rewind
+        tapX > width - sideZone -> PlayerDoubleTapAction.Forward
+        else -> PlayerDoubleTapAction.TogglePlay
+    }
+}
+
+data class PlaybackPositionSnapshot(
+    val positionSeconds: Double,
+    val durationSeconds: Double,
+)
+
 @Composable
 fun MediaTreePlayer(
     playbackSource: PlaybackSource,
@@ -83,6 +105,12 @@ fun MediaTreePlayer(
     selectedSubtitle: Int = -1,
     onProgressUpdate: (position: Double, duration: Double) -> Unit = { _, _ -> },
     onPlaybackComplete: (position: Double, duration: Double) -> Unit = { _, _ -> },
+    onPlaybackPositionChange: (position: Double, duration: Double) -> Unit = { _, _ -> },
+    onPlaybackPositionSnapshot: ((() -> PlaybackPositionSnapshot?) -> Unit)? = null,
+    showFullscreenButton: Boolean = false,
+    isFullscreen: Boolean = false,
+    showAspectRatioControls: Boolean = false,
+    onFullscreenRequest: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -97,6 +125,7 @@ fun MediaTreePlayer(
     var hudMessage by remember { mutableStateOf("") }
     var showOverlay by remember { mutableStateOf(false) }
     var playerLocked by remember { mutableStateOf(false) }
+    var showLockedButton by remember { mutableStateOf(false) }
     var playbackSpeed by remember { mutableDoubleStateOf(1.0) }
     var selectedAspectRatio by remember { mutableStateOf("no") }
     var selectedAudioTrackId by remember { mutableStateOf("") }
@@ -121,7 +150,7 @@ fun MediaTreePlayer(
         }
     }
 
-    LaunchedEffect(playbackSource) {
+    LaunchedEffect(playbackSource.uri, playbackSource.headers) {
         curtainVisible = true
         playbackError = null
         delay(SourceSwapCurtainFadeInMillis.toLong())
@@ -161,6 +190,7 @@ fun MediaTreePlayer(
             delay(1_000)
             positionSeconds = controller.positionSeconds().coerceAtLeast(0.0)
             durationSeconds = controller.durationSeconds().coerceAtLeast(0.0)
+            onPlaybackPositionChange(positionSeconds, durationSeconds)
             playbackError = controller.lastError() ?: playbackError
             audioTracks = controller.audioTrackOptions()
             if (!completedReported && controller.isEnded()) {
@@ -170,12 +200,31 @@ fun MediaTreePlayer(
         }
     }
 
+    DisposableEffect(controller, onPlaybackPositionSnapshot) {
+        onPlaybackPositionSnapshot?.invoke {
+            PlaybackPositionSnapshot(
+                positionSeconds = controller.positionSeconds().coerceAtLeast(0.0),
+                durationSeconds = controller.durationSeconds().coerceAtLeast(0.0),
+            )
+        }
+        onDispose {
+            onPlaybackPositionSnapshot?.invoke { null }
+        }
+    }
+
     LaunchedEffect(controller) {
         while (isActive) {
             delay(15_000)
             if (positionSeconds > 0) {
                 onProgressUpdate(positionSeconds, durationSeconds)
             }
+        }
+    }
+
+    LaunchedEffect(playerLocked, showLockedButton) {
+        if (playerLocked && showLockedButton) {
+            delay(LockedButtonAutoHideMillis)
+            showLockedButton = false
         }
     }
 
@@ -209,12 +258,30 @@ fun MediaTreePlayer(
                     onTap = { showOverlay = !showOverlay },
                     onDoubleTap = { offset ->
                         if (playerLocked) {
-                            showOverlay = true
+                            showLockedButton = true
                             return@detectTapGestures
                         }
-                        val seekDelta = if (offset.x < size.width / 2f) -10.0 else 10.0
-                        controller.seekBy(seekDelta)
-                        hudMessage = if (seekDelta < 0) "快退 10 秒" else "快进 10 秒"
+                        when (playerDoubleTapAction(tapX = offset.x, width = size.width)) {
+                            PlayerDoubleTapAction.Rewind -> {
+                                controller.seekBy(-10.0)
+                                hudMessage = "快退 10 秒"
+                            }
+                            PlayerDoubleTapAction.TogglePlay -> {
+                                if (isPlaying) {
+                                    controller.pause()
+                                    isPlaying = false
+                                    hudMessage = "暂停"
+                                } else {
+                                    controller.play()
+                                    isPlaying = true
+                                    hudMessage = "播放"
+                                }
+                            }
+                            PlayerDoubleTapAction.Forward -> {
+                                controller.seekBy(10.0)
+                                hudMessage = "快进 10 秒"
+                            }
+                        }
                         showOverlay = true
                     },
                 )
@@ -260,13 +327,13 @@ fun MediaTreePlayer(
                 audioTracks = audioTracks,
                 selectedAudioTrackId = selectedAudioTrackId,
                 selectedAspectRatio = selectedAspectRatio,
+                showFullscreenButton = showFullscreenButton,
+                isFullscreen = isFullscreen,
+                showAspectRatioControls = showAspectRatioControls,
                 onToggleLock = {
-                    playerLocked = !playerLocked
+                    playerLocked = true
+                    showLockedButton = true
                     showOverlay = true
-                },
-                onSeekBy = { delta ->
-                    controller.seekBy(delta)
-                    hudMessage = if (delta < 0) "快退 ${(-delta).toInt()} 秒" else "快进 ${delta.toInt()} 秒"
                 },
                 onTogglePlay = {
                     if (isPlaying) {
@@ -305,13 +372,15 @@ fun MediaTreePlayer(
                     hudMessage = "画面 ${option.label}"
                     showOverlay = true
                 },
+                onFullscreenRequest = onFullscreenRequest,
                 modifier = Modifier.fillMaxSize(),
             )
         }
 
-        if (playerLocked && !showOverlay) {
-            PlayerLock(playerLocked = playerLocked) {
+        if (playerLocked && showLockedButton && !showOverlay) {
+            PlayerLock(playerLocked = playerLocked, modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)) {
                 playerLocked = false
+                showLockedButton = false
                 showOverlay = true
                 hudMessage = "控制已解锁"
             }
@@ -347,62 +416,58 @@ private fun PlayerControlsOverlay(
     audioTracks: List<MpvTrackOption>,
     selectedAudioTrackId: String,
     selectedAspectRatio: String,
+    showFullscreenButton: Boolean,
+    isFullscreen: Boolean,
+    showAspectRatioControls: Boolean,
     onToggleLock: () -> Unit,
-    onSeekBy: (Double) -> Unit,
     onTogglePlay: () -> Unit,
     onSpeedChange: (Double) -> Unit,
     onSubtitleChange: (PlaybackSubtitleTrack?) -> Unit,
     onAudioTrackChange: (MpvTrackOption) -> Unit,
     onAspectRatioChange: (PlayerMenuOption) -> Unit,
+    onFullscreenRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.background(Color.Black.copy(alpha = 0.28f))) {
+    Box(modifier.background(Color.Black.copy(alpha = 0.22f))) {
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             LockButton(playerLocked = playerLocked, onToggleLock = onToggleLock)
         }
 
         if (!playerLocked) {
-            Row(
-                modifier = Modifier.align(Alignment.Center),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
+            IconButton(
+                onClick = onTogglePlay,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .background(Color.Black.copy(alpha = 0.36f), RoundedCornerShape(24.dp)),
             ) {
-                IconButton(onClick = { onSeekBy(-10.0) }) {
-                    Icon(Icons.Default.Replay10, contentDescription = "快退10秒", tint = Color.White, modifier = Modifier.size(38.dp))
-                }
-                IconButton(onClick = onTogglePlay) {
-                    Icon(
-                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "暂停" else "播放",
-                        tint = Color.White,
-                        modifier = Modifier.size(52.dp),
-                    )
-                }
-                IconButton(onClick = { onSeekBy(10.0) }) {
-                    Icon(Icons.Default.Forward10, contentDescription = "快进10秒", tint = Color.White, modifier = Modifier.size(38.dp))
-                }
+                Icon(
+                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying) "暂停" else "播放",
+                    tint = Color.White,
+                    modifier = Modifier.size(36.dp),
+                )
             }
 
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 18.dp, vertical = 18.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
                     .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(formatTime(positionSeconds), color = Color.White, fontSize = 12.sp)
-                    Text(formatTime(durationSeconds), color = Color.White, fontSize = 12.sp)
+                    Text(formatTime(positionSeconds), color = Color.White, fontSize = 11.sp)
+                    Text(formatTime(durationSeconds), color = Color.White, fontSize = 11.sp)
                 }
                 LinearProgressIndicator(
                     progress = {
-                        if (durationSeconds > 0) (positionSeconds / durationSeconds).toFloat().coerceIn(0f, 1f) else 0f
+                        playbackProgress(positionSeconds, durationSeconds)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     color = Color.White,
@@ -410,7 +475,7 @@ private fun PlayerControlsOverlay(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     PlaybackSpeedMenu(selectedSpeed = playbackSpeed, onSpeedChange = onSpeedChange)
@@ -424,7 +489,13 @@ private fun PlayerControlsOverlay(
                         tracks = audioTracks,
                         onAudioTrackChange = onAudioTrackChange,
                     )
-                    AspectRatioMenu(selectedAspectRatio = selectedAspectRatio, onAspectRatioChange = onAspectRatioChange)
+                    if (showAspectRatioControls) {
+                        AspectRatioMenu(selectedAspectRatio = selectedAspectRatio, onAspectRatioChange = onAspectRatioChange)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (showFullscreenButton || isFullscreen) {
+                        FullscreenControl(isFullscreen = isFullscreen, onFullscreenRequest = onFullscreenRequest)
+                    }
                 }
             }
         }
@@ -435,20 +506,38 @@ private fun PlayerControlsOverlay(
 private fun LockButton(playerLocked: Boolean, onToggleLock: () -> Unit) {
     IconButton(
         onClick = onToggleLock,
-        modifier = Modifier.background(Color.Black.copy(alpha = 0.48f), RoundedCornerShape(26.dp)),
+        modifier = Modifier
+            .size(40.dp),
     ) {
         Icon(
             if (playerLocked) Icons.Default.Lock else Icons.Default.LockOpen,
             contentDescription = if (playerLocked) "解锁播放器" else "锁定播放器",
             tint = Color.White,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
 
 @Composable
-private fun PlayerLock(playerLocked: Boolean, onToggle: () -> Unit) {
+private fun FullscreenControl(isFullscreen: Boolean, onFullscreenRequest: () -> Unit) {
+    PlayerMenuChip(
+        icon = {
+            Icon(
+                if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                contentDescription = null,
+            )
+        },
+        label = if (isFullscreen) "退出全屏" else "全屏",
+        expanded = false,
+        onExpandedChange = { onFullscreenRequest() },
+    ) {
+    }
+}
+
+@Composable
+private fun PlayerLock(playerLocked: Boolean, modifier: Modifier = Modifier, onToggle: () -> Unit) {
     if (playerLocked) {
-        Box(Modifier.fillMaxSize()) {
+        Box(modifier) {
             LockButton(
                 playerLocked = true,
                 onToggleLock = onToggle,
@@ -485,10 +574,9 @@ private fun SubtitleTrackMenu(
     onSubtitleChange: (PlaybackSubtitleTrack?) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val label = tracks.firstOrNull { it.index == selectedSubtitle }?.subtitleLabel() ?: "字幕"
     PlayerMenuChip(
         icon = { Icon(Icons.Default.Subtitles, contentDescription = null) },
-        label = label,
+        label = "字幕",
         expanded = expanded,
         onExpandedChange = { expanded = it },
     ) {
@@ -576,10 +664,15 @@ private fun PlayerMenuChip(
         AssistChip(
             enabled = enabled,
             onClick = { onExpandedChange(true) },
-            leadingIcon = icon,
+            leadingIcon = {
+                Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
+                    icon()
+                }
+            },
             label = {
                 Text(
                     label,
+                    fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -631,6 +724,11 @@ private fun PlaybackSubtitleTrack.subtitleLabel(): String =
 
 private fun Double.formatSpeed(): String =
     if (this % 1.0 == 0.0) toInt().toString() else toString().trimEnd('0').trimEnd('.')
+
+fun playbackProgress(positionSeconds: Double, durationSeconds: Double): Float {
+    if (!positionSeconds.isFinite() || !durationSeconds.isFinite() || durationSeconds <= 0.0) return 0f
+    return (positionSeconds / durationSeconds).toFloat().coerceIn(0f, 1f)
+}
 
 private fun formatTime(seconds: Double): String {
     val totalSec = seconds.toLong().coerceAtLeast(0)

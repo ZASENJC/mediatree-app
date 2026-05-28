@@ -59,6 +59,28 @@ class MpvPlayerControllerTest {
     }
 
     @Test
+    fun loadUrlSkipsReloadWhenSourceAndHeadersAreUnchanged() {
+        val backend = RecordingMpvBackend()
+        val controller = MpvPlayerController(appContext, backend)
+
+        controller.attachSurface(Any())
+        controller.loadUrl(
+            url = "http://media.local/api/stream/42",
+            headers = mapOf("Authorization" to "Bearer token"),
+            startPositionSeconds = 12.5,
+        )
+        backend.commands.clear()
+
+        controller.loadUrl(
+            url = "http://media.local/api/stream/42",
+            headers = mapOf("Authorization" to "Bearer token"),
+            startPositionSeconds = 0.0,
+        )
+
+        assertEquals(emptyList<List<String>>(), backend.commands)
+    }
+
+    @Test
     fun playbackControlsUseMpvPropertiesAndCommands() {
         val backend = RecordingMpvBackend()
         val controller = MpvPlayerController(appContext, backend)
@@ -94,7 +116,7 @@ class MpvPlayerControllerTest {
     }
 
     @Test
-    fun detachSurfaceStopsPlaybackBeforeClearingWindow() {
+    fun detachSurfaceKeepsLoadedFileForReattachedSurface() {
         val backend = RecordingMpvBackend()
         val controller = MpvPlayerController(appContext, backend)
 
@@ -104,7 +126,7 @@ class MpvPlayerControllerTest {
 
         controller.detachSurface()
 
-        assertEquals(listOf(listOf("stop")), backend.commands)
+        assertEquals(emptyList<List<String>>(), backend.commands)
         assertEquals(
             listOf(
                 "force-window" to "no",
@@ -150,7 +172,7 @@ class MpvPlayerControllerTest {
         controller.detachSurface()
         controller.detachSurface()
 
-        assertEquals(listOf(listOf("stop")), backend.commands)
+        assertEquals(emptyList<List<String>>(), backend.commands)
         assertEquals(
             listOf(
                 "force-window" to "no",

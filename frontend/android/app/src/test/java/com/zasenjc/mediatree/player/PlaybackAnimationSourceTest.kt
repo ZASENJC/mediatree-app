@@ -52,7 +52,7 @@ class PlaybackAnimationSourceTest {
         assertTrue(detailScreen.contains("MediaTreePlayer("))
         assertTrue(detailScreen.contains("AnimatedContent("))
         assertTrue(detailScreen.contains("ExitPlayerReleaseDelayMillis"))
-        assertTrue(detailScreen.contains("if (!leavingDetail)"))
+        assertTrue(detailScreen.contains("activeMovie != null && !leavingDetail"))
         assertFalse(detailScreen.contains("onNavigate(\"detail/${'$'}{episode.id}\")"))
     }
 }

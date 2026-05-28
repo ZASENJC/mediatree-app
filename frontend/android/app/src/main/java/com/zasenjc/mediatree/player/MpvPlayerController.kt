@@ -72,6 +72,7 @@ class MpvPlayerController(
     private var surfaceAttached = false
     private var fileLoaded = false
     private var pendingLoad: PendingLoad? = null
+    private var loadedSource: PendingLoad? = null
 
     fun initialize() {
         if (initialized) return
@@ -90,7 +91,6 @@ class MpvPlayerController(
 
     fun detachSurface() {
         if (!initialized || !surfaceAttached) return
-        stopLoadedFile()
         stopVideoOutput()
         backend.detachSurface()
         surfaceAttached = false
@@ -102,10 +102,16 @@ class MpvPlayerController(
         startPositionSeconds: Double = 0.0,
     ) {
         initialize()
+        if (loadedSource?.sameMediaRequest(url, headers) == true && pendingLoad == null) return
         pendingLoad = PendingLoad(url, headers, startPositionSeconds)
         if (!surfaceAttached) return
         flushPendingLoad()
     }
+
+    private fun PendingLoad.sameMediaRequest(
+        url: String,
+        headers: Map<String, String>,
+    ): Boolean = this.url == url && this.headers == headers
 
     private fun flushPendingLoad() {
         val request = pendingLoad ?: return
@@ -116,6 +122,7 @@ class MpvPlayerController(
         }
         backend.command(arrayOf("loadfile", request.url, "replace"))
         fileLoaded = true
+        loadedSource = request
         if (request.startPositionSeconds > 0.0) {
             seekTo(request.startPositionSeconds)
         }
@@ -175,6 +182,7 @@ class MpvPlayerController(
         if (fileLoaded) {
             backend.command(arrayOf("stop"))
             fileLoaded = false
+            loadedSource = null
         }
     }
 
@@ -216,6 +224,7 @@ class MpvPlayerController(
         surfaceAttached = false
         fileLoaded = false
         pendingLoad = null
+        loadedSource = null
     }
 }
 
