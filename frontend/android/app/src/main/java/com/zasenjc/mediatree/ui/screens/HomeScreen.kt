@@ -122,16 +122,16 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null, sortMode = sort) }
             try {
-                val roots = container.api.mediaRoots().items
+                val roots = container.mediaProvider.mediaRoots().items
                 if (activeLibrary.isBlank()) {
                     roots.firstOrNull { !it.locked }?.let { container.sessionStore.setActiveLibrary(it.path) }
                 }
                 val lib = activeLibrary.ifBlank { roots.firstOrNull { !it.locked }?.path.orEmpty() }
-                val items = container.api.folders(mediaRoot = lib)
+                val items = container.mediaProvider.folders(mediaRoot = lib)
                     .tree
                     .filter { it.movieCount > 0 }
                     .sortedForHome(sort)
-                val recent = container.api.recentWatched(limit = 20, mediaRoot = lib).movies
+                val recent = container.mediaProvider.recentWatched(limit = 20, mediaRoot = lib).movies
                 _state.update {
                     it.copy(
                         loading = false,
@@ -156,7 +156,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(openingPath = item.path, error = null) }
             try {
-                val response = container.api.movies(
+                val response = container.mediaProvider.movies(
                     folder = item.path,
                     sort = "created_desc",
                     limit = 1,
@@ -230,7 +230,7 @@ fun HomeScreen(
                                 items(state.recent, key = { it.id }) { movie ->
                                     RecentWatchingCard(
                                         movie = movie,
-                                        imageUrl = container.api.episodeStillUrl(session.serverUrl, movie.id),
+                                        imageUrl = container.mediaProvider.episodeStillUrl(session.serverUrl, movie.id),
                                         onClick = { onNavigate("detail/${movie.id}") },
                                         modifier = Modifier.width(214.dp),
                                     )
@@ -520,7 +520,7 @@ private fun HomeSearchOverlay(
                 return@launch
             }
             try {
-                val resp = container.api.movies(
+                val resp = container.mediaProvider.movies(
                     code = request,
                     limit = 20,
                     mediaRoot = session.activeLibrary,
@@ -648,7 +648,7 @@ private fun HomeSearchOverlay(
                                     items(results, key = { it.id }) { movie ->
                                         HomeSearchResultRow(
                                             movie = movie,
-                                            imageUrl = container.api.coverUrl(session.serverUrl, movie.id),
+                                            imageUrl = container.mediaProvider.coverUrl(session.serverUrl, movie.id),
                                             onClick = {
                                                 focusManager.clearFocus()
                                                 onNavigate("detail/${movie.id}")

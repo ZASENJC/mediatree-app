@@ -140,7 +140,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun loadRoots() {
         viewModelScope.launch {
             try {
-                val roots = container.api.mediaRoots().items
+                val roots = container.mediaProvider.mediaRoots().items
                 _state.update { it.copy(roots = roots) }
             } catch (e: Throwable) {
                 _state.update { it.copy(error = e.message) }
@@ -161,13 +161,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             val normalized = UrlUtils.normalizeServerUrl(state.serverInput)
             _state.update { it.copy(message = "", error = null) }
             try {
-                val status = container.api.authStatus(normalized)
+                val status = container.mediaProvider.authStatus(normalized)
                 if (!status.needAuth) {
                     container.sessionStore.saveSession(normalized, "")
                     _state.update { it.copy(message = "服务器无需登录，已连接") }
                     return@launch
                 }
-                val result = container.api.login(normalized, state.username, state.password)
+                val result = container.mediaProvider.login(normalized, state.username, state.password)
                 if (result.ok) {
                     container.sessionStore.saveSession(normalized, result.token)
                     _state.update { it.copy(message = "登录成功") }
@@ -191,7 +191,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun scan(activeLibrary: String) {
         viewModelScope.launch {
             _state.update { it.copy(scanning = true, message = "", error = null) }
-            kotlin.runCatching { container.api.scan(activeLibrary) }
+            kotlin.runCatching { container.mediaProvider.scan(activeLibrary) }
                 .onSuccess { r -> _state.update { it.copy(scanning = false, message = "扫描任务已触发，共 ${r.total} 项") } }
                 .onFailure { throwable -> _state.update { it.copy(scanning = false, error = throwable.message) } }
         }

@@ -130,16 +130,16 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             try {
-                val movie = container.api.detail(movieId)
-                val resume = container.api.progress(movieId).position
-                val subs = runCatching { container.api.subtitleTracks(movieId) }.getOrDefault(emptyList())
-                val mediaInfo = runCatching { container.api.mediaInfo(movieId) }.getOrNull()
+                val movie = container.mediaProvider.detail(movieId)
+                val resume = container.mediaProvider.progress(movieId).position
+                val subs = runCatching { container.mediaProvider.subtitleTracks(movieId) }.getOrDefault(emptyList())
+                val mediaInfo = runCatching { container.mediaProvider.mediaInfo(movieId) }.getOrNull()
                 val seriesFolder = seriesFolderFor(movie)
                 val seriesItems = if (seriesFolder.isBlank()) {
                     emptyList()
                 } else {
                     runCatching {
-                        container.api.movies(
+                        container.mediaProvider.movies(
                             folder = seriesFolder,
                             sort = "created_desc",
                             limit = 500,
@@ -167,10 +167,10 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
         val movie = _state.value.movie ?: return
         viewModelScope.launch {
             if (movie.tags.contains("favorite")) {
-                container.api.removeTag(movie.id, "favorite")
+                container.mediaProvider.removeTag(movie.id, "favorite")
                 _state.update { it.copy(movie = it.movie?.copy(tags = it.movie!!.tags - "favorite")) }
             } else {
-                container.api.addTag(movie.id, "favorite")
+                container.mediaProvider.addTag(movie.id, "favorite")
                 _state.update { it.copy(movie = it.movie?.copy(tags = it.movie!!.tags + "favorite")) }
             }
         }
@@ -179,7 +179,7 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
     fun markWatched() {
         val movie = _state.value.movie ?: return
         viewModelScope.launch {
-            container.api.addTag(movie.id, "watched")
+            container.mediaProvider.addTag(movie.id, "watched")
             _state.update { it.copy(movie = it.movie?.copy(tags = it.movie!!.tags + "watched")) }
         }
     }
@@ -190,14 +190,14 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
 
     fun saveProgress(movieId: Int, position: Double, duration: Double) {
         viewModelScope.launch {
-            runCatching { container.api.saveProgress(movieId, position, duration) }
+            runCatching { container.mediaProvider.saveProgress(movieId, position, duration) }
         }
     }
 
     fun onPlaybackComplete(movieId: Int, position: Double, duration: Double) {
         viewModelScope.launch {
-            runCatching { container.api.saveProgress(movieId, position, duration, stopped = true) }
-            runCatching { container.api.addTag(movieId, "watched") }
+            runCatching { container.mediaProvider.saveProgress(movieId, position, duration, stopped = true) }
+            runCatching { container.mediaProvider.addTag(movieId, "watched") }
         }
     }
 }
@@ -445,7 +445,7 @@ private fun DetailMetadataContent(
         ThumbnailStrip(
             movie = movie,
             serverUrl = session.serverUrl,
-            fallbackStill = container.api.episodeStillUrl(session.serverUrl, movie.id),
+            fallbackStill = container.mediaProvider.episodeStillUrl(session.serverUrl, movie.id),
         )
         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             InfoBlock("简介", movie.episodeOverview ?: movie.overview ?: "暂无简介")

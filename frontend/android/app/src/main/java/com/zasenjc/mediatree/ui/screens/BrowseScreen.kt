@@ -121,7 +121,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
             _state.update { it.copy(loading = true, error = null, sortMode = sort) }
             try {
                 if (folder.isBlank()) {
-                    val tree = container.api.folders(mediaRoot).tree.filter { it.movieCount > 0 }
+                    val tree = container.mediaProvider.folders(mediaRoot).tree.filter { it.movieCount > 0 }
                     _state.update {
                         it.copy(
                             loading = false,
@@ -134,7 +134,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                         )
                     }
                 } else {
-                    val response = container.api.movies(
+                    val response = container.mediaProvider.movies(
                         folder = folder,
                         sort = sort.toApiMovieSort(),
                         limit = 48,
@@ -165,7 +165,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
         _state.update { it.copy(page = next) }
         viewModelScope.launch {
             try {
-                val response = container.api.movies(
+                val response = container.mediaProvider.movies(
                     folder = folder,
                     sort = s.sortMode.toApiMovieSort(),
                     limit = 48,
@@ -331,7 +331,7 @@ fun BrowseScreen(
                                         row.forEach { movie ->
                                             MoviePosterCard(
                                                 movie = movie,
-                                                imageUrl = container.api.coverUrl(session.serverUrl, movie.id),
+                                                imageUrl = container.mediaProvider.coverUrl(session.serverUrl, movie.id),
                                                 onClick = { onNavigate("detail/${movie.id}") },
                                                 modifier = Modifier.weight(1f),
                                             )
@@ -357,7 +357,7 @@ fun BrowseScreen(
                                 items(filteredMovies, key = { it.id }) { movie ->
                                     MovieListRow(
                                         movie = movie,
-                                        imageUrl = container.api.coverUrl(session.serverUrl, movie.id),
+                                        imageUrl = container.mediaProvider.coverUrl(session.serverUrl, movie.id),
                                         onClick = { onNavigate("detail/${movie.id}") },
                                     )
                                 }

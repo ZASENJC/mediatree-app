@@ -7,5 +7,6 @@ class AppContainer(context: Context) {
     val clientStorageStore = AndroidClientStorageStore(context)
     val clientStorageRepository = ClientStorageRepository(clientStorageStore)
     val webDavClient = WebDavClient()
-    val api = MediaTreeApi(sessionStore)
+    private val mediaTreeApi = MediaTreeApi(sessionStore)
+    val mediaProvider: MediaProvider = MediaTreeProvider(mediaTreeApi)
 }

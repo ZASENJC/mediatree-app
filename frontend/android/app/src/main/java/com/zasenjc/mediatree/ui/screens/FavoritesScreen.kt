@@ -94,7 +94,7 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             try {
-                val response = container.api.favorites(limit = 48, offset = page * 48, sort = "release_date_desc")
+                val response = container.mediaProvider.favorites(limit = 48, offset = page * 48, sort = "release_date_desc")
                 _state.update {
                     it.copy(
                         page = page,
@@ -201,14 +201,14 @@ fun FavoritesScreen(
                         if (movie.isEpisodeFavorite()) {
                             EpisodeLandscapeCard(
                                 movie = movie,
-                                imageUrl = container.api.episodeStillUrl(session.serverUrl, movie.id),
+                                imageUrl = container.mediaProvider.episodeStillUrl(session.serverUrl, movie.id),
                                 onClick = { onNavigate("detail/${movie.id}") },
                                 showFavorite = true,
                             )
                         } else {
                             MoviePosterCard(
                                 movie = movie,
-                                imageUrl = container.api.coverUrl(session.serverUrl, movie.id),
+                                imageUrl = container.mediaProvider.coverUrl(session.serverUrl, movie.id),
                                 onClick = { onNavigate("detail/${movie.id}") },
                             )
                         }
