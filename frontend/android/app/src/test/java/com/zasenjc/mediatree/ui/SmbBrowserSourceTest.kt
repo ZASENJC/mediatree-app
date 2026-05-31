@@ -21,13 +21,14 @@ class SmbBrowserSourceTest {
     }
 
     @Test
-    fun settingsLinksSmbStorageSourcesToBrowser() {
+    fun settingsSelectsSmbStorageSourcesAsLibraries() {
         val settingsSource = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
             .readText()
 
         assertTrue(settingsSource.contains("ClientStorageType.SMB"))
-        assertTrue(settingsSource.contains("smb/${'$'}{source.id}"))
+        assertTrue(settingsSource.contains("smbLibraryPath(source.id)"))
+        assertFalse(settingsSource.contains("smb/${'$'}{source.id}"))
     }
 
     @Test
@@ -44,7 +45,7 @@ class SmbBrowserSourceTest {
         val proxySource = appRoot.resolve("src/main/java/com/zasenjc/mediatree/data/SmbRangeProxy.kt").readText()
         assertTrue(proxySource.contains("isClientDisconnect"))
         assertTrue(appRoot.resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt").readText().contains("smbLibrarySourceId"))
-        assertTrue(appRoot.resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt").readText().contains("SMB 挂载盘"))
+        assertTrue(appRoot.resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt").readText().contains("挂载源"))
         assertFalse(screenSource.contains("WebDav"))
         assertFalse(screenSource.contains("MediaTreeApi"))
     }

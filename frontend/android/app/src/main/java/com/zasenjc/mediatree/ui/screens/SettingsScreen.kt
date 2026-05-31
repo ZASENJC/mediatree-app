@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
@@ -41,7 +40,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -73,11 +71,11 @@ import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.ThemeModePreference
 import com.zasenjc.mediatree.data.smbLibraryPath
 import com.zasenjc.mediatree.data.viewModelFactory
+import com.zasenjc.mediatree.data.webDavLibraryPath
 import com.zasenjc.mediatree.ui.components.DesignFilterChip
 import com.zasenjc.mediatree.ui.components.DesignSectionCard
 import com.zasenjc.mediatree.ui.components.DesignSettingsRow
 import com.zasenjc.mediatree.ui.components.DesignTopAppBar
-import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -87,7 +85,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 
-private val libraryViews = listOf("全部媒体库", "电影库", "剧集库")
 private val serverProviderTypes = listOf(ProviderType.MediaTree, ProviderType.Jellyfin, ProviderType.Emby)
 
 private fun ProviderType.labelText(): String = when (this) {
@@ -117,12 +114,19 @@ private fun ClientStorageType.connectionIcon(): ImageVector = when (this) {
 }
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
+    data class BackendLibraryItem(
+        val profileId: String,
+        val providerType: ProviderType,
+        val root: MediaRootDto,
+    )
+
     data class UiState(
         val serverInput: String = "",
         val providerType: ProviderType = ProviderType.MediaTree,
         val username: String = "",
         val password: String = "",
         val roots: List<MediaRootDto> = emptyList(),
+        val backendLibraries: List<BackendLibraryItem> = emptyList(),
         val scanning: Boolean = false,
         val message: String = "",
         val error: String? = null,
@@ -138,8 +142,6 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         val smbSharePath: String = "/Media",
         val smbUsername: String = "",
         val smbPassword: String = "",
-        val smbEnabled: Boolean = true,
-        val libraryView: String = "全部媒体库",
         val homeLayoutPreference: HomeLayoutPreference = HomeLayoutPreference.MediaFeed,
         val themeModePreference: ThemeModePreference = ThemeModePreference.System,
     )
@@ -186,14 +188,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun onWebDavUsernameChange(value: String) = _state.update { it.copy(webDavUsername = value) }
     fun onWebDavPasswordChange(value: String) = _state.update { it.copy(webDavPassword = value) }
     fun onWebDavAuthTypeChange(value: ClientStorageAuthType) = _state.update { it.copy(webDavAuthType = value) }
-    fun onWebDavEnabledChange(value: Boolean) = _state.update { it.copy(webDavEnabled = value) }
     fun onSmbNameChange(value: String) = _state.update { it.copy(smbName = value) }
     fun onSmbAddressChange(value: String) = _state.update { it.copy(smbAddress = value) }
     fun onSmbSharePathChange(value: String) = _state.update { it.copy(smbSharePath = value) }
     fun onSmbUsernameChange(value: String) = _state.update { it.copy(smbUsername = value) }
     fun onSmbPasswordChange(value: String) = _state.update { it.copy(smbPassword = value) }
-    fun onSmbEnabledChange(value: Boolean) = _state.update { it.copy(smbEnabled = value) }
-    fun setLibraryView(value: String) = _state.update { it.copy(libraryView = value) }
 
     fun setHomeLayoutPreference(value: HomeLayoutPreference) {
         viewModelScope.launch { container.uiPreferencesStore.setHomeLayoutPreference(value) }
@@ -239,18 +238,54 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun activateServerProfile(profileId: String) {
-        viewModelScope.launch { container.sessionStore.activateProfile(profileId) }
+    fun loadRoots(session: Session) {
+        viewModelScope.launch {
+            val libraries = mutableListOf<BackendLibraryItem>()
+            var activeRoots = emptyList<MediaRootDto>()
+            var firstError: Throwable? = null
+            val activeProfileId = session.activeProfileId
+            session.resolvedProfiles
+                .filter { it.canLoadMediaRoots() }
+                .forEach { profile ->
+                    runCatching {
+                        container.mediaProviderFor(profile.type).mediaRoots(profile).items
+                    }
+                        .onSuccess { roots ->
+                            libraries += roots.map { root ->
+                                BackendLibraryItem(
+                                    profileId = profile.id,
+                                    providerType = profile.type,
+                                    root = root,
+                                )
+                            }
+                            if (profile.id == activeProfileId) activeRoots = roots
+                        }
+                        .onFailure { throwable ->
+                            if (firstError == null) firstError = throwable
+                        }
+                }
+            activeRoots = libraries
+                .filter { it.profileId == activeProfileId }
+                .map { it.root }
+                .ifEmpty { activeRoots }
+            _state.update {
+                it.copy(
+                    roots = activeRoots,
+                    backendLibraries = libraries,
+                    error = firstError?.message,
+                )
+            }
+        }
     }
 
-    fun loadRoots() {
+    fun clearBackendLibraries() {
+        _state.update { it.copy(roots = emptyList(), backendLibraries = emptyList(), error = null) }
+    }
+
+    fun selectBackendLibrary(profileId: String, path: String) {
         viewModelScope.launch {
-            try {
-                val roots = container.mediaProviderFor(_state.value.providerType).mediaRoots().items
-                _state.update { it.copy(roots = roots) }
-            } catch (e: Throwable) {
-                _state.update { it.copy(error = e.message) }
-            }
+            container.sessionStore.activateProfile(profileId)
+            container.sessionStore.setActiveLibrary(path)
         }
     }
 
@@ -314,7 +349,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             username = state.webDavUsername,
             password = state.webDavPassword,
             authType = state.webDavAuthType,
-            enabled = state.webDavEnabled,
+            enabled = true,
         )
     }
 
@@ -361,7 +396,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             sharePath = state.smbSharePath,
             username = state.smbUsername,
             password = state.smbPassword,
-            enabled = state.smbEnabled,
+            enabled = true,
         )
     }
 
@@ -413,17 +448,18 @@ fun SettingsScreen(
     container: AppContainer,
     session: Session,
     onError: (Throwable) -> Unit,
-    onOpenClientStorageSource: (String) -> Unit = {},
 ) {
     val vm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
     var editingConnection by remember { mutableStateOf<ConnectionEditorTarget?>(null) }
 
-    LaunchedEffect(session.serverUrl, session.activeProviderType) {
+    LaunchedEffect(session.serverUrl, session.activeProviderType, session.resolvedProfiles) {
         vm.initServerInput(session.serverUrl)
         vm.initProviderType(session.activeProviderType)
-        if (shouldLoadRemoteContent(session)) {
-            vm.loadRoots()
+        if (session.resolvedProfiles.any { it.canLoadMediaRoots() }) {
+            vm.loadRoots(session)
+        } else {
+            vm.clearBackendLibraries()
         }
     }
 
@@ -459,19 +495,9 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    Text(
-                        text = "媒体流按剧集/电影显示单海报；目录优先直接显示媒体库或 SMB 的源文件夹结构。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     ThemeModeSelector(
                         selected = state.themeModePreference,
                         onSelect = vm::setThemeModePreference,
-                    )
-                    Text(
-                        text = "外观默认跟随系统；关闭跟随后可固定浅色或深色模式。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -481,47 +507,42 @@ fun SettingsScreen(
                     sources = state.clientStorageSources,
                     onAdd = { editingConnection = it },
                     onEdit = { editingConnection = it },
-                    onActivateProfile = vm::activateServerProfile,
-                    onOpenClientStorageSource = onOpenClientStorageSource,
                     onDeleteClientStorageSource = vm::deleteClientStorageSource,
                     onLogout = vm::logout,
                 )
             }
             item {
                 SettingsSectionCard(title = "媒体库显示", icon = Icons.Default.Folder) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        libraryViews.forEach { item ->
-                            DesignFilterChip(
-                                selected = state.libraryView == item,
-                                onClick = { vm.setLibraryView(item) },
-                                label = item,
-                            )
-                        }
-                    }
-                    state.clientStorageSources
-                        .filter { it.type == ClientStorageType.SMB && it.enabled }
-                        .forEach { source ->
-                            DesignSettingsRow(
-                                title = source.name,
-                                subtitle = "SMB 挂载盘 · ${source.storageSummary()}",
-                                icon = Icons.Default.Storage,
-                                trailing = {
-                                    if (session.activeLibrary == smbLibraryPath(source.id)) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
-                                },
-                                onClick = { vm.setActiveLibrary(smbLibraryPath(source.id)) },
-                            )
-                        }
-                    state.roots.filterForLibraryView(state.libraryView).forEach { root ->
+                    state.backendLibraries.forEach { library ->
                         DesignSettingsRow(
-                            title = root.label.ifBlank { root.path.substringAfterLast("/") },
-                            subtitle = "${root.movieCount} 部 · ${root.scraper.ifBlank { "auto" }}",
-                            icon = Icons.Default.Folder,
+                            title = library.root.label.ifBlank { library.root.path.substringAfterLast("/") },
+                            subtitle = "${library.providerType.labelText()} 媒体库 · ${library.root.movieCount} 项",
+                            icon = library.providerType.connectionIcon(),
                             trailing = {
-                                if (session.activeLibrary == root.path) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
+                                if (session.activeProfileId == library.profileId && session.activeLibrary == library.root.path) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = "当前")
+                                }
                             },
-                            onClick = { vm.setActiveLibrary(root.path) },
+                            onClick = { vm.selectBackendLibrary(library.profileId, library.root.path) },
                         )
                     }
+                    state.clientStorageSources
+                        .filter { it.enabled }
+                        .forEach { source ->
+                            val libraryPath = when (source.type) {
+                                ClientStorageType.WebDAV -> webDavLibraryPath(source.id)
+                                ClientStorageType.SMB -> smbLibraryPath(source.id)
+                            }
+                            DesignSettingsRow(
+                                title = source.name,
+                                subtitle = "${source.type.labelText()} 挂载源 · ${source.storageSummary()}",
+                                icon = source.type.connectionIcon(),
+                                trailing = {
+                                    if (session.activeLibrary == libraryPath) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
+                                },
+                                onClick = { vm.setActiveLibrary(libraryPath) },
+                            )
+                        }
                     Button(
                         enabled = !state.scanning,
                         onClick = { vm.scan(session.activeLibrary) },
@@ -554,12 +575,6 @@ fun SettingsScreen(
                         title = "字幕语言",
                         subtitle = "跟随系统",
                         icon = Icons.Default.Visibility,
-                        trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
-                    )
-                    DesignSettingsRow(
-                        title = "主题",
-                        subtitle = state.themeModePreference.labelText(),
-                        icon = Icons.Default.Palette,
                         trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
                     )
                 }
@@ -611,8 +626,6 @@ private fun ConnectionsSection(
     sources: List<ClientStorageSource>,
     onAdd: (ConnectionEditorTarget) -> Unit,
     onEdit: (ConnectionEditorTarget) -> Unit,
-    onActivateProfile: (String) -> Unit,
-    onOpenClientStorageSource: (String) -> Unit,
     onDeleteClientStorageSource: (String) -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -671,10 +684,6 @@ private fun ConnectionsSection(
                 icon = profile.type.connectionIcon(),
                 trailing = {
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        if (profile.id == session.activeProfileId) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = "当前")
-                        }
-                        TextButton(onClick = { onActivateProfile(profile.id) }) { Text("启用") }
                         Icon(Icons.Default.ChevronRight, contentDescription = null)
                     }
                 },
@@ -688,8 +697,6 @@ private fun ConnectionsSection(
                 icon = source.type.connectionIcon(),
                 trailing = {
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        if (source.enabled) Icon(Icons.Default.CheckCircle, contentDescription = "已启用")
-                        TextButton(onClick = { onOpenClientStorageSource(source.openRoute()) }) { Text("浏览") }
                         IconButton(onClick = { onDeleteClientStorageSource(source.id) }) {
                             Icon(Icons.Default.Delete, contentDescription = "删除存储源")
                         }
@@ -813,7 +820,6 @@ private fun WebDavConnectionDialog(
     var username by remember(target) { mutableStateOf(source?.username.orEmpty()) }
     var password by remember(target) { mutableStateOf("") }
     var authType by remember(target) { mutableStateOf(source?.authType ?: ClientStorageAuthType.Basic) }
-    var enabled by remember(target) { mutableStateOf(source?.enabled ?: true) }
     var passwordVisible by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -841,11 +847,10 @@ private fun WebDavConnectionDialog(
                     visible = passwordVisible,
                     onVisibleChange = { passwordVisible = it },
                 )
-                EnabledSwitchRow(checked = enabled, onCheckedChange = { enabled = it })
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(source?.id, name, url, username, password.ifBlank { source?.secret.orEmpty() }, authType, enabled) }) {
+            Button(onClick = { onSave(source?.id, name, url, username, password.ifBlank { source?.secret.orEmpty() }, authType, true) }) {
                 Text("保存")
             }
         },
@@ -865,7 +870,6 @@ private fun SmbConnectionDialog(
     var sharePath by remember(target) { mutableStateOf(source?.path ?: "/Media") }
     var username by remember(target) { mutableStateOf(source?.username.orEmpty()) }
     var password by remember(target) { mutableStateOf("") }
-    var enabled by remember(target) { mutableStateOf(source?.enabled ?: true) }
     var passwordVisible by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -884,11 +888,10 @@ private fun SmbConnectionDialog(
                     visible = passwordVisible,
                     onVisibleChange = { passwordVisible = it },
                 )
-                EnabledSwitchRow(checked = enabled, onCheckedChange = { enabled = it })
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(source?.id, name, server, sharePath, username, password.ifBlank { source?.secret.orEmpty() }, enabled) }) {
+            Button(onClick = { onSave(source?.id, name, server, sharePath, username, password.ifBlank { source?.secret.orEmpty() }, true) }) {
                 Text("保存")
             }
         },
@@ -920,14 +923,6 @@ private fun PasswordTextField(
             }
         },
     )
-}
-
-@Composable
-private fun EnabledSwitchRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        Text("启用", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
 }
 
 private sealed interface ConnectionEditorTarget {
@@ -973,12 +968,6 @@ private fun SettingsSectionCard(
     DesignSectionCard(title = title, icon = icon, actions = actions, content = content)
 }
 
-private fun List<MediaRootDto>.filterForLibraryView(view: String): List<MediaRootDto> = when (view) {
-    "电影库" -> filter { it.label.contains("movie", true) || it.path.contains("movie", true) }
-    "剧集库" -> filter { it.label.contains("tv", true) || it.path.contains("tv", true) || it.label.contains("show", true) }
-    else -> this
-}
-
 private fun ClientStorageSource.storageSummary(): String {
     val provider = when (type) {
         ClientStorageType.WebDAV -> "WebDAV"
@@ -990,15 +979,17 @@ private fun ClientStorageSource.storageSummary(): String {
     return "$provider · $location · ${username.ifBlank { "匿名" }}"
 }
 
-private fun ClientStorageSource.openRoute(): String = when (type) {
-    ClientStorageType.WebDAV -> "webdav/$id"
-    ClientStorageType.SMB -> "smb/$id"
-}
-
 private fun ServerProfile.connectionStatus(session: Session): String = when {
     id == session.activeProfileId && token.isNotBlank() -> "当前 · 已登录"
     id == session.activeProfileId -> "当前 · 已连接"
     token.isNotBlank() -> "已登录"
     serverUrl.isNotBlank() -> "已连接"
     else -> "未配置"
+}
+
+private fun ServerProfile.canLoadMediaRoots(): Boolean = when (type) {
+    ProviderType.MediaTree -> serverUrl.isNotBlank()
+    ProviderType.Jellyfin, ProviderType.Emby ->
+        serverUrl.isNotBlank() && token.isNotBlank() && userId.isNotBlank()
+    ProviderType.WebDAV, ProviderType.SMB -> false
 }

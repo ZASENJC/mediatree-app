@@ -46,6 +46,16 @@ class BrowseDirectorySemanticsSourceTest {
     }
 
     @Test
+    fun browseSupportsWebDavMountedLibrarySource() {
+        assertTrue(browseSource.contains("webDavLibrarySourceId"))
+        assertTrue(browseSource.contains("private suspend fun loadWebDav"))
+        assertTrue(browseSource.contains("container.webDavClient.list(source, folder)"))
+        assertTrue(browseSource.contains("webDavDirectoryChildCount(source, entry.path)"))
+        assertTrue(browseSource.contains("webDavLibraryPath(sourceId)"))
+        assertTrue(browseSource.contains("webdavPlayer/${'$'}sourceId?path="))
+    }
+
+    @Test
     fun browserRowsExposeThemeContentColorForDarkMode() {
         val source = browseSource
         val designFolderRow = source.substringAfter("private fun DesignFolderRow").substringBefore("@Composable\nprivate fun PosterFolderRow")

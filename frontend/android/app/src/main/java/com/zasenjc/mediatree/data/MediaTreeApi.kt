@@ -50,6 +50,9 @@ class MediaTreeApi(private val sessionStore: SessionStore) {
 
     suspend fun mediaRoots(): MediaRootsResponseDto = request("/media-roots")
 
+    suspend fun mediaRoots(serverUrl: String, token: String): MediaRootsResponseDto =
+        request("/media-roots", serverOverride = serverUrl, tokenOverride = token)
+
     suspend fun folders(mediaRoot: String = ""): FolderTreeResponseDto =
         request("/folders", params = params("media_root" to mediaRoot))
 

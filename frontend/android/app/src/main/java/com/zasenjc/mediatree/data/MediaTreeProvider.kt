@@ -15,6 +15,9 @@ class MediaTreeProvider(
     override suspend fun mediaRoots(): MediaRootsResponseDto =
         api.mediaRoots()
 
+    override suspend fun mediaRoots(profile: ServerProfile): MediaRootsResponseDto =
+        api.mediaRoots(profile.serverUrl, profile.token)
+
     override suspend fun folders(mediaRoot: String): FolderTreeResponseDto =
         api.folders(mediaRoot)
 

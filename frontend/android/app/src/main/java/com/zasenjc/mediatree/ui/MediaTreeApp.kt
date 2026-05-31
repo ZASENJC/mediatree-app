@@ -257,7 +257,6 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 container = container,
                                 session = session,
                                 onError = onError,
-                                onOpenClientStorageSource = ::handleAppNavigate,
                             )
                         }
                     }

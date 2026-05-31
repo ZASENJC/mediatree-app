@@ -28,16 +28,17 @@ class HomeLayoutSemanticsSourceTest {
         assertTrue(directoryBlock.contains("HomeDirectoryRow"))
         assertTrue(directoryBlock.contains("vm.openDirectoryItem"))
         assertTrue(source.contains("columns = GridCells.Fixed(1)"))
+        assertTrue(source.contains("webDavLibrarySourceId"))
         assertFalse(directoryBlock.contains("HomeMediaPosterCard"))
     }
 
     @Test
-    fun settingsExplainsHomeLayoutModes() {
+    fun settingsDoesNotExplainHomeLayoutModesInline() {
         val source = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
             .readText()
 
-        assertTrue(source.contains("媒体流按剧集/电影显示单海报"))
-        assertTrue(source.contains("目录优先直接显示媒体库或 SMB 的源文件夹结构"))
+        assertFalse(source.contains("媒体流按剧集/电影显示单海报"))
+        assertFalse(source.contains("目录优先直接显示媒体库或 SMB 的源文件夹结构"))
     }
 }

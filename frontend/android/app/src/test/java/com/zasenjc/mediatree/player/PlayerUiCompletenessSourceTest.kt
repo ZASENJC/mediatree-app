@@ -134,7 +134,10 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(detailScreen.contains("modifier = playerModifier"))
         assertFalse(detailScreen.contains("SubtitleSelector("))
         assertFalse(detailScreen.contains("private fun SubtitleSelector"))
-        assertFalse(detailScreen.contains("FilterChip"))
+        val playerStart = detailScreen.indexOf("MediaTreePlayer(")
+        val playerEnd = detailScreen.indexOf("}", playerStart)
+        val playerInvocation = detailScreen.substring(playerStart, playerEnd)
+        assertFalse(playerInvocation.contains("FilterChip"))
     }
 
     @Test

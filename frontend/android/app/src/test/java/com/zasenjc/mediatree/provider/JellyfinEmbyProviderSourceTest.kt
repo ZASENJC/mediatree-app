@@ -67,7 +67,8 @@ class JellyfinEmbyProviderSourceTest {
         val settings = screenRoot.resolve("SettingsScreen.kt").readText()
         val detail = screenRoot.resolve("DetailScreen.kt").readText()
 
-        assertTrue(settings.contains("ProviderType.entries"))
+        assertTrue(settings.contains("serverProviderTypes.forEach"))
+        assertTrue(settings.contains("ConnectionEditorTarget.Server(type = type)"))
         assertTrue(settings.contains("state.providerType"))
         assertTrue(settings.contains("container.mediaProviderFor(state.providerType)"))
         assertTrue(settings.contains("saveSession(normalized, result.token, type = state.providerType, userId = result.userId)"))

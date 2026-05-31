@@ -65,6 +65,8 @@ import com.zasenjc.mediatree.data.FolderNodeDto
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
+import com.zasenjc.mediatree.data.webDavLibraryPath
+import com.zasenjc.mediatree.data.webDavLibrarySourceId
 import com.zasenjc.mediatree.data.smbLibrarySourceId
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.ui.components.LoadingPane
@@ -125,6 +127,11 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                 val smbSourceId = mediaRoot.smbLibrarySourceId()
                 if (smbSourceId != null) {
                     loadSmb(smbSourceId, folder, sort)
+                    return@launch
+                }
+                val webDavSourceId = mediaRoot.webDavLibrarySourceId()
+                if (webDavSourceId != null) {
+                    loadWebDav(webDavSourceId, folder, sort)
                     return@launch
                 }
                 val provider = container.mediaProviderFor(providerType)
@@ -209,8 +216,60 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
             .count { it.isDirectory || it.isPlayableVideo }
     }.getOrDefault(0)
 
+    private suspend fun loadWebDav(sourceId: String, folder: String, sort: String) {
+        val source = container.clientStorageRepository.load()
+            .firstOrNull { it.id == sourceId && it.type == com.zasenjc.mediatree.data.ClientStorageType.WebDAV && it.enabled }
+            ?: throw IllegalArgumentException("WebDAV 存储源不可用")
+        val entries = container.webDavClient.list(source, folder)
+        val folders = entries.filter { it.isDirectory }
+            .map { entry ->
+                FolderNodeDto(
+                    name = entry.name,
+                    path = entry.path,
+                    isLeaf = false,
+                    movieCount = webDavDirectoryChildCount(source, entry.path),
+                    displayTitle = entry.name,
+                    mediaRoot = webDavLibraryPath(sourceId),
+                )
+            }
+            .sortedFoldersForBrowse(sort)
+        val movies = entries.filter { it.isPlayableVideo }
+            .map { entry ->
+                MovieDto(
+                    id = (source.id + ":" + entry.path).hashCode(),
+                    path = entry.path,
+                    code = entry.name,
+                    title = entry.name,
+                    displayTitle = entry.name,
+                    mediaRoot = webDavLibraryPath(sourceId),
+                    fileSize = entry.sizeBytes,
+                    size = entry.sizeBytes,
+                )
+            }
+            .sortedMoviesForBrowse(sort)
+        _state.update {
+            it.copy(
+                loading = false,
+                folders = folders,
+                movies = movies,
+                total = movies.size,
+                currentFolder = folder,
+                page = 0,
+                sortMode = sort,
+            )
+        }
+    }
+
+    private suspend fun webDavDirectoryChildCount(
+        source: com.zasenjc.mediatree.data.ClientStorageSource,
+        folderPath: String,
+    ): Int = runCatching {
+        container.webDavClient.list(source, folderPath)
+            .count { it.isDirectory || it.isPlayableVideo }
+    }.getOrDefault(0)
+
     fun loadMore(providerType: ProviderType, folder: String, mediaRoot: String) {
-        if (mediaRoot.smbLibrarySourceId() != null) return
+        if (mediaRoot.smbLibrarySourceId() != null || mediaRoot.webDavLibrarySourceId() != null) return
         val s = _state.value
         val next = s.page + 1
         _state.update { it.copy(page = next) }
@@ -256,7 +315,8 @@ fun BrowseScreen(
 
     LaunchedEffect(session.serverUrl, session.activeProviderType, session.activeLibrary, initialFolder) {
         val smbSourceId = session.activeLibrary.smbLibrarySourceId()
-        if (shouldLoadRemoteContent(session) || smbSourceId != null) {
+        val webDavSourceId = session.activeLibrary.webDavLibrarySourceId()
+        if (shouldLoadRemoteContent(session) || smbSourceId != null || webDavSourceId != null) {
             vm.load(session.activeProviderType, initialFolder, session.activeLibrary)
         }
     }
@@ -293,7 +353,8 @@ fun BrowseScreen(
             FloatingActionButton(
                 onClick = {
                     val smbSourceId = session.activeLibrary.smbLibrarySourceId()
-                    if (shouldLoadRemoteContent(session) || smbSourceId != null) {
+                    val webDavSourceId = session.activeLibrary.webDavLibrarySourceId()
+                    if (shouldLoadRemoteContent(session) || smbSourceId != null || webDavSourceId != null) {
                         vm.load(session.activeProviderType, initialFolder, session.activeLibrary, state.sortMode)
                     }
                 },
@@ -304,7 +365,9 @@ fun BrowseScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
-                !shouldLoadRemoteContent(session) && session.activeLibrary.smbLibrarySourceId() == null -> EmptyBrowseState("请先在设置页连接 MediaTree 服务器")
+                !shouldLoadRemoteContent(session) &&
+                    session.activeLibrary.smbLibrarySourceId() == null &&
+                    session.activeLibrary.webDavLibrarySourceId() == null -> EmptyBrowseState("请先在设置页连接 MediaTree 服务器")
                 state.loading -> LoadingPane(Modifier.fillMaxSize())
                 else -> {
                     LazyColumn(
@@ -339,7 +402,8 @@ fun BrowseScreen(
                                         selected = state.sortMode == key,
                                         onClick = {
                                             val smbSourceId = session.activeLibrary.smbLibrarySourceId()
-                                            if (shouldLoadRemoteContent(session) || smbSourceId != null) {
+                                            val webDavSourceId = session.activeLibrary.webDavLibrarySourceId()
+                                            if (shouldLoadRemoteContent(session) || smbSourceId != null || webDavSourceId != null) {
                                                 vm.load(session.activeProviderType, initialFolder, session.activeLibrary, key)
                                             }
                                         },
@@ -394,7 +458,7 @@ fun BrowseScreen(
                                         row.forEach { movie ->
                                             MoviePosterCard(
                                                 movie = movie,
-                                                imageUrl = movie.mediaRoot?.smbLibrarySourceId()?.let { null } ?: provider.coverUrl(session.serverUrl, movie.id),
+                                                imageUrl = movie.mediaRoot?.mountedLibrarySourceId()?.let { null } ?: provider.coverUrl(session.serverUrl, movie.id),
                                                 onClick = { onNavigate(movie.openRoute()) },
                                                 modifier = Modifier.weight(1f),
                                             )
@@ -420,7 +484,7 @@ fun BrowseScreen(
                                 items(filteredMovies, key = { it.id }) { movie ->
                                     MovieListRow(
                                         movie = movie,
-                                        imageUrl = movie.mediaRoot?.smbLibrarySourceId()?.let { null } ?: provider.coverUrl(session.serverUrl, movie.id),
+                                        imageUrl = movie.mediaRoot?.mountedLibrarySourceId()?.let { null } ?: provider.coverUrl(session.serverUrl, movie.id),
                                         onClick = { onNavigate(movie.openRoute()) },
                                     )
                                 }
@@ -880,9 +944,14 @@ private fun MovieDto.detailRoute(): String =
     "detail/${routeId()}" + path.takeIf { it.isNotBlank() }?.let { "?providerItemId=${Uri.encode(it)}" }.orEmpty()
 
 private fun MovieDto.openRoute(): String =
-    mediaRoot?.smbLibrarySourceId()?.let { sourceId -> "smbPlayer/$sourceId?path=${Uri.encode(path)}" } ?: detailRoute()
+    mediaRoot?.smbLibrarySourceId()?.let { sourceId -> "smbPlayer/$sourceId?path=${Uri.encode(path)}" }
+        ?: mediaRoot?.webDavLibrarySourceId()?.let { sourceId -> "webdavPlayer/$sourceId?path=${Uri.encode(path)}" }
+        ?: detailRoute()
 
 private fun mediaRootPath(sourceId: String): String = "smb/$sourceId"
+
+private fun String.mountedLibrarySourceId(): String? =
+    smbLibrarySourceId() ?: webDavLibrarySourceId()
 
 private fun String.toMovieRouteId(): Int =
     takeLast(8).toUIntOrNull(16)?.toInt() ?: hashCode()

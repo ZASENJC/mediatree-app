@@ -9,6 +9,8 @@ interface MediaProvider {
 
     suspend fun mediaRoots(): MediaRootsResponseDto
 
+    suspend fun mediaRoots(profile: ServerProfile): MediaRootsResponseDto = mediaRoots()
+
     suspend fun folders(mediaRoot: String = ""): FolderTreeResponseDto
 
     suspend fun recentWatched(limit: Int = 30, offset: Int = 0, mediaRoot: String = ""): MoviesResponseDto

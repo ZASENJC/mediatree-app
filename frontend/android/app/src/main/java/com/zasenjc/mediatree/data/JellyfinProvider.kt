@@ -62,9 +62,31 @@ open class JellyfinProvider(
 
     override suspend fun mediaRoots(): MediaRootsResponseDto {
         val session = currentSession()
+        return mediaRootsFor(
+            serverUrl = session.serverUrl,
+            token = session.token,
+            userId = session.requireUserId(),
+        )
+    }
+
+    override suspend fun mediaRoots(profile: ServerProfile): MediaRootsResponseDto =
+        mediaRootsFor(
+            serverUrl = profile.serverUrl,
+            token = profile.token,
+            userId = profile.requireUserId(),
+        )
+
+    private suspend fun mediaRootsFor(
+        serverUrl: String,
+        token: String,
+        userId: String,
+    ): MediaRootsResponseDto {
         val result = request<JellyfinItemsResponse>(
-            path = "/Users/${session.requireUserId()}/Views",
+            path = "/Users/$userId/Views",
             params = listOf("IncludeExternalContent" to "false"),
+            serverOverride = serverUrl,
+            tokenOverride = token,
+            userIdOverride = userId,
         )
         return MediaRootsResponseDto(
             items = result.items.map { item ->
@@ -569,6 +591,9 @@ internal fun secondsToTicks(seconds: Double): Long = (seconds * TicksPerSecond).
 
 private fun Session.requireUserId(): String =
     activeUserId.ifBlank { throw java.io.IOException("User ID is required for ${activeProviderType.name}") }
+
+private fun ServerProfile.requireUserId(): String =
+    userId.ifBlank { throw java.io.IOException("User ID is required for ${type.name}") }
 
 @PublishedApi
 internal fun mediaBrowserAuthorizationValue(scheme: String, token: String, userId: String): String =
