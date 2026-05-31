@@ -1,5 +1,7 @@
 package com.zasenjc.mediatree.data
 
+import com.zasenjc.mediatree.playback.PlaybackSource
+
 interface MediaProvider {
     suspend fun authStatus(serverUrl: String? = null): AuthStatusDto
 
@@ -51,4 +53,12 @@ interface MediaProvider {
     fun streamUrl(serverUrl: String, movieId: Int): String
 
     fun subtitleUrl(serverUrl: String, movieId: Int, trackIndex: Int): String
+
+    fun playbackSource(
+        serverUrl: String,
+        movieId: Int,
+        token: String,
+        userId: String = "",
+        subtitleTracks: List<SubtitleTrackDto> = emptyList(),
+    ): PlaybackSource
 }

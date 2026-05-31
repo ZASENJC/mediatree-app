@@ -1,12 +1,10 @@
 package com.zasenjc.mediatree.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,12 +14,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -39,12 +37,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.zasenjc.mediatree.data.MovieDto
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -60,70 +55,21 @@ fun MoviePosterCard(
     var sheetOpen by remember { mutableStateOf(false) }
     val title = movie.displayTitle ?: movie.title ?: movie.code
     val progress = (movie.progressPercent ?: 0.0).coerceIn(0.0, 100.0)
-    ElevatedCard(
-        modifier = modifier.combinedClickable(onClick = onClick, onLongClick = { sheetOpen = true }),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-    ) {
-        Box {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(aspectRatio),
-            )
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.35f to Color.Transparent,
-                                0.78f to Color.Black.copy(alpha = 0.58f),
-                                1f to Color.Black.copy(alpha = 0.86f),
-                            ),
-                        ),
-                    ),
-            )
-            if (showFavorite) {
-                FavoriteBadge(
-                    checked = movie.tags.contains("favorite"),
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                )
-            }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = movieCardMeta(movie),
-                    color = Color.White.copy(alpha = 0.82f),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (progress > 0.0 && !movie.tags.contains("watched")) {
-                    LinearProgressIndicator(
-                        progress = { (progress / 100.0).toFloat() },
-                        modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(8.dp)),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = Color.White.copy(alpha = 0.3f),
-                    )
-                }
-            }
-        }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        PosterImageFrame(
+            title = title,
+            imageUrl = imageUrl,
+            aspectRatio = aspectRatio,
+            showFavorite = showFavorite,
+            favorite = movie.tags.contains("favorite"),
+            progress = progress.takeIf { it > 0.0 && !movie.tags.contains("watched") },
+            onClick = onClick,
+            onLongClick = { sheetOpen = true },
+        )
+        PosterTextBelow(
+            title = title,
+            meta = movieCardMeta(movie),
+        )
     }
     if (sheetOpen) {
         ModalBottomSheet(onDismissRequest = { sheetOpen = false }, sheetState = rememberModalBottomSheetState()) {
@@ -134,7 +80,8 @@ fun MoviePosterCard(
                 modifier = Modifier.combinedClickable(onClick = { sheetOpen = false; onClick() }),
             )
             ListItem(
-                headlineContent = { Text("更多操作将在后续版本补齐") },
+                headlineContent = { Text("更多操作未实现") },
+                supportingContent = { Text("后续版本补齐") },
                 leadingContent = { Icon(Icons.Default.MoreVert, contentDescription = null) },
             )
             Spacer(Modifier.height(24.dp))
@@ -154,100 +101,122 @@ fun EpisodeLandscapeCard(
     val title = movie.displayTitle ?: movie.title ?: movie.code
     val episode = episodeLabel(movie)
     val progress = (movie.progressPercent ?: 0.0).coerceIn(0.0, 100.0)
-    ElevatedCard(
-        modifier = modifier.combinedClickable(onClick = onClick, onLongClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        PosterImageFrame(
+            title = title,
+            imageUrl = imageUrl,
+            aspectRatio = 16f / 9f,
+            showFavorite = showFavorite,
+            favorite = movie.tags.contains("favorite"),
+            progress = progress.takeIf { it > 0.0 && !movie.tags.contains("watched") },
+            onClick = onClick,
+            onLongClick = onClick,
+            leadingPlayIcon = true,
+        )
+        PosterTextBelow(title = title, meta = episode)
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PosterImageFrame(
+    title: String,
+    imageUrl: String?,
+    aspectRatio: Float,
+    showFavorite: Boolean,
+    favorite: Boolean,
+    progress: Double?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    leadingPlayIcon: Boolean = false,
+) {
+    Card(
+        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Box {
-            AsyncImage(
-                model = imageUrl,
+            MediaAsyncImage(
+                imageUrl = imageUrl,
                 contentDescription = title,
-                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 9f),
+                    .aspectRatio(aspectRatio),
+                cornerRadius = 16.dp,
             )
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.25f to Color.Transparent,
-                                0.72f to Color.Black.copy(alpha = 0.58f),
-                                1f to Color.Black.copy(alpha = 0.88f),
-                            ),
-                        ),
-                    ),
-            )
-            Surface(
-                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                shape = CircleShape,
-                color = Color.White.copy(alpha = 0.9f),
-            ) {
-                Icon(
-                    Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(6.dp).size(18.dp),
-                )
+            if (leadingPlayIcon) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(6.dp).size(18.dp),
+                    )
+                }
             }
             if (showFavorite) {
-                FavoriteBadge(
-                    checked = movie.tags.contains("favorite"),
-                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                BookmarkRibbon(
+                    checked = favorite,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 7.dp, end = 8.dp),
                 )
             }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            if (progress != null) {
+                LinearProgressIndicator(
+                    progress = { (progress / 100.0).toFloat() },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.72f),
                 )
-                Text(
-                    text = episode,
-                    color = Color.White.copy(alpha = 0.84f),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (progress > 0.0 && !movie.tags.contains("watched")) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        LinearProgressIndicator(
-                            progress = { (progress / 100.0).toFloat() },
-                            modifier = Modifier.weight(1f).height(3.dp).clip(RoundedCornerShape(8.dp)),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = Color.White.copy(alpha = 0.3f),
-                        )
-                        Text("${progress.toInt()}%", color = Color.White.copy(alpha = 0.82f), style = MaterialTheme.typography.labelSmall)
-                    }
-                }
             }
         }
     }
 }
 
 @Composable
-private fun FavoriteBadge(checked: Boolean, modifier: Modifier = Modifier) {
+private fun PosterTextBelow(title: String, meta: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = title,
+            color = MaterialTheme.colorScheme.onBackground,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = meta,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun BookmarkRibbon(checked: Boolean, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
-        shape = CircleShape,
-        color = Color.White.copy(alpha = if (checked) 0.94f else 0.72f),
+        shape = RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp, bottomStart = 10.dp, bottomEnd = 10.dp),
+        color = if (checked) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
+        },
     ) {
         Icon(
-            imageVector = if (checked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+            imageVector = if (checked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
             contentDescription = if (checked) "已收藏" else "未收藏",
-            tint = if (checked) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(5.dp).size(18.dp),
+            tint = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 5.dp).size(16.dp),
         )
     }
 }

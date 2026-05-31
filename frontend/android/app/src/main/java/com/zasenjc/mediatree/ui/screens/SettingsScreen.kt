@@ -1,48 +1,49 @@
 package com.zasenjc.mediatree.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,9 +65,18 @@ import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageAuthType
 import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.ClientStorageType
+import com.zasenjc.mediatree.data.HomeLayoutPreference
 import com.zasenjc.mediatree.data.MediaRootDto
+import com.zasenjc.mediatree.data.ProviderType
+import com.zasenjc.mediatree.data.ServerProfile
 import com.zasenjc.mediatree.data.Session
+import com.zasenjc.mediatree.data.ThemeModePreference
+import com.zasenjc.mediatree.data.smbLibraryPath
 import com.zasenjc.mediatree.data.viewModelFactory
+import com.zasenjc.mediatree.ui.components.DesignFilterChip
+import com.zasenjc.mediatree.ui.components.DesignSectionCard
+import com.zasenjc.mediatree.ui.components.DesignSettingsRow
+import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
 import kotlinx.coroutines.flow.collect
@@ -75,12 +85,41 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.Color
 
 private val libraryViews = listOf("全部媒体库", "电影库", "剧集库")
+private val serverProviderTypes = listOf(ProviderType.MediaTree, ProviderType.Jellyfin, ProviderType.Emby)
+
+private fun ProviderType.labelText(): String = when (this) {
+    ProviderType.MediaTree -> "MediaTree"
+    ProviderType.Jellyfin -> "Jellyfin"
+    ProviderType.Emby -> "Emby"
+    ProviderType.WebDAV -> "WebDAV"
+    ProviderType.SMB -> "SMB"
+}
+
+private fun ClientStorageType.labelText(): String = when (this) {
+    ClientStorageType.WebDAV -> "WebDAV"
+    ClientStorageType.SMB -> "SMB"
+}
+
+private fun ProviderType.connectionIcon(): ImageVector = when (this) {
+    ProviderType.MediaTree -> Icons.Default.Dns
+    ProviderType.Jellyfin -> Icons.Default.Movie
+    ProviderType.Emby -> Icons.Default.PlayArrow
+    ProviderType.WebDAV -> Icons.Default.Storage
+    ProviderType.SMB -> Icons.Default.Router
+}
+
+private fun ClientStorageType.connectionIcon(): ImageVector = when (this) {
+    ClientStorageType.WebDAV -> Icons.Default.Storage
+    ClientStorageType.SMB -> Icons.Default.Router
+}
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     data class UiState(
         val serverInput: String = "",
+        val providerType: ProviderType = ProviderType.MediaTree,
         val username: String = "",
         val password: String = "",
         val roots: List<MediaRootDto> = emptyList(),
@@ -101,6 +140,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         val smbPassword: String = "",
         val smbEnabled: Boolean = true,
         val libraryView: String = "全部媒体库",
+        val homeLayoutPreference: HomeLayoutPreference = HomeLayoutPreference.MediaFeed,
+        val themeModePreference: ThemeModePreference = ThemeModePreference.System,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -112,6 +153,16 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 _state.update { it.copy(clientStorageSources = sources) }
             }
         }
+        viewModelScope.launch {
+            container.uiPreferencesStore.homeLayoutFlow.collect { preference ->
+                _state.update { it.copy(homeLayoutPreference = preference) }
+            }
+        }
+        viewModelScope.launch {
+            container.uiPreferencesStore.themeModeFlow.collect { preference ->
+                _state.update { it.copy(themeModePreference = preference) }
+            }
+        }
     }
 
     fun initServerInput(serverUrl: String) {
@@ -120,7 +171,14 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun initProviderType(type: ProviderType) {
+        if (_state.value.providerType != type) {
+            _state.update { it.copy(providerType = type) }
+        }
+    }
+
     fun onServerInputChange(value: String) = _state.update { it.copy(serverInput = value, message = "") }
+    fun onProviderTypeChange(value: ProviderType) = _state.update { it.copy(providerType = value, message = "") }
     fun onUsernameChange(value: String) = _state.update { it.copy(username = value) }
     fun onPasswordChange(value: String) = _state.update { it.copy(password = value) }
     fun onWebDavNameChange(value: String) = _state.update { it.copy(webDavName = value) }
@@ -137,10 +195,58 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun onSmbEnabledChange(value: Boolean) = _state.update { it.copy(smbEnabled = value) }
     fun setLibraryView(value: String) = _state.update { it.copy(libraryView = value) }
 
+    fun setHomeLayoutPreference(value: HomeLayoutPreference) {
+        viewModelScope.launch { container.uiPreferencesStore.setHomeLayoutPreference(value) }
+    }
+
+    fun setThemeModePreference(value: ThemeModePreference) {
+        viewModelScope.launch { container.uiPreferencesStore.setThemeModePreference(value) }
+    }
+
+    fun saveServerProfile(profileId: String?, providerType: ProviderType, serverUrl: String) {
+        viewModelScope.launch {
+            kotlin.runCatching {
+                container.sessionStore.saveProfile(profileId, serverUrl, providerType)
+            }
+                .onSuccess { _state.update { it.copy(message = "${providerType.labelText()} 已保存", error = null) } }
+                .onFailure { throwable -> _state.update { it.copy(error = throwable.message) } }
+        }
+    }
+
+    fun loginServerProfile(profileId: String?, providerType: ProviderType, serverUrl: String, username: String, password: String) {
+        viewModelScope.launch {
+            val normalized = UrlUtils.normalizeServerUrl(serverUrl)
+            _state.update { it.copy(message = "", error = null) }
+            try {
+                container.sessionStore.saveProfile(profileId, normalized, providerType)
+                val provider = container.mediaProviderFor(providerType)
+                val status = provider.authStatus(normalized)
+                if (!status.needAuth) {
+                    container.sessionStore.saveSession(normalized, "", type = providerType)
+                    _state.update { it.copy(message = "${providerType.labelText()} 无需登录，已连接") }
+                    return@launch
+                }
+                val result = provider.login(normalized, username, password)
+                if (result.ok) {
+                    container.sessionStore.saveSession(normalized, result.token, type = providerType, userId = result.userId)
+                    _state.update { it.copy(message = "${providerType.labelText()} 登录成功") }
+                } else {
+                    _state.update { it.copy(error = "${providerType.labelText()} 登录失败") }
+                }
+            } catch (e: Throwable) {
+                _state.update { it.copy(error = e.message ?: "${providerType.labelText()} 登录失败") }
+            }
+        }
+    }
+
+    fun activateServerProfile(profileId: String) {
+        viewModelScope.launch { container.sessionStore.activateProfile(profileId) }
+    }
+
     fun loadRoots() {
         viewModelScope.launch {
             try {
-                val roots = container.mediaProvider.mediaRoots().items
+                val roots = container.mediaProviderFor(_state.value.providerType).mediaRoots().items
                 _state.update { it.copy(roots = roots) }
             } catch (e: Throwable) {
                 _state.update { it.copy(error = e.message) }
@@ -150,7 +256,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun saveServer() {
         viewModelScope.launch {
-            container.sessionStore.saveServer(_state.value.serverInput)
+            val state = _state.value
+            container.sessionStore.saveServer(state.serverInput, type = state.providerType)
             _state.update { it.copy(message = "服务器地址已保存") }
         }
     }
@@ -161,15 +268,16 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             val normalized = UrlUtils.normalizeServerUrl(state.serverInput)
             _state.update { it.copy(message = "", error = null) }
             try {
-                val status = container.mediaProvider.authStatus(normalized)
+                val provider = container.mediaProviderFor(state.providerType)
+                val status = provider.authStatus(normalized)
                 if (!status.needAuth) {
-                    container.sessionStore.saveSession(normalized, "")
+                    container.sessionStore.saveSession(normalized, "", type = state.providerType)
                     _state.update { it.copy(message = "服务器无需登录，已连接") }
                     return@launch
                 }
-                val result = container.mediaProvider.login(normalized, state.username, state.password)
+                val result = provider.login(normalized, state.username, state.password)
                 if (result.ok) {
-                    container.sessionStore.saveSession(normalized, result.token)
+                    container.sessionStore.saveSession(normalized, result.token, type = state.providerType, userId = result.userId)
                     _state.update { it.copy(message = "登录成功") }
                 } else {
                     _state.update { it.copy(error = "登录失败") }
@@ -191,7 +299,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun scan(activeLibrary: String) {
         viewModelScope.launch {
             _state.update { it.copy(scanning = true, message = "", error = null) }
-            kotlin.runCatching { container.mediaProvider.scan(activeLibrary) }
+            kotlin.runCatching { container.mediaProviderFor(_state.value.providerType).scan(activeLibrary) }
                 .onSuccess { r -> _state.update { it.copy(scanning = false, message = "扫描任务已触发，共 ${r.total} 项") } }
                 .onFailure { throwable -> _state.update { it.copy(scanning = false, error = throwable.message) } }
         }
@@ -199,15 +307,36 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun saveWebDavSource() {
         val state = _state.value
+        saveWebDavSource(
+            id = null,
+            name = state.webDavName,
+            url = state.webDavUrl,
+            username = state.webDavUsername,
+            password = state.webDavPassword,
+            authType = state.webDavAuthType,
+            enabled = state.webDavEnabled,
+        )
+    }
+
+    fun saveWebDavSource(
+        id: String?,
+        name: String,
+        url: String,
+        username: String,
+        password: String,
+        authType: ClientStorageAuthType,
+        enabled: Boolean,
+    ) {
         viewModelScope.launch {
             kotlin.runCatching {
                 container.clientStorageRepository.saveWebDav(
-                    name = state.webDavName,
-                    url = state.webDavUrl,
-                    username = state.webDavUsername,
-                    password = state.webDavPassword,
-                    authType = state.webDavAuthType,
-                    enabled = state.webDavEnabled,
+                    id = id ?: java.util.UUID.randomUUID().toString(),
+                    name = name,
+                    url = url,
+                    username = username,
+                    password = password,
+                    authType = authType,
+                    enabled = enabled,
                 )
             }
                 .onSuccess {
@@ -225,15 +354,36 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun saveSmbSource() {
         val state = _state.value
+        saveSmbSource(
+            id = null,
+            name = state.smbName,
+            server = state.smbAddress,
+            sharePath = state.smbSharePath,
+            username = state.smbUsername,
+            password = state.smbPassword,
+            enabled = state.smbEnabled,
+        )
+    }
+
+    fun saveSmbSource(
+        id: String?,
+        name: String,
+        server: String,
+        sharePath: String,
+        username: String,
+        password: String,
+        enabled: Boolean,
+    ) {
         viewModelScope.launch {
             kotlin.runCatching {
                 container.clientStorageRepository.saveSmb(
-                    name = state.smbName,
-                    server = state.smbAddress,
-                    sharePath = state.smbSharePath,
-                    username = state.smbUsername,
-                    password = state.smbPassword,
-                    enabled = state.smbEnabled,
+                    id = id ?: java.util.UUID.randomUUID().toString(),
+                    name = name,
+                    server = server,
+                    sharePath = sharePath,
+                    username = username,
+                    password = password,
+                    enabled = enabled,
                 )
             }
                 .onSuccess {
@@ -267,12 +417,11 @@ fun SettingsScreen(
 ) {
     val vm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
-    var passwordVisible by remember { mutableStateOf(false) }
-    var webDavPasswordVisible by remember { mutableStateOf(false) }
-    var smbPasswordVisible by remember { mutableStateOf(false) }
+    var editingConnection by remember { mutableStateOf<ConnectionEditorTarget?>(null) }
 
-    LaunchedEffect(session.serverUrl) {
+    LaunchedEffect(session.serverUrl, session.activeProviderType) {
         vm.initServerInput(session.serverUrl)
+        vm.initProviderType(session.activeProviderType)
         if (shouldLoadRemoteContent(session)) {
             vm.loadRoots()
         }
@@ -283,11 +432,9 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
-            TopAppBar(
-                title = { Text("设置") },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-            )
+            DesignTopAppBar(title = "设置")
         },
     ) { padding ->
         LazyColumn(
@@ -296,249 +443,84 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
-                SettingsSectionCard(title = "后端连接", icon = Icons.Default.Dns) {
-                    OutlinedTextField(
-                        value = state.serverInput,
-                        onValueChange = vm::onServerInputChange,
-                        label = { Text("服务器地址") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ConnectionStatusChip(session)
-                        AssistChip(
-                            onClick = {},
-                            label = {
-                                Text(
-                                    when {
-                                        session.serverUrl.isBlank() -> "未连接"
-                                        session.token.isBlank() -> "已连接"
-                                        else -> "已登录"
-                                    },
-                                )
-                            },
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = state.username,
-                            onValueChange = vm::onUsernameChange,
-                            label = { Text("用户名") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                        )
-                        OutlinedTextField(
-                            value = state.password,
-                            onValueChange = vm::onPasswordChange,
-                            label = { Text("密码") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            trailingIcon = {
-                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                    Icon(
-                                        if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = "切换密码显示",
-                                    )
-                                }
-                            },
-                        )
-                    }
+                SettingsSectionCard(title = "显示偏好", icon = Icons.Default.Visibility) {
+                    Text("首页布局", style = MaterialTheme.typography.titleSmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        Button(onClick = vm::saveServer, modifier = Modifier.weight(1f)) { Text("保存连接") }
-                        FilledTonalButton(onClick = vm::login, modifier = Modifier.weight(1f)) { Text("登录") }
+                        DesignFilterChip(
+                            selected = state.homeLayoutPreference == HomeLayoutPreference.MediaFeed,
+                            onClick = { vm.setHomeLayoutPreference(HomeLayoutPreference.MediaFeed) },
+                            label = "媒体流",
+                            modifier = Modifier.weight(1f),
+                        )
+                        DesignFilterChip(
+                            selected = state.homeLayoutPreference == HomeLayoutPreference.DirectoryFirst,
+                            onClick = { vm.setHomeLayoutPreference(HomeLayoutPreference.DirectoryFirst) },
+                            label = "目录优先",
+                            modifier = Modifier.weight(1f),
+                        )
                     }
-                    TextButton(
-                        onClick = vm::logout,
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("退出登录")
-                    }
+                    Text(
+                        text = "媒体流按剧集/电影显示单海报；目录优先直接显示媒体库或 SMB 的源文件夹结构。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    ThemeModeSelector(
+                        selected = state.themeModePreference,
+                        onSelect = vm::setThemeModePreference,
+                    )
+                    Text(
+                        text = "外观默认跟随系统；关闭跟随后可固定浅色或深色模式。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
             item {
-                SettingsSectionCard(title = "客户端存储源", icon = Icons.Default.Storage) {
-                    Text("WebDAV", style = MaterialTheme.typography.titleSmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = state.webDavName,
-                            onValueChange = vm::onWebDavNameChange,
-                            label = { Text("名称") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-                            Text("启用", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                            Switch(checked = state.webDavEnabled, onCheckedChange = vm::onWebDavEnabledChange)
-                        }
-                    }
-                    OutlinedTextField(
-                        value = state.webDavUrl,
-                        onValueChange = vm::onWebDavUrlChange,
-                        label = { Text("WebDAV 地址") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        ClientStorageAuthType.entries.forEach { authType ->
-                            FilterChip(
-                                selected = state.webDavAuthType == authType,
-                                onClick = { vm.onWebDavAuthTypeChange(authType) },
-                                label = { Text(if (authType == ClientStorageAuthType.Basic) "Basic" else "Bearer") },
-                            )
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = state.webDavUsername,
-                            onValueChange = vm::onWebDavUsernameChange,
-                            label = { Text("用户名") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                        )
-                        OutlinedTextField(
-                            value = state.webDavPassword,
-                            onValueChange = vm::onWebDavPasswordChange,
-                            label = { Text("密码或 Token") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            visualTransformation = if (webDavPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            trailingIcon = {
-                                IconButton(onClick = { webDavPasswordVisible = !webDavPasswordVisible }) {
-                                    Icon(
-                                        if (webDavPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = "切换 WebDAV 密钥显示",
-                                    )
-                                }
-                            },
-                        )
-                    }
-                    Button(onClick = vm::saveWebDavSource, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("保存 WebDAV")
-                    }
-
-                    Text("SMB", style = MaterialTheme.typography.titleSmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = state.smbName,
-                            onValueChange = vm::onSmbNameChange,
-                            label = { Text("名称") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-                            Text("启用", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                            Switch(checked = state.smbEnabled, onCheckedChange = vm::onSmbEnabledChange)
-                        }
-                    }
-                    OutlinedTextField(
-                        value = state.smbAddress,
-                        onValueChange = vm::onSmbAddressChange,
-                        label = { Text("SMB 地址") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    OutlinedTextField(
-                        value = state.smbSharePath,
-                        onValueChange = vm::onSmbSharePathChange,
-                        label = { Text("共享路径") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = state.smbUsername,
-                            onValueChange = vm::onSmbUsernameChange,
-                            label = { Text("用户名") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                        )
-                        OutlinedTextField(
-                            value = state.smbPassword,
-                            onValueChange = vm::onSmbPasswordChange,
-                            label = { Text("密码") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            visualTransformation = if (smbPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            trailingIcon = {
-                                IconButton(onClick = { smbPasswordVisible = !smbPasswordVisible }) {
-                                    Icon(
-                                        if (smbPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = "切换 SMB 密码显示",
-                                    )
-                                }
-                            },
-                        )
-                    }
-                    Button(onClick = vm::saveSmbSource, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("保存 SMB")
-                    }
-
-                    state.clientStorageSources.forEach { source ->
-                        ElevatedCard(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                        ) {
-                            ListItem(
-                                headlineContent = { Text(source.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                supportingContent = { Text(source.storageSummary(), maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                                leadingContent = { Icon(Icons.Default.Storage, contentDescription = null) },
-                                trailingContent = {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        if (source.enabled) {
-                                            Icon(Icons.Default.CheckCircle, contentDescription = "已启用")
-                                        }
-                                        if (source.type == ClientStorageType.WebDAV) {
-                                            TextButton(onClick = { onOpenClientStorageSource("webdav/${source.id}") }) {
-                                                Text("浏览")
-                                            }
-                                        }
-                                        IconButton(onClick = { vm.deleteClientStorageSource(source.id) }) {
-                                            Icon(Icons.Default.Delete, contentDescription = "删除存储源")
-                                        }
-                                    }
-                                },
-                            )
-                        }
-                    }
-                }
+                ConnectionsSection(
+                    session = session,
+                    sources = state.clientStorageSources,
+                    onAdd = { editingConnection = it },
+                    onEdit = { editingConnection = it },
+                    onActivateProfile = vm::activateServerProfile,
+                    onOpenClientStorageSource = onOpenClientStorageSource,
+                    onDeleteClientStorageSource = vm::deleteClientStorageSource,
+                    onLogout = vm::logout,
+                )
             }
             item {
                 SettingsSectionCard(title = "媒体库显示", icon = Icons.Default.Folder) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         libraryViews.forEach { item ->
-                            FilterChip(
+                            DesignFilterChip(
                                 selected = state.libraryView == item,
                                 onClick = { vm.setLibraryView(item) },
-                                label = { Text(item) },
+                                label = item,
                             )
                         }
                     }
-                    state.roots.filterForLibraryView(state.libraryView).forEach { root ->
-                        ElevatedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                        ) {
-                            ListItem(
-                                headlineContent = {
-                                    Text(root.label.ifBlank { root.path.substringAfterLast("/") }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    state.clientStorageSources
+                        .filter { it.type == ClientStorageType.SMB && it.enabled }
+                        .forEach { source ->
+                            DesignSettingsRow(
+                                title = source.name,
+                                subtitle = "SMB 挂载盘 · ${source.storageSummary()}",
+                                icon = Icons.Default.Storage,
+                                trailing = {
+                                    if (session.activeLibrary == smbLibraryPath(source.id)) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
                                 },
-                                supportingContent = { Text("${root.movieCount} 部 · ${root.scraper.ifBlank { "auto" }}") },
-                                leadingContent = { Icon(Icons.Default.Folder, contentDescription = null) },
-                                trailingContent = {
-                                    if (session.activeLibrary == root.path) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
-                                },
-                                modifier = Modifier.clickable { vm.setActiveLibrary(root.path) },
+                                onClick = { vm.setActiveLibrary(smbLibraryPath(source.id)) },
                             )
                         }
+                    state.roots.filterForLibraryView(state.libraryView).forEach { root ->
+                        DesignSettingsRow(
+                            title = root.label.ifBlank { root.path.substringAfterLast("/") },
+                            subtitle = "${root.movieCount} 部 · ${root.scraper.ifBlank { "auto" }}",
+                            icon = Icons.Default.Folder,
+                            trailing = {
+                                if (session.activeLibrary == root.path) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
+                            },
+                            onClick = { vm.setActiveLibrary(root.path) },
+                        )
                     }
                     Button(
                         enabled = !state.scanning,
@@ -560,48 +542,435 @@ fun SettingsScreen(
                     )
                 }
             }
+            item {
+                SettingsSectionCard(title = "播放", icon = Icons.Default.PlayArrow) {
+                    DesignSettingsRow(
+                        title = "默认画面",
+                        subtitle = "原生系统",
+                        icon = Icons.Default.PlayArrow,
+                        trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                    )
+                    DesignSettingsRow(
+                        title = "字幕语言",
+                        subtitle = "跟随系统",
+                        icon = Icons.Default.Visibility,
+                        trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                    )
+                    DesignSettingsRow(
+                        title = "主题",
+                        subtitle = state.themeModePreference.labelText(),
+                        icon = Icons.Default.Palette,
+                        trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                    )
+                }
+            }
+            item {
+                SettingsSectionCard(title = "关于", icon = Icons.Default.Info) {
+                    DesignSettingsRow(
+                        title = "版本",
+                        subtitle = "0.1.00",
+                        icon = Icons.Default.Info,
+                    )
+                    DesignSettingsRow(
+                        title = "关于 mediatree",
+                        subtitle = "Android client",
+                        icon = Icons.Default.Info,
+                        trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                    )
+                }
+            }
         }
     }
+    editingConnection?.let { target ->
+        ConnectionEditorDialog(
+            target = target,
+            onDismiss = { editingConnection = null },
+            onSaveServer = { profileId, providerType, serverUrl ->
+                vm.saveServerProfile(profileId, providerType, serverUrl)
+                editingConnection = null
+            },
+            onLoginServer = { profileId, providerType, serverUrl, username, password ->
+                vm.loginServerProfile(profileId, providerType, serverUrl, username, password)
+                editingConnection = null
+            },
+            onSaveWebDav = { id, name, url, username, password, authType, enabled ->
+                vm.saveWebDavSource(id, name, url, username, password, authType, enabled)
+                editingConnection = null
+            },
+            onSaveSmb = { id, name, server, sharePath, username, password, enabled ->
+                vm.saveSmbSource(id, name, server, sharePath, username, password, enabled)
+                editingConnection = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun ConnectionsSection(
+    session: Session,
+    sources: List<ClientStorageSource>,
+    onAdd: (ConnectionEditorTarget) -> Unit,
+    onEdit: (ConnectionEditorTarget) -> Unit,
+    onActivateProfile: (String) -> Unit,
+    onOpenClientStorageSource: (String) -> Unit,
+    onDeleteClientStorageSource: (String) -> Unit,
+    onLogout: () -> Unit,
+) {
+    var addMenuExpanded by remember { mutableStateOf(false) }
+    SettingsSectionCard(
+        title = "后端连接",
+        icon = Icons.Default.Dns,
+        actions = {
+            Box {
+                IconButton(onClick = { addMenuExpanded = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "添加连接")
+                }
+                DropdownMenu(expanded = addMenuExpanded, onDismissRequest = { addMenuExpanded = false }) {
+                    serverProviderTypes.forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text("${type.labelText()} 后端") },
+                            leadingIcon = { Icon(type.connectionIcon(), contentDescription = null) },
+                            onClick = {
+                                addMenuExpanded = false
+                                onAdd(ConnectionEditorTarget.Server(type = type))
+                            },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("WebDAV 存储源") },
+                        leadingIcon = { Icon(Icons.Default.Storage, contentDescription = null) },
+                        onClick = {
+                            addMenuExpanded = false
+                            onAdd(ConnectionEditorTarget.WebDav())
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("SMB 存储源") },
+                        leadingIcon = { Icon(Icons.Default.Router, contentDescription = null) },
+                        onClick = {
+                            addMenuExpanded = false
+                            onAdd(ConnectionEditorTarget.Smb())
+                        },
+                    )
+                }
+            }
+        },
+    ) {
+        val profiles = session.resolvedProfiles.filter { it.type in serverProviderTypes }
+        if (profiles.isEmpty() && sources.isEmpty()) {
+            Text(
+                text = "暂无连接，点击右上角添加。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        profiles.forEach { profile ->
+            DesignSettingsRow(
+                title = profile.serverUrl.ifBlank { profile.type.labelText() },
+                subtitle = "${profile.type.labelText()} 后端 · ${profile.connectionStatus(session)}",
+                icon = profile.type.connectionIcon(),
+                trailing = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        if (profile.id == session.activeProfileId) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = "当前")
+                        }
+                        TextButton(onClick = { onActivateProfile(profile.id) }) { Text("启用") }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
+                    }
+                },
+                onClick = { onEdit(ConnectionEditorTarget.Server(type = profile.type, profile = profile)) },
+            )
+        }
+        sources.forEach { source ->
+            DesignSettingsRow(
+                title = source.name,
+                subtitle = "${source.type.labelText()} · ${source.storageSummary()}",
+                icon = source.type.connectionIcon(),
+                trailing = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        if (source.enabled) Icon(Icons.Default.CheckCircle, contentDescription = "已启用")
+                        TextButton(onClick = { onOpenClientStorageSource(source.openRoute()) }) { Text("浏览") }
+                        IconButton(onClick = { onDeleteClientStorageSource(source.id) }) {
+                            Icon(Icons.Default.Delete, contentDescription = "删除存储源")
+                        }
+                    }
+                },
+                onClick = {
+                    when (source.type) {
+                        ClientStorageType.WebDAV -> onEdit(ConnectionEditorTarget.WebDav(source))
+                        ClientStorageType.SMB -> onEdit(ConnectionEditorTarget.Smb(source))
+                    }
+                },
+            )
+        }
+        if (profiles.isNotEmpty()) {
+            TextButton(
+                onClick = onLogout,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("退出所有后端登录")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConnectionEditorDialog(
+    target: ConnectionEditorTarget,
+    onDismiss: () -> Unit,
+    onSaveServer: (String?, ProviderType, String) -> Unit,
+    onLoginServer: (String?, ProviderType, String, String, String) -> Unit,
+    onSaveWebDav: (String?, String, String, String, String, ClientStorageAuthType, Boolean) -> Unit,
+    onSaveSmb: (String?, String, String, String, String, String, Boolean) -> Unit,
+) {
+    when (target) {
+        is ConnectionEditorTarget.Server -> ServerConnectionDialog(
+            target = target,
+            onDismiss = onDismiss,
+            onSave = onSaveServer,
+            onLogin = onLoginServer,
+        )
+        is ConnectionEditorTarget.WebDav -> WebDavConnectionDialog(
+            target = target,
+            onDismiss = onDismiss,
+            onSave = onSaveWebDav,
+        )
+        is ConnectionEditorTarget.Smb -> SmbConnectionDialog(
+            target = target,
+            onDismiss = onDismiss,
+            onSave = onSaveSmb,
+        )
+    }
+}
+
+@Composable
+private fun ServerConnectionDialog(
+    target: ConnectionEditorTarget.Server,
+    onDismiss: () -> Unit,
+    onSave: (String?, ProviderType, String) -> Unit,
+    onLogin: (String?, ProviderType, String, String, String) -> Unit,
+) {
+    var serverUrl by remember(target) { mutableStateOf(target.profile?.serverUrl.orEmpty()) }
+    var username by remember(target) { mutableStateOf("") }
+    var password by remember(target) { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    val title = "${if (target.profile == null) "添加" else "编辑"}${target.type.labelText()} 后端"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = serverUrl,
+                    onValueChange = { serverUrl = it },
+                    label = { Text("服务器地址") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("用户名") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                PasswordTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = "密码",
+                    visible = passwordVisible,
+                    onVisibleChange = { passwordVisible = it },
+                )
+            }
+        },
+        confirmButton = {
+            FilledTonalButton(onClick = { onLogin(target.profile?.id, target.type, serverUrl, username, password) }) {
+                Text("登录")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onDismiss) { Text("取消") }
+                Button(onClick = { onSave(target.profile?.id, target.type, serverUrl) }) { Text("保存") }
+            }
+        },
+    )
+}
+
+@Composable
+private fun WebDavConnectionDialog(
+    target: ConnectionEditorTarget.WebDav,
+    onDismiss: () -> Unit,
+    onSave: (String?, String, String, String, String, ClientStorageAuthType, Boolean) -> Unit,
+) {
+    val source = target.source
+    var name by remember(target) { mutableStateOf(source?.name ?: "WebDAV") }
+    var url by remember(target) { mutableStateOf(source?.endpoint.orEmpty()) }
+    var username by remember(target) { mutableStateOf(source?.username.orEmpty()) }
+    var password by remember(target) { mutableStateOf("") }
+    var authType by remember(target) { mutableStateOf(source?.authType ?: ClientStorageAuthType.Basic) }
+    var enabled by remember(target) { mutableStateOf(source?.enabled ?: true) }
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (source == null) "添加 WebDAV 存储源" else "编辑 WebDAV 存储源") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名称") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("WebDAV 地址") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    ClientStorageAuthType.entries.forEach { type ->
+                        DesignFilterChip(
+                            selected = authType == type,
+                            onClick = { authType = type },
+                            label = if (type == ClientStorageAuthType.Basic) "Basic" else "Bearer",
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("用户名") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                PasswordTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = "密码或 Token",
+                    visible = passwordVisible,
+                    onVisibleChange = { passwordVisible = it },
+                )
+                EnabledSwitchRow(checked = enabled, onCheckedChange = { enabled = it })
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(source?.id, name, url, username, password.ifBlank { source?.secret.orEmpty() }, authType, enabled) }) {
+                Text("保存")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun SmbConnectionDialog(
+    target: ConnectionEditorTarget.Smb,
+    onDismiss: () -> Unit,
+    onSave: (String?, String, String, String, String, String, Boolean) -> Unit,
+) {
+    val source = target.source
+    var name by remember(target) { mutableStateOf(source?.name ?: "SMB") }
+    var server by remember(target) { mutableStateOf(source?.endpoint ?: "smb://192.168.1.10") }
+    var sharePath by remember(target) { mutableStateOf(source?.path ?: "/Media") }
+    var username by remember(target) { mutableStateOf(source?.username.orEmpty()) }
+    var password by remember(target) { mutableStateOf("") }
+    var enabled by remember(target) { mutableStateOf(source?.enabled ?: true) }
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (source == null) "添加 SMB 存储源" else "编辑 SMB 存储源") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名称") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = server, onValueChange = { server = it }, label = { Text("SMB 地址") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = sharePath, onValueChange = { sharePath = it }, label = { Text("共享路径") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("用户名") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                PasswordTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = "密码",
+                    visible = passwordVisible,
+                    onVisibleChange = { passwordVisible = it },
+                )
+                EnabledSwitchRow(checked = enabled, onCheckedChange = { enabled = it })
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(source?.id, name, server, sharePath, username, password.ifBlank { source?.secret.orEmpty() }, enabled) }) {
+                Text("保存")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun PasswordTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    visible: Boolean,
+    onVisibleChange: (Boolean) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        trailingIcon = {
+            IconButton(onClick = { onVisibleChange(!visible) }) {
+                Icon(
+                    if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = "切换密码显示",
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun EnabledSwitchRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Text("启用", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+private sealed interface ConnectionEditorTarget {
+    data class Server(val type: ProviderType, val profile: ServerProfile? = null) : ConnectionEditorTarget
+    data class WebDav(val source: ClientStorageSource? = null) : ConnectionEditorTarget
+    data class Smb(val source: ClientStorageSource? = null) : ConnectionEditorTarget
+}
+
+@Composable
+private fun ThemeModeSelector(
+    selected: ThemeModePreference,
+    onSelect: (ThemeModePreference) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        listOf(
+            ThemeModePreference.System to "跟随系统",
+            ThemeModePreference.Light to "浅色模式",
+            ThemeModePreference.Dark to "深色模式",
+        ).forEach { (preference, label) ->
+            DesignFilterChip(
+                selected = selected == preference,
+                onClick = { onSelect(preference) },
+                label = label,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+private fun ThemeModePreference.labelText(): String = when (this) {
+    ThemeModePreference.System -> "跟随系统"
+    ThemeModePreference.Light -> "浅色模式"
+    ThemeModePreference.Dark -> "深色模式"
 }
 
 @Composable
 private fun SettingsSectionCard(
     title: String,
     icon: ImageVector,
+    actions: @Composable RowScope.() -> Unit = {},
     content: @Composable () -> Unit,
 ) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Text(title, style = MaterialTheme.typography.titleMedium)
-            }
-            content()
-        }
-    }
-}
-
-@Composable
-private fun ConnectionStatusChip(session: Session) {
-    val label = when {
-        session.serverUrl.isBlank() -> "离线"
-        else -> "已连接"
-    }
-    AssistChip(
-        onClick = {},
-        leadingIcon = {
-            Icon(
-                Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        },
-        label = { Text(label) },
-    )
+    DesignSectionCard(title = title, icon = icon, actions = actions, content = content)
 }
 
 private fun List<MediaRootDto>.filterForLibraryView(view: String): List<MediaRootDto> = when (view) {
@@ -619,4 +988,17 @@ private fun ClientStorageSource.storageSummary(): String {
         .filter { it.isNotBlank() }
         .joinToString(" ")
     return "$provider · $location · ${username.ifBlank { "匿名" }}"
+}
+
+private fun ClientStorageSource.openRoute(): String = when (type) {
+    ClientStorageType.WebDAV -> "webdav/$id"
+    ClientStorageType.SMB -> "smb/$id"
+}
+
+private fun ServerProfile.connectionStatus(session: Session): String = when {
+    id == session.activeProfileId && token.isNotBlank() -> "当前 · 已登录"
+    id == session.activeProfileId -> "当前 · 已连接"
+    token.isNotBlank() -> "已登录"
+    serverUrl.isNotBlank() -> "已连接"
+    else -> "未配置"
 }

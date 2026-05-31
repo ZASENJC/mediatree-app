@@ -32,6 +32,7 @@ data class ServerProfile(
     val type: ProviderType = ProviderType.MediaTree,
     val name: String = type.name,
     val serverUrl: String = "",
+    val userId: String = "",
     val token: String = "",
     val activeLibrary: String = "",
 )
@@ -47,6 +48,7 @@ fun mediaTreeProfile(
     type = ProviderType.MediaTree,
     name = ProviderType.MediaTree.name,
     serverUrl = serverUrl,
+    userId = "",
     token = token,
     activeLibrary = activeLibrary,
 )
@@ -56,6 +58,7 @@ data class Session(
     val profiles: List<ServerProfile> = emptyList(),
     val activeProfileId: String = DEFAULT_MEDIATREE_PROFILE_ID,
     val serverUrl: String = profiles.activeProfile(activeProfileId)?.serverUrl.orEmpty(),
+    val userId: String = profiles.activeProfile(activeProfileId)?.userId.orEmpty(),
     val token: String = profiles.activeProfile(activeProfileId)?.token.orEmpty(),
     val activeLibrary: String = profiles.activeProfile(activeProfileId)?.activeLibrary.orEmpty(),
 ) {
@@ -73,6 +76,7 @@ data class Session(
                 if (profile.id == activeProfileId && profile.type == ProviderType.MediaTree) {
                     profile.copy(
                         serverUrl = serverUrl.ifBlank { profile.serverUrl },
+                        userId = userId.ifBlank { profile.userId },
                         token = token.ifBlank { profile.token },
                         activeLibrary = activeLibrary.ifBlank { profile.activeLibrary },
                     )
@@ -83,6 +87,12 @@ data class Session(
 
     val activeProfile: ServerProfile?
         get() = resolvedProfiles.activeProfile(activeProfileId)
+
+    val activeProviderType: ProviderType
+        get() = activeProfile?.type ?: ProviderType.MediaTree
+
+    val activeUserId: String
+        get() = activeProfile?.userId.orEmpty()
 }
 
 private fun List<ServerProfile>.activeProfile(activeProfileId: String): ServerProfile? =
@@ -97,6 +107,8 @@ data class AuthStatusDto(
 data class LoginResponseDto(
     val token: String = "",
     val ok: Boolean = false,
+    val userId: String = "",
+    val userName: String = "",
 )
 
 @Serializable
@@ -241,6 +253,7 @@ data class SubtitleTrackDto(
     val path: String? = null,
     val url: String? = null,
     val format: String? = null,
+    @SerialName("media_source_id") val mediaSourceId: String? = null,
     @SerialName("is_external") val isExternal: Boolean = false,
     @SerialName("web_supported") val webSupported: Boolean? = null,
 )

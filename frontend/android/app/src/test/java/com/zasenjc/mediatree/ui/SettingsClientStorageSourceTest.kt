@@ -14,7 +14,9 @@ class SettingsClientStorageSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
             .readText()
 
-        assertTrue(settingsSource.contains("客户端存储源"))
+        assertTrue(settingsSource.contains("ConnectionsSection"))
+        assertTrue(settingsSource.contains("后端连接"))
+        assertTrue(settingsSource.contains("ConnectionEditorDialog"))
         assertTrue(settingsSource.contains("WebDAV"))
         assertTrue(settingsSource.contains("SMB"))
         assertTrue(settingsSource.contains("saveWebDavSource"))
@@ -28,7 +30,7 @@ class SettingsClientStorageSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
             .readText()
         val clientStorageBlock = settingsSource
-            .substringAfter("客户端存储源")
+            .substringAfter("private fun ConnectionsSection")
             .substringBefore("媒体库显示")
 
         assertFalse(clientStorageBlock.contains("vm.scan"))

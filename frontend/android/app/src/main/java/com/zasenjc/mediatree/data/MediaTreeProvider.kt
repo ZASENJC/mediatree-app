@@ -1,5 +1,8 @@
 package com.zasenjc.mediatree.data
 
+import com.zasenjc.mediatree.playback.PlaybackSource
+import com.zasenjc.mediatree.playback.toPlaybackSubtitleTrack
+
 class MediaTreeProvider(
     private val api: MediaTreeApi,
 ) : MediaProvider {
@@ -72,4 +75,18 @@ class MediaTreeProvider(
 
     override fun subtitleUrl(serverUrl: String, movieId: Int, trackIndex: Int): String =
         api.subtitleUrl(serverUrl, movieId, trackIndex)
+
+    override fun playbackSource(
+        serverUrl: String,
+        movieId: Int,
+        token: String,
+        userId: String,
+        subtitleTracks: List<SubtitleTrackDto>,
+    ): PlaybackSource =
+        PlaybackSource.mediaTree(
+            serverUrl = serverUrl,
+            movieId = movieId,
+            token = token,
+            subtitleTracks = subtitleTracks.map { it.toPlaybackSubtitleTrack() },
+        )
 }

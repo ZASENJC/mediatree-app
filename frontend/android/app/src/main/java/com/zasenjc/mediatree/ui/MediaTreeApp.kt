@@ -1,6 +1,7 @@
 package com.zasenjc.mediatree.ui
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -59,6 +60,7 @@ import com.zasenjc.mediatree.data.ApiException
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.ui.components.LoadingPane
+import com.zasenjc.mediatree.ui.components.MediaTreePageBackground
 import com.zasenjc.mediatree.ui.components.bottomChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.bottomChromeExitTransition
 import com.zasenjc.mediatree.ui.navigation.TopDestination
@@ -68,6 +70,8 @@ import com.zasenjc.mediatree.ui.screens.DetailScreen
 import com.zasenjc.mediatree.ui.screens.FavoritesScreen
 import com.zasenjc.mediatree.ui.screens.HomeScreen
 import com.zasenjc.mediatree.ui.screens.SettingsScreen
+import com.zasenjc.mediatree.ui.screens.SmbBrowseScreen
+import com.zasenjc.mediatree.ui.screens.SmbPlayerScreen
 import com.zasenjc.mediatree.ui.screens.WebDavBrowseScreen
 import com.zasenjc.mediatree.ui.screens.WebDavPlayerScreen
 import kotlinx.coroutines.launch
@@ -165,6 +169,10 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         }
     }
 
+    fun browseParentFolder(): String = browseFolder
+        .trimEnd('/')
+        .substringBeforeLast("/", missingDelimiterValue = "")
+
     fun handleAppNavigate(route: String) {
         when {
             route.startsWith("detail/") -> navController.navigate(route) { launchSingleTop = true }
@@ -181,6 +189,11 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         }
     }
 
+    BackHandler(enabled = pagerState.currentPage == topDestinations.indexOfFirst { it.route == "browse" } && browseFolder.isNotBlank()) {
+        browseFolder = browseParentFolder()
+        navigateTopDestination("browse")
+    }
+
     LaunchedEffect(initialMovieId, session.serverUrl) {
         if (initialMovieId != null) {
             if (shouldLoadRemoteContent(session)) {
@@ -193,10 +206,11 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
+    MediaTreePageBackground {
         Scaffold(
             contentWindowInsets = WindowInsets.safeDrawing,
             snackbarHost = { SnackbarHost(snackbarHostState) },
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
         ) { padding ->
             NavHost(
                 navController = navController,
@@ -249,16 +263,24 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                     }
                 }
                 composable(
-                    route = "detail/{movieId}",
-                    arguments = listOf(navArgument("movieId") { type = NavType.IntType }),
+                    route = "detail/{movieId}?providerItemId={providerItemId}",
+                    arguments = listOf(
+                        navArgument("movieId") { type = NavType.IntType },
+                        navArgument("providerItemId") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        },
+                    ),
                 ) { entry ->
                     DetailScreen(
                         container = container,
                         session = session,
                         movieId = entry.arguments?.getInt("movieId") ?: 0,
+                        providerItemId = entry.arguments?.getString("providerItemId").orEmpty(),
                         onBack = { navController.popBackStack() },
                         onNavigate = ::handleAppNavigate,
                         onError = onError,
+                        onChromeVisibleChange = { chromeVisible = it },
                     )
                 }
                 composable(
@@ -298,15 +320,52 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                         onError = onError,
                     )
                 }
+                composable(
+                    route = "smb/{sourceId}?path={path}",
+                    arguments = listOf(
+                        navArgument("sourceId") { type = NavType.StringType },
+                        navArgument("path") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        },
+                    ),
+                ) { entry ->
+                    SmbBrowseScreen(
+                        container = container,
+                        sourceId = entry.arguments?.getString("sourceId").orEmpty(),
+                        path = entry.arguments?.getString("path").orEmpty(),
+                        onBack = { navController.popBackStack() },
+                        onNavigate = ::handleAppNavigate,
+                        onError = onError,
+                    )
+                }
+                composable(
+                    route = "smbPlayer/{sourceId}?path={path}",
+                    arguments = listOf(
+                        navArgument("sourceId") { type = NavType.StringType },
+                        navArgument("path") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        },
+                    ),
+                ) { entry ->
+                    SmbPlayerScreen(
+                        container = container,
+                        sourceId = entry.arguments?.getString("sourceId").orEmpty(),
+                        path = entry.arguments?.getString("path").orEmpty(),
+                        onBack = { navController.popBackStack() },
+                        onError = onError,
+                    )
+                }
             }
         }
         AnimatedVisibility(
-            visible = chromeVisible && !currentRoute.startsWith("detail"),
+            visible = chromeVisible && !currentRoute.startsWith("detail") && !currentRoute.endsWith("Player/{sourceId}?path={path}"),
             enter = bottomChromeEnterTransition(),
             exit = bottomChromeExitTransition(),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            FrostedBottomNavigationBar(
+            DesignBottomNavigationBar(
                 currentPage = pagerState.currentPage,
                 pageOffsetFraction = pagerState.currentPageOffsetFraction,
                 onNavigate = ::navigateTopDestination,
@@ -316,7 +375,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
 }
 
 @Composable
-private fun FrostedBottomNavigationBar(
+private fun DesignBottomNavigationBar(
     currentPage: Int,
     pageOffsetFraction: Float,
     onNavigate: (String) -> Unit,
@@ -327,9 +386,9 @@ private fun FrostedBottomNavigationBar(
             .navigationBarsPadding()
             .padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 14.dp),
         shape = RoundedCornerShape(38.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.86f),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        tonalElevation = 4.dp,
+        shadowElevation = 12.dp,
     ) {
         Row(
             modifier = Modifier
@@ -392,7 +451,7 @@ private fun BottomNavItem(
                     scaleX = indicatorScale
                     scaleY = 0.96f + 0.04f * selectedAmount
                 }
-                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)),
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f + 0.74f * selectedAmount)),
         )
         BottomNavItemContent(
             selectedAmount = selectedAmount,
@@ -410,7 +469,7 @@ private fun BottomNavItemContent(
     selectedIcon: androidx.compose.ui.graphics.vector.ImageVector,
     unselectedIcon: androidx.compose.ui.graphics.vector.ImageVector,
 ) {
-    val selectedColor = MaterialTheme.colorScheme.onPrimaryContainer
+    val selectedColor = MaterialTheme.colorScheme.onPrimary
     val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
     val contentColor = lerp(unselectedColor, selectedColor, selectedAmount)
     Column(

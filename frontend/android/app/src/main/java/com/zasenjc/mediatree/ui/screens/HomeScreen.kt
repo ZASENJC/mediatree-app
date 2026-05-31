@@ -1,5 +1,6 @@
 package com.zasenjc.mediatree.ui.screens
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -27,11 +28,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -50,8 +55,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,7 +68,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,16 +76,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.zasenjc.mediatree.data.AppContainer
+import com.zasenjc.mediatree.data.ClientStorageSource
+import com.zasenjc.mediatree.data.ClientStorageType
+import com.zasenjc.mediatree.data.HomeLayoutPreference
 import com.zasenjc.mediatree.data.FolderNodeDto
 import com.zasenjc.mediatree.data.MediaRootDto
 import com.zasenjc.mediatree.data.MovieDto
+import com.zasenjc.mediatree.data.SmbEntry
+import com.zasenjc.mediatree.data.smbLibraryPath
+import com.zasenjc.mediatree.data.smbLibrarySourceId
+import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.viewModelFactory
+import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.ui.components.LoadingPane
-import com.zasenjc.mediatree.ui.components.SectionHeader
-import com.zasenjc.mediatree.ui.components.SyncChromeWithListScroll
+import com.zasenjc.mediatree.ui.components.MediaAsyncImage
+import com.zasenjc.mediatree.ui.components.SyncChromeWithGridScroll
 import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.topChromeExitTransition
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
@@ -96,6 +105,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.Color
 
 private val sortOptions = listOf(
     "release_date_desc" to "发行时间",
@@ -109,6 +119,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         val loading: Boolean = true,
         val roots: List<MediaRootDto> = emptyList(),
         val recent: List<MovieDto> = emptyList(),
+        val feedMovies: List<MovieDto> = emptyList(),
         val libraryItems: List<FolderNodeDto> = emptyList(),
         val sortMode: String = "release_date_desc",
         val openingPath: String? = null,
@@ -118,25 +129,33 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
-    fun load(activeLibrary: String, sort: String = _state.value.sortMode) {
+    fun load(providerType: ProviderType, activeLibrary: String, sort: String = _state.value.sortMode) {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null, sortMode = sort) }
             try {
-                val roots = container.mediaProvider.mediaRoots().items
+                val provider = container.mediaProviderFor(providerType)
+                val smbSourceId = activeLibrary.smbLibrarySourceId()
+                if (smbSourceId != null) {
+                    loadSmbLibrary(smbSourceId, sort)
+                    return@launch
+                }
+                val roots = provider.mediaRoots().items
                 if (activeLibrary.isBlank()) {
                     roots.firstOrNull { !it.locked }?.let { container.sessionStore.setActiveLibrary(it.path) }
                 }
                 val lib = activeLibrary.ifBlank { roots.firstOrNull { !it.locked }?.path.orEmpty() }
-                val items = container.mediaProvider.folders(mediaRoot = lib)
+                val items = provider.folders(mediaRoot = lib)
                     .tree
                     .filter { it.movieCount > 0 }
                     .sortedForHome(sort)
-                val recent = container.mediaProvider.recentWatched(limit = 20, mediaRoot = lib).movies
+                val recent = provider.recentWatched(limit = 20, mediaRoot = lib).movies
+                val feedMovies = provider.movies(sort = sort, limit = 60, mediaRoot = lib).movies
                 _state.update {
                     it.copy(
                         loading = false,
                         roots = roots,
                         recent = recent,
+                        feedMovies = feedMovies,
                         libraryItems = items,
                         sortMode = sort,
                     )
@@ -147,7 +166,32 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    private suspend fun loadSmbLibrary(sourceId: String, sort: String) {
+        val source = container.clientStorageRepository.load()
+            .firstOrNull { it.id == sourceId && it.type == ClientStorageType.SMB && it.enabled }
+            ?: throw IllegalArgumentException("SMB 存储源不可用")
+        val entries = container.smbClient.list(source)
+        val folders = entries.filter { it.isDirectory }
+            .map { entry -> entry.toFolderNode(source.id) }
+            .sortedForHome(sort)
+        val recent = entries.filter { it.isPlayableVideo }
+            .map { entry -> entry.toMovieDto(source) }
+            .sortedBy { it.title.orEmpty() }
+            .take(20)
+        _state.update {
+            it.copy(
+                loading = false,
+                roots = emptyList(),
+                recent = recent,
+                feedMovies = recent,
+                libraryItems = folders,
+                sortMode = sort,
+            )
+        }
+    }
+
     fun openLibraryItem(
+        providerType: ProviderType,
         item: FolderNodeDto,
         fallbackMediaRoot: String,
         onNavigate: (String) -> Unit,
@@ -156,17 +200,23 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(openingPath = item.path, error = null) }
             try {
-                val response = container.mediaProvider.movies(
-                    folder = item.path,
-                    sort = "created_desc",
-                    limit = 1,
-                    mediaRoot = item.mediaRoot?.takeIf { it.isNotBlank() } ?: fallbackMediaRoot,
-                )
-                val movie = response.movies.firstOrNull()
-                if (movie == null) {
-                    _state.update { it.copy(error = IllegalStateException("未找到可播放影片")) }
+                if (item.mediaRoot?.smbLibrarySourceId() != null) {
+                    onNavigate("smb/${item.mediaRoot.smbLibrarySourceId()}?path=${android.net.Uri.encode(item.path)}")
+                } else if (item.isLeaf) {
+                    onNavigate(item.detailRoute())
                 } else {
-                    onNavigate("detail/${movie.id}")
+                    val response = container.mediaProviderFor(providerType).movies(
+                        folder = item.path,
+                        sort = "created_desc",
+                        limit = 1,
+                        mediaRoot = item.mediaRoot?.takeIf { it.isNotBlank() } ?: fallbackMediaRoot,
+                    )
+                    val movie = response.movies.firstOrNull()
+                    if (movie == null) {
+                        _state.update { it.copy(error = IllegalStateException("未找到可播放影片")) }
+                    } else {
+                        onNavigate(movie.detailRoute())
+                    }
                 }
             } catch (e: Throwable) {
                 _state.update { it.copy(error = e) }
@@ -174,6 +224,18 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 _state.update { it.copy(openingPath = null) }
             }
         }
+    }
+
+    fun openDirectoryItem(item: FolderNodeDto, onNavigate: (String) -> Unit) {
+        if (_state.value.openingPath == item.path) return
+        _state.update { it.copy(openingPath = item.path, error = null) }
+        val smbSourceId = item.mediaRoot?.smbLibrarySourceId()
+        if (smbSourceId != null) {
+            onNavigate("smb/$smbSourceId?path=${android.net.Uri.encode(item.path)}")
+        } else {
+            onNavigate("browse?folder=${android.net.Uri.encode(item.path)}")
+        }
+        _state.update { it.copy(openingPath = null) }
     }
 }
 
@@ -192,17 +254,18 @@ fun HomeScreen(
     var showSearch by remember { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
     var showMore by remember { mutableStateOf(false) }
-    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+    val homeLayout by container.uiPreferencesStore.homeLayoutFlow.collectAsStateWithLifecycle(initialValue = HomeLayoutPreference.MediaFeed)
 
-    SyncChromeWithListScroll(listState, onChromeVisibleChange)
+    SyncChromeWithGridScroll(gridState, onChromeVisibleChange)
 
     LaunchedEffect(Unit) {
         onChromeVisibleChange(true)
     }
 
-    LaunchedEffect(session.serverUrl, session.activeLibrary) {
+    LaunchedEffect(session.serverUrl, session.activeProviderType, session.activeLibrary) {
         if (shouldLoadRemoteContent(session)) {
-            vm.load(session.activeLibrary)
+            vm.load(session.activeProviderType, session.activeLibrary)
         }
     }
 
@@ -210,62 +273,90 @@ fun HomeScreen(
         state.error?.let(onError)
     }
 
-    Scaffold { padding ->
+    val provider = remember(session.activeProviderType, container) {
+        container.mediaProviderFor(session.activeProviderType)
+    }
+    val showMediaFeed = homeLayout == HomeLayoutPreference.MediaFeed
+
+    Scaffold(containerColor = Color.Transparent) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (!shouldLoadRemoteContent(session)) {
                 EmptyMediaState("请先在设置页连接 MediaTree 服务器")
             } else if (state.loading) {
                 LoadingPane(Modifier.fillMaxSize())
-            } else {
-                LazyColumn(
-                    state = listState,
+            } else if (showMediaFeed) {
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Adaptive(104.dp),
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, top = 82.dp, end = 16.dp, bottom = 112.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                    contentPadding = PaddingValues(start = 20.dp, top = 86.dp, end = 20.dp, bottom = 116.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     if (state.recent.isNotEmpty()) {
-                        item { SectionHeader("最近观看") }
-                        item {
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                items(state.recent, key = { it.id }) { movie ->
-                                    RecentWatchingCard(
-                                        movie = movie,
-                                        imageUrl = container.mediaProvider.episodeStillUrl(session.serverUrl, movie.id),
-                                        onClick = { onNavigate("detail/${movie.id}") },
-                                        modifier = Modifier.width(214.dp),
-                                    )
-                                }
-                            }
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "section") {
+                            HomeSectionHeader("继续观看 >")
+                        }
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "recent") {
+                            HomeHeroRail(
+                                movies = state.recent,
+                                imageUrl = { movie -> provider.episodeStillUrl(session.serverUrl, movie.id) },
+                                onOpen = { movie -> onNavigate(movie.openRoute()) },
+                            )
                         }
                     }
-                    item { SectionHeader("媒体库") }
+                    item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "section") {
+                        HomeSectionHeader("媒体库")
+                    }
                     if (state.libraryItems.isEmpty()) {
-                        item { EmptyMediaState("暂无媒体") }
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "empty") {
+                            EmptyMediaState("暂无媒体")
+                        }
                     } else {
-                        items(state.libraryItems.chunked(3)) { row ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                                row.forEach { item ->
-                                    HomeLibraryPosterCard(
+                        items(state.libraryItems, key = { it.path }, contentType = { "media-poster" }) { item ->
+                            HomeMediaPosterCard(
+                                item = item,
+                                imageUrl = UrlUtils.resolveApiUrl(
+                                    session.serverUrl,
+                                    item.randomCover ?: item.cover,
+                                ),
+                                opening = state.openingPath == item.path,
+                                onClick = {
+                                    vm.openLibraryItem(
+                                        providerType = session.activeProviderType,
                                         item = item,
-                                        imageUrl = UrlUtils.resolveApiUrl(
-                                            session.serverUrl,
-                                            item.randomCover ?: item.cover,
-                                        ),
-                                        opening = state.openingPath == item.path,
-                                        onClick = {
-                                            vm.openLibraryItem(
-                                                item = item,
-                                                fallbackMediaRoot = session.activeLibrary,
-                                                onNavigate = onNavigate,
-                                            )
-                                        },
-                                        modifier = Modifier.weight(1f),
+                                        fallbackMediaRoot = session.activeLibrary,
+                                        onNavigate = onNavigate,
                                     )
-                                }
-                                repeat(3 - row.size) {
-                                    Spacer(Modifier.weight(1f))
-                                }
-                            }
+                                },
+                            )
+                        }
+                    }
+                }
+            } else {
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Fixed(1),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 20.dp, top = 86.dp, end = 20.dp, bottom = 116.dp),
+                    horizontalArrangement = Arrangement.spacedBy(0.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    item(contentType = "section") { HomeSectionHeader("目录") }
+                    if (state.libraryItems.isEmpty()) {
+                        item(contentType = "empty") { EmptyMediaState("暂无目录") }
+                    } else {
+                        items(state.libraryItems, key = { it.path }, contentType = { "directory-row" }) { item ->
+                            HomeDirectoryRow(
+                                item = item,
+                                opening = state.openingPath == item.path,
+                                onClick = {
+                                    vm.openDirectoryItem(
+                                        item = item,
+                                        onNavigate = onNavigate,
+                                    )
+                                },
+                            )
                         }
                     }
                 }
@@ -276,15 +367,9 @@ fun HomeScreen(
                 exit = topChromeExitTransition(),
                 modifier = Modifier.align(Alignment.TopCenter),
             ) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            "mediatree",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    },
+                DesignTopAppBar(
+                    title = "mediatree",
+                    brand = true,
                     actions = {
                         IconButton(onClick = { showSearch = true }) {
                             Icon(Icons.Default.Search, contentDescription = "搜索")
@@ -300,7 +385,7 @@ fun HomeScreen(
                                         onClick = {
                                             showSort = false
                                             if (shouldLoadRemoteContent(session)) {
-                                                vm.load(session.activeLibrary, key)
+                                                vm.load(session.activeProviderType, session.activeLibrary, key)
                                             }
                                         },
                                     )
@@ -318,16 +403,13 @@ fun HomeScreen(
                                     onClick = {
                                         showMore = false
                                         if (shouldLoadRemoteContent(session)) {
-                                            vm.load(session.activeLibrary)
+                                            vm.load(session.activeProviderType, session.activeLibrary)
                                         }
                                     },
                                 )
                             }
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                    ),
                 )
             }
             HomeSearchOverlay(
@@ -346,7 +428,76 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeLibraryPosterCard(
+private fun HomeSectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onBackground,
+    )
+}
+
+@Composable
+private fun HomeHeroRail(
+    movies: List<MovieDto>,
+    imageUrl: (MovieDto) -> String?,
+    onOpen: (MovieDto) -> Unit,
+) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        items(movies, key = { it.id }) { movie ->
+            RecentWatchingCard(
+                movie = movie,
+                imageUrl = imageUrl(movie),
+                onClick = { onOpen(movie) },
+                modifier = Modifier.width(214.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeMoviePosterCard(
+    movie: MovieDto,
+    imageUrl: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val title = movie.displayTitle ?: movie.title ?: movie.code
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Card(
+            modifier = Modifier.clickable(onClick = onClick),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
+            MediaAsyncImage(
+                imageUrl = imageUrl,
+                contentDescription = title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f),
+                cornerRadius = 16.dp,
+            )
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = listOfNotNull(movie.releaseDate?.take(4), movieCardType(movie)).joinToString(" · "),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun HomeMediaPosterCard(
     item: FolderNodeDto,
     imageUrl: String?,
     opening: Boolean,
@@ -354,22 +505,21 @@ private fun HomeLibraryPosterCard(
     modifier: Modifier = Modifier,
 ) {
     val title = item.displayTitle ?: item.name.ifBlank { item.path.substringAfterLast("/") }
-    Card(
-        modifier = modifier
-            .clickable(enabled = !opening, onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.clip(RoundedCornerShape(12.dp))) {
-                AsyncImage(
-                    model = imageUrl,
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Card(
+            modifier = Modifier.clickable(enabled = !opening, onClick = onClick),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
+            Box {
+                MediaAsyncImage(
+                    imageUrl = imageUrl,
                     contentDescription = title,
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(2f / 3f)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        .aspectRatio(2f / 3f),
+                    cornerRadius = 16.dp,
                 )
                 if (item.folderWatched == true) {
                     WatchFlag(Modifier.align(Alignment.TopEnd).padding(7.dp))
@@ -385,21 +535,70 @@ private fun HomeLibraryPosterCard(
                     }
                 }
             }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 2.dp),
-            )
-            Text(
-                text = item.releaseDateMax?.take(4).orEmpty(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 2.dp),
-            )
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = item.releaseDateMax?.take(4).orEmpty(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun HomeDirectoryRow(
+    item: FolderNodeDto,
+    opening: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val title = item.name.ifBlank { item.path.substringAfterLast("/").ifBlank { item.displayTitle ?: item.path } }
+    Surface(
+        modifier = modifier.fillMaxWidth().clickable(enabled = !opening, onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 1.dp,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.primary,
+            ) {
+                Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.padding(9.dp).size(24.dp))
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = item.directoryMeta(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (opening) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+            } else {
+                Icon(Icons.Default.MoreVert, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
@@ -412,43 +611,42 @@ private fun RecentWatchingCard(
     modifier: Modifier = Modifier,
 ) {
     val title = movie.displayTitle ?: movie.title ?: movie.code
-    Card(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.clip(RoundedCornerShape(12.dp))) {
-                AsyncImage(
-                    model = imageUrl,
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Card(
+            modifier = Modifier.clickable(onClick = onClick),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
+            Box {
+                MediaAsyncImage(
+                    imageUrl = imageUrl,
                     contentDescription = title,
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        .aspectRatio(16f / 9f),
+                    cornerRadius = 16.dp,
                 )
                 if (movie.tags.contains("watched")) {
                     WatchFlag(Modifier.align(Alignment.TopEnd).padding(7.dp))
                 }
             }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 2.dp),
-            )
-            Text(
-                text = listOfNotNull(movie.releaseDate?.take(4), episodeText(movie).takeIf { it.isNotBlank() })
-                    .joinToString(" · "),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 2.dp),
-            )
         }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = listOfNotNull(movie.releaseDate?.take(4), episodeText(movie).takeIf { it.isNotBlank() })
+                .joinToString(" · "),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -495,6 +693,9 @@ private fun HomeSearchOverlay(
     var searchJob by remember { mutableStateOf<Job?>(null) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val provider = remember(session.activeProviderType, container) {
+        container.mediaProviderFor(session.activeProviderType)
+    }
 
     fun dismissSearch() {
         focusManager.clearFocus()
@@ -520,7 +721,7 @@ private fun HomeSearchOverlay(
                 return@launch
             }
             try {
-                val resp = container.mediaProvider.movies(
+                val resp = provider.movies(
                     code = request,
                     limit = 20,
                     mediaRoot = session.activeLibrary,
@@ -648,10 +849,10 @@ private fun HomeSearchOverlay(
                                     items(results, key = { it.id }) { movie ->
                                         HomeSearchResultRow(
                                             movie = movie,
-                                            imageUrl = container.mediaProvider.coverUrl(session.serverUrl, movie.id),
+                                            imageUrl = provider.coverUrl(session.serverUrl, movie.id),
                                             onClick = {
                                                 focusManager.clearFocus()
-                                                onNavigate("detail/${movie.id}")
+                                                onNavigate(movie.detailRoute())
                                             },
                                         )
                                     }
@@ -684,15 +885,13 @@ private fun HomeSearchResultRow(
             modifier = Modifier.padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AsyncImage(
-                model = imageUrl,
+            MediaAsyncImage(
+                imageUrl = imageUrl,
                 contentDescription = title,
-                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .width(54.dp)
-                    .height(76.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    .height(76.dp),
+                cornerRadius = 10.dp,
             )
             Spacer(Modifier.width(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -727,7 +926,53 @@ private fun List<FolderNodeDto>.sortedForHome(sort: String): List<FolderNodeDto>
     )
 }
 
+private fun SmbEntry.toFolderNode(sourceId: String): FolderNodeDto = FolderNodeDto(
+    name = name,
+    path = path,
+    isLeaf = false,
+    movieCount = 1,
+    displayTitle = name,
+    mediaRoot = smbLibraryPath(sourceId),
+)
+
+private fun SmbEntry.toMovieDto(source: ClientStorageSource): MovieDto = MovieDto(
+    id = (source.id + ":" + path).hashCode(),
+    path = path,
+    code = name,
+    title = name,
+    displayTitle = name,
+    mediaRoot = smbLibraryPath(source.id),
+    fileSize = sizeBytes,
+    size = sizeBytes,
+)
+
 private fun FolderNodeDto.homeTitle(): String = displayTitle ?: name.ifBlank { path }
+
+private fun FolderNodeDto.directoryMeta(): String {
+    val count = if (movieCount > 0) "$movieCount 项" else "文件夹"
+    val location = path.takeIf { it.isNotBlank() } ?: mediaRoot.orEmpty()
+    return listOf(count, location).filter { it.isNotBlank() }.joinToString(" · ")
+}
+
+private fun FolderNodeDto.detailRoute(): String =
+    "detail/${path.toMovieRouteId()}?providerItemId=${Uri.encode(path)}"
+
+private fun MovieDto.routeId(): Int = id
+
+private fun MovieDto.detailRoute(): String =
+    "detail/${routeId()}" + path.takeIf { it.isNotBlank() }?.let { "?providerItemId=${Uri.encode(it)}" }.orEmpty()
+
+private fun MovieDto.openRoute(): String =
+    mediaRoot?.smbLibrarySourceId()?.let { sourceId -> "smbPlayer/$sourceId?path=${Uri.encode(path)}" } ?: detailRoute()
+
+private fun String.toMovieRouteId(): Int =
+    takeLast(8).toUIntOrNull(16)?.toInt() ?: hashCode()
+
+private fun movieCardType(movie: MovieDto): String = when {
+    movie.tmdbEpisode != null || movie.episodeTitle != null -> "剧集"
+    movie.tmdbType == "tv" -> "剧集"
+    else -> "电影"
+}
 
 private fun episodeText(movie: MovieDto): String = when {
     movie.tmdbSeason != null || movie.tmdbEpisode != null ->

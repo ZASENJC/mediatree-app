@@ -92,18 +92,16 @@ class WebDavClient(
                 val response = responses.item(index) as? Element ?: return@mapNotNull null
                 val href = response.firstText("href").ifBlank { return@mapNotNull null }
                 if (sameWebDavResource(href, currentUrl)) return@mapNotNull null
+                val hrefPath = childPathFromHref(source, href)
                 val decodedName = response.firstText("displayname")
-                    .ifBlank { decodedHrefLeaf(href) }
+                    .ifBlank { hrefPath.substringAfterLast('/') }
                     .trimEnd('/')
-                if (decodedName.isBlank()) return@mapNotNull null
+                if (decodedName.isBlank() || hrefPath.isBlank()) return@mapNotNull null
                 val isDirectory = response.getElementsByTagNameNS("*", "collection").length > 0 || href.endsWith("/")
-                val childPath = currentPath
-                    .trim('/')
-                    .let { parent -> if (parent.isBlank()) decodedName else "$parent/$decodedName" }
                 WebDavEntry(
                     sourceId = source.id,
                     name = decodedName,
-                    path = childPath,
+                    path = hrefPath,
                     href = href,
                     isDirectory = isDirectory,
                     sizeBytes = response.firstText("getcontentlength").toLongOrNull() ?: 0L,
@@ -135,9 +133,13 @@ private fun Element.firstText(localName: String): String {
     return nodes.item(0)?.textContent?.trim().orEmpty()
 }
 
-private fun decodedHrefLeaf(href: String): String {
-    val rawPath = runCatching { URI(href).rawPath }.getOrNull() ?: href
-    return URLDecoder.decode(rawPath.trimEnd('/').substringAfterLast('/'), Charsets.UTF_8.name())
+private fun childPathFromHref(source: ClientStorageSource, href: String): String {
+    val rawHrefPath = runCatching { URI(href).rawPath }.getOrNull() ?: href
+    val rawBasePath = runCatching { URI(source.endpoint).rawPath }.getOrNull().orEmpty()
+    val relative = rawHrefPath.trimEnd('/')
+        .removePrefix(rawBasePath.trimEnd('/'))
+        .trim('/')
+    return URLDecoder.decode(relative, Charsets.UTF_8.name())
 }
 
 private fun sameWebDavResource(href: String, currentUrl: String): Boolean {

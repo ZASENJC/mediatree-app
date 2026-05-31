@@ -21,7 +21,7 @@ class WebDavBrowserSourceTest {
     }
 
     @Test
-    fun settingsLinksOnlyWebDavStorageSourcesToBrowser() {
+    fun settingsLinksWebDavStorageSourcesToBrowser() {
         val settingsSource = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
             .readText()
@@ -29,7 +29,6 @@ class WebDavBrowserSourceTest {
         assertTrue(settingsSource.contains("onOpenClientStorageSource"))
         assertTrue(settingsSource.contains("webdav/${'$'}{source.id}"))
         assertTrue(settingsSource.contains("ClientStorageType.WebDAV"))
-        assertFalse(settingsSource.contains("smb/${'$'}{source.id}"))
     }
 
     @Test

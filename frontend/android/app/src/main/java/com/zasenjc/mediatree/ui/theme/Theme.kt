@@ -1,79 +1,86 @@
 package com.zasenjc.mediatree.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+private val Pantone2905 = Color(0xFF2F7DF6)
+private val Pantone283 = Color(0xFF69A8FF)
+private val MistBackground = Color(0xFFF4F9FF)
+private val MistSurface = Color(0xFFFAFDFF)
+private val CoolGray90 = Color(0xFF14234A)
+private val CoolGray70 = Color(0xFF465A7F)
+private val CoolGray20 = Color(0xFFDDE7F6)
+private val SuccessGreen = Color(0xFF5AB963)
+private val WarningOrange = Color(0xFFFF9F1A)
+private val ErrorRed = Color(0xFFFF4949)
+
 private val MediaTreeLightScheme = lightColorScheme(
-    primary = Color(0xFF006A60),
+    primary = Pantone2905,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF74F8E5),
-    onPrimaryContainer = Color(0xFF00201C),
-    secondary = Color(0xFF625B71),
+    primaryContainer = Color(0xFFD9E9FF),
+    onPrimaryContainer = Color(0xFF001A42),
+    secondary = Pantone283,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE8DEF8),
-    onSecondaryContainer = Color(0xFF1D192B),
-    tertiary = Color(0xFFBA1A1A),
+    secondaryContainer = Color(0xFFE8F3FF),
+    onSecondaryContainer = Color(0xFF06254D),
+    tertiary = WarningOrange,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFDAD6),
-    onTertiaryContainer = Color(0xFF410002),
-    background = Color(0xFFFFFBFF),
-    onBackground = Color(0xFF1C1B1F),
-    surface = Color(0xFFFFFBFF),
-    onSurface = Color(0xFF1C1B1F),
-    surfaceVariant = Color(0xFFE7E0EC),
-    onSurfaceVariant = Color(0xFF49454F),
+    tertiaryContainer = Color(0xFFFFE6B8),
+    onTertiaryContainer = Color(0xFF3E2500),
+    background = MistBackground,
+    onBackground = CoolGray90,
+    surface = MistSurface,
+    onSurface = CoolGray90,
+    surfaceVariant = Color(0xFFEAF2FC),
+    onSurfaceVariant = CoolGray70,
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF8F2FA),
-    surfaceContainer = Color(0xFFF3EDF7),
-    surfaceContainerHigh = Color(0xFFECE6F0),
-    surfaceContainerHighest = Color(0xFFE6E0E9),
-    outline = Color(0xFF79747E),
-    outlineVariant = Color(0xFFCAC4D0),
-    error = Color(0xFFBA1A1A),
+    surfaceContainerLow = Color(0xFFF8FBFF),
+    surfaceContainer = Color(0xFFF0F6FF),
+    surfaceContainerHigh = Color(0xFFE8F2FF),
+    surfaceContainerHighest = Color(0xFFDDEBFF),
+    outline = Color(0xFF8FA0BB),
+    outlineVariant = CoolGray20,
+    error = ErrorRed,
     onError = Color.White,
 )
 
 private val MediaTreeDarkScheme = darkColorScheme(
-    primary = Color(0xFF6FDBCE),
-    onPrimary = Color(0xFF003731),
-    primaryContainer = Color(0xFF005047),
-    onPrimaryContainer = Color(0xFF8FF8E9),
-    secondary = Color(0xFFCBC2DB),
-    onSecondary = Color(0xFF332D41),
-    secondaryContainer = Color(0xFF4A4458),
-    onSecondaryContainer = Color(0xFFE8DEF8),
-    tertiary = Color(0xFFFFB4AB),
-    onTertiary = Color(0xFF690005),
-    tertiaryContainer = Color(0xFF93000A),
-    onTertiaryContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF141316),
-    onBackground = Color(0xFFE6E1E5),
-    surface = Color(0xFF141316),
-    onSurface = Color(0xFFE6E1E5),
-    surfaceVariant = Color(0xFF49454F),
-    onSurfaceVariant = Color(0xFFCAC4D0),
-    surfaceContainerLowest = Color(0xFF0F0D11),
-    surfaceContainerLow = Color(0xFF1C1B1F),
-    surfaceContainer = Color(0xFF211F26),
-    surfaceContainerHigh = Color(0xFF2B2930),
-    surfaceContainerHighest = Color(0xFF36343B),
-    outline = Color(0xFF938F99),
-    outlineVariant = Color(0xFF49454F),
+    primary = Color(0xFF66AAFF),
+    onPrimary = Color(0xFF001B3F),
+    primaryContainer = Color(0xFF163B73),
+    onPrimaryContainer = Color(0xFFDCEBFF),
+    secondary = Color(0xFF8CC0FF),
+    onSecondary = Color(0xFF072348),
+    secondaryContainer = Color(0xFF223E66),
+    onSecondaryContainer = Color(0xFFE6F1FF),
+    tertiary = Color(0xFFFFC46B),
+    onTertiary = Color(0xFF3F2700),
+    tertiaryContainer = Color(0xFF60450E),
+    onTertiaryContainer = Color(0xFFFFE6BB),
+    background = Color(0xFF060A12),
+    onBackground = Color(0xFFE6ECF6),
+    surface = Color(0xFF101825),
+    onSurface = Color(0xFFE6ECF6),
+    surfaceVariant = Color(0xFF27364A),
+    onSurfaceVariant = Color(0xFFC4D0E2),
+    surfaceContainerLowest = Color(0xFF050810),
+    surfaceContainerLow = Color(0xFF0C1420),
+    surfaceContainer = Color(0xFF121D2C),
+    surfaceContainerHigh = Color(0xFF1A2738),
+    surfaceContainerHighest = Color(0xFF223247),
+    outline = Color(0xFF7E91AD),
+    outlineVariant = Color(0xFF33445C),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
 )
@@ -97,6 +104,42 @@ private val MediaTreeTypography = Typography(
         fontSize = 16.sp,
         lineHeight = 22.sp,
     ),
+    titleSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    ),
+    bodySmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+        lineHeight = 17.sp,
+    ),
+    labelLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 13.sp,
+        lineHeight = 17.sp,
+    ),
+    labelMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+    ),
+    labelSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Medium,
+        fontSize = 10.sp,
+        lineHeight = 14.sp,
+    ),
 )
 
 private val MediaTreeShapes = Shapes(
@@ -110,15 +153,10 @@ private val MediaTreeShapes = Shapes(
 @Composable
 fun MediaTreeTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val context = LocalContext.current
-    val colorScheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else {
-        if (darkTheme) MediaTreeDarkScheme else MediaTreeLightScheme
-    }
+    val colorScheme = if (darkTheme) MediaTreeDarkScheme else MediaTreeLightScheme
     MaterialTheme(
         colorScheme = colorScheme,
         typography = MediaTreeTypography,

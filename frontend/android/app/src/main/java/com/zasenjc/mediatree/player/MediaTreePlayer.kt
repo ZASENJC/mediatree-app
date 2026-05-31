@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -48,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +72,7 @@ private const val SourceSwapCurtainFadeOutMillis = 220
 private const val OverlayAutoHideMillis = 3_500L
 private const val HudAutoHideMillis = 1_500L
 private const val LockedButtonAutoHideMillis = 5_000L
+private const val HorizontalSeekSecondsPerScreen = 90.0
 
 private val PlayerSpeeds = listOf(0.75, 1.0, 1.25, 1.5, 2.0)
 private val AspectRatioOptions = listOf(
@@ -96,6 +101,7 @@ fun playerDoubleTapAction(tapX: Float, width: Int): PlayerDoubleTapAction {
 data class PlaybackPositionSnapshot(
     val positionSeconds: Double,
     val durationSeconds: Double,
+    val percentPosition: Double = 0.0,
 )
 
 @Composable
@@ -121,6 +127,9 @@ fun MediaTreePlayer(
     var isPlaying by remember { mutableStateOf(false) }
     var positionSeconds by remember { mutableDoubleStateOf(startPosition.coerceAtLeast(0.0)) }
     var durationSeconds by remember { mutableDoubleStateOf(0.0) }
+    var percentPosition by remember { mutableDoubleStateOf(0.0) }
+    var seekingPositionSeconds by remember { mutableStateOf<Double?>(null) }
+    var tickCount by remember { mutableStateOf(0) }
     var completedReported by remember(playbackSource) { mutableStateOf(false) }
     var hudMessage by remember { mutableStateOf("") }
     var showOverlay by remember { mutableStateOf(false) }
@@ -142,6 +151,27 @@ fun MediaTreePlayer(
             },
         ),
         label = "sourceSwapCurtainAlpha",
+    )
+    val horizontalSeekHandler by rememberUpdatedState(
+        newValue = { deltaSeconds: Double ->
+            if (playerLocked || deltaSeconds == 0.0) {
+                Unit
+            } else if (durationSeconds > 0.0) {
+                val target = (positionSeconds + deltaSeconds).coerceIn(0.0, durationSeconds)
+                controller.seekTo(target)
+                seekingPositionSeconds = null
+                positionSeconds = target
+                percentPosition = playbackPercent(target, durationSeconds, percentPosition)
+                hudMessage = seekHudMessage(deltaSeconds, target, durationSeconds)
+                showOverlay = true
+            } else {
+                controller.seekBy(deltaSeconds)
+                val target = (positionSeconds + deltaSeconds).coerceAtLeast(0.0)
+                positionSeconds = target
+                hudMessage = relativeSeekHudMessage(deltaSeconds)
+                showOverlay = true
+            }
+        },
     )
 
     DisposableEffect(controller) {
@@ -187,12 +217,36 @@ fun MediaTreePlayer(
 
     LaunchedEffect(controller) {
         while (isActive) {
-            delay(1_000)
-            positionSeconds = controller.positionSeconds().coerceAtLeast(0.0)
-            durationSeconds = controller.durationSeconds().coerceAtLeast(0.0)
+            delay(500)
+            tickCount += 1
+            val controllerPosition = controller.positionSeconds().coerceAtLeast(0.0)
+            val controllerDuration = controller.durationSeconds().coerceAtLeast(0.0)
+            val controllerPercent = controller.percentPosition().coerceIn(0.0, 100.0)
+            val resolvedPosition = if (controllerPosition > 0.0) {
+                controllerPosition
+            } else if (controllerDuration > 0.0 && controllerPercent > 0.0) {
+                controllerDuration * controllerPercent / 100.0
+            } else {
+                controllerPosition
+            }
+            if (seekingPositionSeconds == null) {
+                positionSeconds = resolvedPosition
+            }
+            if (controllerDuration > 0.0) {
+                durationSeconds = controllerDuration
+            }
+            percentPosition = playbackPercent(
+                positionSeconds = seekingPositionSeconds ?: positionSeconds,
+                durationSeconds = durationSeconds,
+                fallbackPercent = controllerPercent,
+            )
             onPlaybackPositionChange(positionSeconds, durationSeconds)
-            playbackError = controller.lastError() ?: playbackError
-            audioTracks = controller.audioTrackOptions()
+            if (tickCount % 3 == 1) {
+                playbackError = controller.lastError() ?: playbackError
+            }
+            if (showOverlay && tickCount % 5 == 1) {
+                audioTracks = controller.audioTrackOptions()
+            }
             if (!completedReported && controller.isEnded()) {
                 completedReported = true
                 onPlaybackComplete(positionSeconds, durationSeconds)
@@ -205,6 +259,7 @@ fun MediaTreePlayer(
             PlaybackPositionSnapshot(
                 positionSeconds = controller.positionSeconds().coerceAtLeast(0.0),
                 durationSeconds = controller.durationSeconds().coerceAtLeast(0.0),
+                percentPosition = controller.percentPosition().coerceIn(0.0, 100.0),
             )
         }
         onDispose {
@@ -230,67 +285,67 @@ fun MediaTreePlayer(
 
     Box(
         modifier = modifier
-            .background(Color.Black)
-            .pointerInput(playerLocked) {
-                detectVerticalDragGestures { change, dragAmount ->
-                    if (playerLocked) return@detectVerticalDragGestures
-                    val halfWidth = size.width / 2f
-                    val ratio = (dragAmount / size.height).coerceIn(-0.5f, 0.5f)
-                    if (change.position.x < halfWidth) {
-                        activity?.let { act ->
-                            val attrs = act.window.attributes
-                            attrs.screenBrightness = (attrs.screenBrightness - ratio).coerceIn(0.01f, 1f)
-                            act.window.attributes = attrs
-                            hudMessage = "亮度: ${(attrs.screenBrightness * 100).toInt()}%"
-                        }
-                    } else {
-                        val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                        val maxVol = audio?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
-                        val currentVol = audio?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 7
-                        val newVol = (currentVol - (ratio * maxVol).toInt()).coerceIn(0, maxVol)
-                        audio?.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
-                        hudMessage = "音量: ${(newVol * 100 / maxVol)}%"
-                    }
-                }
-            }
-            .pointerInput(playerLocked) {
-                detectTapGestures(
-                    onTap = { showOverlay = !showOverlay },
-                    onDoubleTap = { offset ->
-                        if (playerLocked) {
-                            showLockedButton = true
-                            return@detectTapGestures
-                        }
-                        when (playerDoubleTapAction(tapX = offset.x, width = size.width)) {
-                            PlayerDoubleTapAction.Rewind -> {
-                                controller.seekBy(-10.0)
-                                hudMessage = "快退 10 秒"
-                            }
-                            PlayerDoubleTapAction.TogglePlay -> {
-                                if (isPlaying) {
-                                    controller.pause()
-                                    isPlaying = false
-                                    hudMessage = "暂停"
-                                } else {
-                                    controller.play()
-                                    isPlaying = true
-                                    hudMessage = "播放"
-                                }
-                            }
-                            PlayerDoubleTapAction.Forward -> {
-                                controller.seekBy(10.0)
-                                hudMessage = "快进 10 秒"
-                            }
-                        }
-                        showOverlay = true
-                    },
-                )
-            },
+            .background(Color.Black),
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { MpvPlayerView(it).apply { this.controller = controller } },
             update = { view -> view.controller = controller },
+        )
+
+        PlayerGestureLayer(
+            playerLocked = playerLocked,
+            onHorizontalSeek = horizontalSeekHandler,
+            onVerticalDrag = { x, dragAmount, width, height ->
+                if (playerLocked) return@PlayerGestureLayer
+                val halfWidth = width / 2f
+                val ratio = (dragAmount / height).coerceIn(-0.5f, 0.5f)
+                if (x < halfWidth) {
+                    activity?.let { act ->
+                        val attrs = act.window.attributes
+                        attrs.screenBrightness = (attrs.screenBrightness - ratio).coerceIn(0.01f, 1f)
+                        act.window.attributes = attrs
+                        hudMessage = "亮度: ${(attrs.screenBrightness * 100).toInt()}%"
+                    }
+                } else {
+                    val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                    val maxVol = audio?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
+                    val currentVol = audio?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 7
+                    val newVol = (currentVol - (ratio * maxVol).toInt()).coerceIn(0, maxVol)
+                    audio?.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                    hudMessage = "音量: ${(newVol * 100 / maxVol)}%"
+                }
+            },
+            onTap = { showOverlay = !showOverlay },
+            onDoubleTap = { tapX, width ->
+                if (playerLocked) {
+                    showLockedButton = true
+                    return@PlayerGestureLayer
+                }
+                when (playerDoubleTapAction(tapX = tapX, width = width)) {
+                    PlayerDoubleTapAction.Rewind -> {
+                        controller.seekBy(-10.0)
+                        hudMessage = "快退 10 秒"
+                    }
+                    PlayerDoubleTapAction.TogglePlay -> {
+                        if (isPlaying) {
+                            controller.pause()
+                            isPlaying = false
+                            hudMessage = "暂停"
+                        } else {
+                            controller.play()
+                            isPlaying = true
+                            hudMessage = "播放"
+                        }
+                    }
+                    PlayerDoubleTapAction.Forward -> {
+                        controller.seekBy(10.0)
+                        hudMessage = "快进 10 秒"
+                    }
+                }
+                showOverlay = true
+            },
+            modifier = Modifier.fillMaxSize(),
         )
 
         if (curtainAlpha > 0.01f) {
@@ -308,6 +363,15 @@ fun MediaTreePlayer(
             }
         }
 
+        if (!showOverlay && !playerLocked) {
+            PlayerProgressBar(
+                progress = playbackProgress(positionSeconds, durationSeconds, percentPosition),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+            )
+        }
+
         if (showOverlay) {
             LaunchedEffect(showOverlay, playerLocked) {
                 if (!playerLocked) {
@@ -319,8 +383,9 @@ fun MediaTreePlayer(
             PlayerControlsOverlay(
                 isPlaying = isPlaying,
                 playerLocked = playerLocked,
-                positionSeconds = positionSeconds,
+                positionSeconds = seekingPositionSeconds ?: positionSeconds,
                 durationSeconds = durationSeconds,
+                percentPosition = percentPosition,
                 playbackSpeed = playbackSpeed,
                 selectedSubtitle = selectedSubtitle,
                 subtitleTracks = playbackSource.subtitleTracks,
@@ -359,6 +424,23 @@ fun MediaTreePlayer(
                         hudMessage = option.subtitleLabel()
                     }
                     showOverlay = true
+                },
+                onSeekPreview = { target ->
+                    seekingPositionSeconds = target
+                    positionSeconds = target
+                    percentPosition = playbackPercent(target, durationSeconds, percentPosition)
+                    showOverlay = true
+                },
+                onSeekCommit = { target ->
+                    controller.seekTo(target)
+                    seekingPositionSeconds = null
+                    positionSeconds = target
+                    percentPosition = playbackPercent(target, durationSeconds, percentPosition)
+                    hudMessage = formatTime(target)
+                    showOverlay = true
+                },
+                onAudioMenuOpen = {
+                    audioTracks = controller.audioTrackOptions()
                 },
                 onAudioTrackChange = { option ->
                     selectedAudioTrackId = option.id
@@ -405,11 +487,45 @@ fun MediaTreePlayer(
 }
 
 @Composable
+private fun PlayerGestureLayer(
+    playerLocked: Boolean,
+    onHorizontalSeek: (Double) -> Unit,
+    onVerticalDrag: (x: Float, dragAmount: Float, width: Int, height: Int) -> Unit,
+    onTap: () -> Unit,
+    onDoubleTap: (tapX: Float, width: Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .pointerInput(playerLocked) {
+                detectHorizontalDragGestures { change, dragAmount ->
+                    if (playerLocked) return@detectHorizontalDragGestures
+                    change.consume()
+                    onHorizontalSeek(horizontalSeekDeltaSeconds(dragAmount, size.width))
+                }
+            }
+            .pointerInput(playerLocked) {
+                detectVerticalDragGestures { change, dragAmount ->
+                    if (playerLocked) return@detectVerticalDragGestures
+                    onVerticalDrag(change.position.x, dragAmount, size.width, size.height)
+                }
+            }
+            .pointerInput(playerLocked) {
+                detectTapGestures(
+                    onTap = { onTap() },
+                    onDoubleTap = { offset -> onDoubleTap(offset.x, size.width) },
+                )
+            },
+    )
+}
+
+@Composable
 private fun PlayerControlsOverlay(
     isPlaying: Boolean,
     playerLocked: Boolean,
     positionSeconds: Double,
     durationSeconds: Double,
+    percentPosition: Double,
     playbackSpeed: Double,
     selectedSubtitle: Int,
     subtitleTracks: List<PlaybackSubtitleTrack>,
@@ -423,6 +539,9 @@ private fun PlayerControlsOverlay(
     onTogglePlay: () -> Unit,
     onSpeedChange: (Double) -> Unit,
     onSubtitleChange: (PlaybackSubtitleTrack?) -> Unit,
+    onSeekPreview: (Double) -> Unit,
+    onSeekCommit: (Double) -> Unit,
+    onAudioMenuOpen: () -> Unit,
     onAudioTrackChange: (MpvTrackOption) -> Unit,
     onAspectRatioChange: (PlayerMenuOption) -> Unit,
     onFullscreenRequest: () -> Unit,
@@ -465,13 +584,13 @@ private fun PlayerControlsOverlay(
                     Text(formatTime(positionSeconds), color = Color.White, fontSize = 11.sp)
                     Text(formatTime(durationSeconds), color = Color.White, fontSize = 11.sp)
                 }
-                LinearProgressIndicator(
-                    progress = {
-                        playbackProgress(positionSeconds, durationSeconds)
-                    },
+                PlayerSeekBar(
+                    positionSeconds = positionSeconds,
+                    durationSeconds = durationSeconds,
+                    percentPosition = percentPosition,
+                    onSeekPreview = onSeekPreview,
+                    onSeekCommit = onSeekCommit,
                     modifier = Modifier.fillMaxWidth(),
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.28f),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -487,6 +606,7 @@ private fun PlayerControlsOverlay(
                     AudioTrackMenu(
                         selectedAudioTrackId = selectedAudioTrackId,
                         tracks = audioTracks,
+                        onAudioMenuOpen = onAudioMenuOpen,
                         onAudioTrackChange = onAudioTrackChange,
                     )
                     if (showAspectRatioControls) {
@@ -500,6 +620,56 @@ private fun PlayerControlsOverlay(
             }
         }
     }
+}
+
+@Composable
+private fun PlayerProgressBar(progress: Float, modifier: Modifier = Modifier) {
+    LinearProgressIndicator(
+        progress = { progress },
+        modifier = modifier.height(3.dp),
+        color = Color.White,
+        trackColor = Color.White.copy(alpha = 0.22f),
+    )
+}
+
+@Composable
+private fun PlayerSeekBar(
+    positionSeconds: Double,
+    durationSeconds: Double,
+    percentPosition: Double,
+    onSeekPreview: (Double) -> Unit,
+    onSeekCommit: (Double) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var pendingSeekSeconds by remember { mutableDoubleStateOf(Double.NaN) }
+    val dragging = pendingSeekSeconds.isFinite()
+    val displayPosition = if (dragging) pendingSeekSeconds else positionSeconds
+    Slider(
+        value = playbackProgress(displayPosition, durationSeconds, percentPosition),
+        onValueChange = { progress ->
+            if (durationSeconds > 0.0) {
+                val target = progress.coerceIn(0f, 1f) * durationSeconds
+                pendingSeekSeconds = target
+                onSeekPreview(target)
+            }
+        },
+        onValueChangeFinished = {
+            if (pendingSeekSeconds.isFinite()) {
+                onSeekCommit(pendingSeekSeconds)
+                pendingSeekSeconds = Double.NaN
+            }
+        },
+        enabled = durationSeconds > 0.0,
+        modifier = modifier.height(28.dp),
+        colors = SliderDefaults.colors(
+            thumbColor = Color.White,
+            activeTrackColor = Color.White,
+            inactiveTrackColor = Color.White.copy(alpha = 0.28f),
+            disabledThumbColor = Color.White.copy(alpha = 0.48f),
+            disabledActiveTrackColor = Color.White.copy(alpha = 0.48f),
+            disabledInactiveTrackColor = Color.White.copy(alpha = 0.22f),
+        ),
+    )
 }
 
 @Composable
@@ -603,6 +773,7 @@ private fun SubtitleTrackMenu(
 private fun AudioTrackMenu(
     selectedAudioTrackId: String,
     tracks: List<MpvTrackOption>,
+    onAudioMenuOpen: () -> Unit,
     onAudioTrackChange: (MpvTrackOption) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -611,8 +782,11 @@ private fun AudioTrackMenu(
         icon = { Icon(Icons.Default.Audiotrack, contentDescription = null) },
         label = label,
         expanded = expanded,
-        onExpandedChange = { expanded = it },
-        enabled = tracks.isNotEmpty(),
+        onExpandedChange = {
+            if (it) onAudioMenuOpen()
+            expanded = it
+        },
+        enabled = true,
     ) {
         tracks.forEach { track ->
             DropdownMenuItem(
@@ -725,9 +899,37 @@ private fun PlaybackSubtitleTrack.subtitleLabel(): String =
 private fun Double.formatSpeed(): String =
     if (this % 1.0 == 0.0) toInt().toString() else toString().trimEnd('0').trimEnd('.')
 
-fun playbackProgress(positionSeconds: Double, durationSeconds: Double): Float {
-    if (!positionSeconds.isFinite() || !durationSeconds.isFinite() || durationSeconds <= 0.0) return 0f
-    return (positionSeconds / durationSeconds).toFloat().coerceIn(0f, 1f)
+fun playbackProgress(
+    positionSeconds: Double,
+    durationSeconds: Double,
+    percentPosition: Double = 0.0,
+): Float = (playbackPercent(positionSeconds, durationSeconds, percentPosition) / 100.0).toFloat().coerceIn(0f, 1f)
+
+fun playbackPercent(
+    positionSeconds: Double,
+    durationSeconds: Double,
+    fallbackPercent: Double = 0.0,
+): Double {
+    if (positionSeconds.isFinite() && durationSeconds.isFinite() && durationSeconds > 0.0) {
+        return (positionSeconds / durationSeconds * 100.0).coerceIn(0.0, 100.0)
+    }
+    if (!fallbackPercent.isFinite() || fallbackPercent <= 0.0) return 0.0
+    return fallbackPercent.coerceIn(0.0, 100.0)
+}
+
+fun horizontalSeekDeltaSeconds(dragAmountPx: Float, widthPx: Int): Double {
+    if (widthPx <= 0) return 0.0
+    return dragAmountPx.toDouble() / widthPx.toDouble() * HorizontalSeekSecondsPerScreen
+}
+
+private fun seekHudMessage(deltaSeconds: Double, targetSeconds: Double, durationSeconds: Double): String {
+    val sign = if (deltaSeconds >= 0.0) "+" else "-"
+    return "$sign${formatTime(kotlin.math.abs(deltaSeconds))}  ${formatTime(targetSeconds)} / ${formatTime(durationSeconds)}"
+}
+
+private fun relativeSeekHudMessage(deltaSeconds: Double): String {
+    val sign = if (deltaSeconds >= 0.0) "+" else "-"
+    return "$sign${formatTime(kotlin.math.abs(deltaSeconds))}"
 }
 
 private fun formatTime(seconds: Double): String {

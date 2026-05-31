@@ -16,7 +16,10 @@ class PlayerUiCompletenessSourceTest {
             .readText()
 
         assertTrue(player.contains("onDoubleTap"))
-        assertTrue(player.contains("playerDoubleTapAction"))
+        assertTrue(player.contains("PlayerGestureLayer"))
+        assertTrue(player.contains("detectHorizontalDragGestures"))
+        assertTrue(player.contains("horizontalSeekDeltaSeconds"))
+        assertTrue(player.contains("HorizontalSeekSecondsPerScreen = 90.0"))
         assertTrue(player.contains("PlayerLock"))
         assertTrue(player.contains("FullscreenControl"))
         assertTrue(player.contains("PlaybackSpeedMenu"))
@@ -24,9 +27,15 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("AudioTrackMenu"))
         assertTrue(player.contains("AspectRatioMenu"))
         assertTrue(player.contains("PlayerErrorOverlay"))
+        assertTrue(player.contains("PlayerProgressBar"))
+        assertTrue(player.contains("PlayerSeekBar"))
+        assertTrue(player.contains("Slider("))
+        assertTrue(player.contains("controller.seekTo"))
+        assertTrue(player.contains("controller.seekBy(deltaSeconds)"))
         assertTrue(player.contains("controller.setPlaybackSpeed"))
         assertTrue(player.contains("controller.selectAudioTrack"))
         assertTrue(player.contains("controller.setAspectRatio"))
+        assertTrue(player.contains("controller.percentPosition()"))
         assertTrue(player.contains("controller.lastError()"))
     }
 
@@ -74,6 +83,9 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(detailScreen.contains("playbackPositions"))
         assertTrue(detailScreen.contains("onPlaybackPositionChange"))
         assertTrue(detailScreen.contains("ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT"))
+        assertTrue(detailScreen.contains("onChromeVisibleChange"))
+        assertTrue(detailScreen.contains("onChromeVisibleChange(!isLandscape)"))
+        assertTrue(detailScreen.contains("onDispose { onChromeVisibleChange(true) }"))
         assertTrue(detailScreen.contains("isFullscreen = isLandscape"))
         assertTrue(detailScreen.contains("showAspectRatioControls = isLandscape"))
     }
@@ -142,6 +154,18 @@ class PlayerUiCompletenessSourceTest {
         assertEquals(0f, playbackProgress(positionSeconds = 0.0, durationSeconds = 0.0))
         assertEquals(0.5f, playbackProgress(positionSeconds = 30.0, durationSeconds = 60.0))
         assertEquals(1f, playbackProgress(positionSeconds = 90.0, durationSeconds = 60.0))
+        assertEquals(0.25f, playbackProgress(positionSeconds = 30.0, durationSeconds = 0.0, percentPosition = 25.0))
+        assertEquals(1f, playbackProgress(positionSeconds = 30.0, durationSeconds = 0.0, percentPosition = 120.0))
+        assertEquals(0f, playbackProgress(positionSeconds = 30.0, durationSeconds = 0.0, percentPosition = Double.NaN))
+        assertEquals(25.0, playbackPercent(positionSeconds = 30.0, durationSeconds = 120.0), 0.001)
+        assertEquals(25.0, playbackPercent(positionSeconds = 0.0, durationSeconds = 0.0, fallbackPercent = 25.0), 0.001)
+    }
+
+    @Test
+    fun horizontalSeekGestureUsesLowSensitivity() {
+        assertEquals(45.0, horizontalSeekDeltaSeconds(dragAmountPx = 500f, widthPx = 1000), 0.001)
+        assertEquals(-45.0, horizontalSeekDeltaSeconds(dragAmountPx = -500f, widthPx = 1000), 0.001)
+        assertEquals(0.0, horizontalSeekDeltaSeconds(dragAmountPx = 500f, widthPx = 0), 0.001)
     }
 
     @Test

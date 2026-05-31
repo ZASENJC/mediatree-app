@@ -3,9 +3,13 @@ package `is`.xyz.mpv
 import android.content.Context
 import android.util.Log
 import android.view.Surface
+import java.util.concurrent.ConcurrentHashMap
 
 object MPVLib {
     private const val TAG = "MPVLib"
+    private val observedDoubles = ConcurrentHashMap<String, Double>()
+    private val observedBooleans = ConcurrentHashMap<String, Boolean>()
+    private val observedStrings = ConcurrentHashMap<String, String>()
 
     init {
         System.loadLibrary("mpv")
@@ -30,15 +34,33 @@ object MPVLib {
     external fun observeProperty(name: String, format: Int)
     external fun grabThumbnail(width: Int): ByteArray?
 
+    fun observedDouble(name: String): Double? = observedDoubles[name]
+
+    fun observedBoolean(name: String): Boolean? = observedBooleans[name]
+
+    fun observedString(name: String): String? = observedStrings[name]
+
     @JvmStatic fun eventProperty(name: String) = Unit
 
-    @JvmStatic fun eventProperty(name: String, value: Boolean) = Unit
+    @JvmStatic fun eventProperty(name: String, value: Boolean) {
+        observedBooleans[name] = value
+    }
 
-    @JvmStatic fun eventProperty(name: String, value: Long) = Unit
+    @JvmStatic fun eventProperty(name: String, value: Long) {
+        observedDoubles[name] = value.toDouble()
+    }
 
-    @JvmStatic fun eventProperty(name: String, value: Double) = Unit
+    @JvmStatic fun eventProperty(name: String, value: Double) {
+        observedDoubles[name] = value
+    }
 
-    @JvmStatic fun eventProperty(name: String, value: String?) = Unit
+    @JvmStatic fun eventProperty(name: String, value: String?) {
+        if (value == null) {
+            observedStrings.remove(name)
+        } else {
+            observedStrings[name] = value
+        }
+    }
 
     @JvmStatic fun event(eventId: Int) = Unit
 

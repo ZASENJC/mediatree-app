@@ -36,6 +36,38 @@ class PlaybackSourceTest {
     }
 
     @Test
+    fun jellyfinSourceUsesServerStreamEndpointWithMediaBrowserHeaders() {
+        val source = PlaybackSource.jellyfin(
+            serverUrl = "https://jellyfin.example.com/",
+            itemId = "42",
+            token = "jf-token",
+            userId = "user-1",
+            subtitleTracks = listOf(PlaybackSubtitleTrack(index = 4, title = "English", uri = "https://subs.example.com/en.vtt")),
+        )
+
+        assertEquals("https://jellyfin.example.com/Videos/42/stream?static=true", source.uri)
+        assertEquals("jf-token", source.headers["X-Emby-Token"])
+        assertTrue(source.headers.getValue("X-Emby-Authorization").startsWith("MediaBrowser "))
+        assertEquals("https://subs.example.com/en.vtt", source.subtitleUri(4))
+    }
+
+    @Test
+    fun embySourceUsesEmbyAuthorizationHeaderAndTokenQuerySubtitleFallbacks() {
+        val source = PlaybackSource.emby(
+            serverUrl = "http://emby.local",
+            itemId = "9",
+            token = "emby-token",
+            userId = "user-2",
+            subtitleTracks = listOf(PlaybackSubtitleTrack(index = 2, title = "中文", format = "srt", mediaSourceId = "source-1")),
+        )
+
+        assertEquals("http://emby.local/Videos/9/stream?static=true", source.uri)
+        assertEquals("emby-token", source.headers["X-Emby-Token"])
+        assertTrue(source.headers.getValue("Authorization").startsWith("Emby "))
+        assertEquals("http://emby.local/Videos/9/source-1/Subtitles/2/Stream.srt?api_key=emby-token", source.subtitleUri(2))
+    }
+
+    @Test
     fun directPlaybackSourcesExposeTypedUrisAndHeaders() {
         val webDav = WebDavPlaybackSource(
             uri = "https://dav.example.com/video.mkv",
@@ -65,7 +97,7 @@ class PlaybackSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
             .readText()
 
-        assertTrue(detailScreen.contains("PlaybackSource.mediaTree"))
+        assertTrue(detailScreen.contains("PlaybackSource"))
         assertFalse(detailScreen.contains(".streamUrl("))
         assertFalse(detailScreen.contains(".subtitleUrl("))
     }

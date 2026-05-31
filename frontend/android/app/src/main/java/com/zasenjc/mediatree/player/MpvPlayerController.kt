@@ -10,10 +10,14 @@ interface MpvBackend {
     fun destroy()
     fun command(args: Array<String>)
     fun setOptionString(name: String, value: String)
+    fun observeProperty(name: String, format: Int)
     fun getPropertyInt(name: String): Int
     fun getPropertyDouble(name: String): Double
     fun getPropertyBoolean(name: String): Boolean
     fun getPropertyString(name: String): String?
+    fun observedPropertyDouble(name: String): Double?
+    fun observedPropertyBoolean(name: String): Boolean?
+    fun observedPropertyString(name: String): String?
     fun setPropertyDouble(name: String, value: Double)
     fun setPropertyBoolean(name: String, value: Boolean)
     fun setPropertyString(name: String, value: String)
@@ -32,6 +36,8 @@ object NativeMpvBackend : MpvBackend {
 
     override fun setOptionString(name: String, value: String) = MPVLib.setOptionString(name, value)
 
+    override fun observeProperty(name: String, format: Int) = MPVLib.observeProperty(name, format)
+
     override fun getPropertyInt(name: String): Int = MPVLib.getPropertyInt(name)
 
     override fun getPropertyDouble(name: String): Double = MPVLib.getPropertyDouble(name)
@@ -39,6 +45,12 @@ object NativeMpvBackend : MpvBackend {
     override fun getPropertyBoolean(name: String): Boolean = MPVLib.getPropertyBoolean(name)
 
     override fun getPropertyString(name: String): String? = MPVLib.getPropertyString(name)
+
+    override fun observedPropertyDouble(name: String): Double? = MPVLib.observedDouble(name)
+
+    override fun observedPropertyBoolean(name: String): Boolean? = MPVLib.observedBoolean(name)
+
+    override fun observedPropertyString(name: String): String? = MPVLib.observedString(name)
 
     override fun setPropertyDouble(name: String, value: Double) = MPVLib.setPropertyDouble(name, value)
 
@@ -73,17 +85,33 @@ class MpvPlayerController(
     private var fileLoaded = false
     private var pendingLoad: PendingLoad? = null
     private var loadedSource: PendingLoad? = null
+    private var videoOutputStopped = false
 
     fun initialize() {
         if (initialized) return
         backend.create(appContext)
         backend.setOptionString("force-window", "no")
         backend.init()
+        observePlaybackProperties()
         initialized = true
+    }
+
+    private fun observePlaybackProperties() {
+        listOf(
+            "time-pos",
+            "playback-time",
+            "duration",
+            "time-remaining",
+            "playtime-remaining",
+            "percent-pos",
+        ).forEach { property -> backend.observeProperty(property, MpvFormatDouble) }
+        backend.observeProperty("eof-reached", MpvFormatFlag)
+        backend.observeProperty("error-string", MpvFormatString)
     }
 
     fun attachSurface(surface: Any, width: Int = 0, height: Int = 0) {
         initialize()
+        if (videoOutputStopped) restoreVideoOutput()
         backend.attachSurface(surface)
         surfaceAttached = true
         setSurfaceSize(width, height)
@@ -117,10 +145,8 @@ class MpvPlayerController(
     private fun flushPendingLoad() {
         val request = pendingLoad ?: return
         pendingLoad = null
-        val headers = request.headers
-        if (headers.isNotEmpty()) {
-            backend.command(arrayOf("set", "http-header-fields", headers.toHeaderFields()))
-        }
+        clearHttpHeaders()
+        setHttpHeaders(request.headers)
         backend.command(arrayOf("loadfile", request.url, "replace"))
         fileLoaded = true
         loadedSource = request
@@ -193,19 +219,84 @@ class MpvPlayerController(
         }
     }
 
+    private fun clearHttpHeaders() {
+        backend.command(arrayOf("change-list", "http-header-fields", "clr", ""))
+    }
+
+    private fun setHttpHeaders(headers: Map<String, String>) {
+        headers.forEach { (name, value) ->
+            backend.command(arrayOf("change-list", "http-header-fields", "append", "$name: $value"))
+        }
+    }
+
+    private fun restoreVideoOutput() {
+        backend.setPropertyString("vo", "gpu")
+        videoOutputStopped = false
+    }
+
     private fun stopVideoOutput() {
         backend.setPropertyString("force-window", "no")
         backend.setPropertyString("vo", "null")
+        videoOutputStopped = true
     }
 
-    fun positionSeconds(): Double = if (initialized) backend.getPropertyDouble("time-pos") else 0.0
+    fun positionSeconds(): Double {
+        if (!initialized) return 0.0
+        val positivePosition = listOf("time-pos", "playback-time")
+            .firstNotNullOfOrNull { name -> readPositiveDouble(name) }
+        if (positivePosition != null) return positivePosition
+        return listOf("time-pos", "playback-time")
+            .firstNotNullOfOrNull { name -> readFiniteDouble(name)?.coerceAtLeast(0.0) }
+            ?: 0.0
+    }
 
-    fun durationSeconds(): Double = if (initialized) backend.getPropertyDouble("duration") else 0.0
+    fun durationSeconds(): Double {
+        if (!initialized) return 0.0
+        readPositiveDouble("duration")?.let { return it }
+        val position = positionSeconds()
+        val remaining = readPositiveDouble("time-remaining") ?: readPositiveDouble("playtime-remaining")
+        if (position > 0.0 && remaining != null) return position + remaining
+        val percent = readPercentDouble("percent-pos")
+        if (position > 0.0 && percent != null) return position * 100.0 / percent
+        return 0.0
+    }
 
-    fun isEnded(): Boolean = initialized && backend.getPropertyBoolean("eof-reached")
+    fun percentPosition(): Double {
+        if (!initialized) return 0.0
+        readPercentDouble("percent-pos")?.let { return it }
+        val position = positionSeconds()
+        val duration = readPositiveDouble("duration")
+            ?: readPositiveDouble("time-remaining")?.let { position + it }
+            ?: readPositiveDouble("playtime-remaining")?.let { position + it }
+        if (position > 0.0 && duration != null && duration > 0.0) {
+            return (position / duration * 100.0).coerceIn(0.0, 100.0)
+        }
+        return 0.0
+    }
 
-    fun lastError(): String? =
-        if (initialized) backend.getPropertyString("error-string")?.takeIf { it.isNotBlank() } else null
+    private fun readFiniteDouble(name: String): Double? =
+        backend.observedPropertyDouble(name)
+            ?.takeIf { it.isFinite() }
+            ?: runCatching { backend.getPropertyDouble(name) }
+                .getOrNull()
+                ?.takeIf { it.isFinite() }
+
+    private fun readPositiveDouble(name: String): Double? =
+        readFiniteDouble(name)?.takeIf { it > 0.0 }
+
+    private fun readPercentDouble(name: String): Double? =
+        readFiniteDouble(name)
+            ?.takeIf { it > 0.0 }
+            ?.coerceIn(0.0, 100.0)
+
+    fun isEnded(): Boolean = initialized && (backend.observedPropertyBoolean("eof-reached") ?: backend.getPropertyBoolean("eof-reached"))
+
+    fun lastError(): String? = if (initialized) {
+        (backend.observedPropertyString("error-string") ?: backend.getPropertyString("error-string"))
+            ?.takeIf { it.isNotBlank() }
+    } else {
+        null
+    }
 
     fun audioTrackOptions(): List<MpvTrackOption> {
         if (!initialized) return emptyList()
@@ -232,11 +323,13 @@ class MpvPlayerController(
         fileLoaded = false
         pendingLoad = null
         loadedSource = null
+        videoOutputStopped = false
     }
 }
 
-private fun Map<String, String>.toHeaderFields(): String =
-    entries.joinToString(",") { (name, value) -> "$name: $value" }
+private const val MpvFormatString = 1
+private const val MpvFormatFlag = 3
+private const val MpvFormatDouble = 5
 
 private fun audioTrackLabel(id: String, title: String, language: String): String {
     val base = title.ifBlank { "音轨 $id" }

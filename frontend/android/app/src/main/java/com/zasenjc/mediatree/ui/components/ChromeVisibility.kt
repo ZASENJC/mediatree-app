@@ -15,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 fun topChromeEnterTransition(): EnterTransition =
     fadeIn(animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)) +
@@ -42,15 +43,18 @@ fun SyncChromeWithListScroll(
         var previousIndex = state.firstVisibleItemIndex
         var previousOffset = state.firstVisibleItemScrollOffset
         snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+            .distinctUntilChanged()
             .collect { (index, offset) ->
                 val atTop = index == 0 && offset < 12
-                val scrollingIntoContent = index > previousIndex || (index == previousIndex && offset > previousOffset + 8)
-                val scrollingTowardTop = index < previousIndex || (index == previousIndex && offset < previousOffset - 8)
-                when {
-                    atTop -> onChange(true)
-                    scrollingIntoContent -> onChange(false)
-                    scrollingTowardTop -> onChange(true)
+                val scrollingIntoContent = index > previousIndex || (index == previousIndex && offset > previousOffset + 32)
+                val scrollingTowardTop = index < previousIndex || (index == previousIndex && offset < previousOffset - 32)
+                val visible = when {
+                    atTop -> true
+                    scrollingIntoContent -> false
+                    scrollingTowardTop -> true
+                    else -> null
                 }
+                visible?.let(onChange)
                 previousIndex = index
                 previousOffset = offset
             }
@@ -67,15 +71,18 @@ fun SyncChromeWithGridScroll(
         var previousIndex = state.firstVisibleItemIndex
         var previousOffset = state.firstVisibleItemScrollOffset
         snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
+            .distinctUntilChanged()
             .collect { (index, offset) ->
                 val atTop = index == 0 && offset < 12
-                val scrollingIntoContent = index > previousIndex || (index == previousIndex && offset > previousOffset + 8)
-                val scrollingTowardTop = index < previousIndex || (index == previousIndex && offset < previousOffset - 8)
-                when {
-                    atTop -> onChange(true)
-                    scrollingIntoContent -> onChange(false)
-                    scrollingTowardTop -> onChange(true)
+                val scrollingIntoContent = index > previousIndex || (index == previousIndex && offset > previousOffset + 32)
+                val scrollingTowardTop = index < previousIndex || (index == previousIndex && offset < previousOffset - 32)
+                val visible = when {
+                    atTop -> true
+                    scrollingIntoContent -> false
+                    scrollingTowardTop -> true
+                    else -> null
                 }
+                visible?.let(onChange)
                 previousIndex = index
                 previousOffset = offset
             }

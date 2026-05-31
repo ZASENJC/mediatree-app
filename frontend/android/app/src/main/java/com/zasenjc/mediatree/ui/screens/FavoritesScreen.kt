@@ -26,15 +26,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,9 +48,13 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.MovieDto
+import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
+import com.zasenjc.mediatree.data.smbLibrarySourceId
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.ui.components.EpisodeLandscapeCard
+import com.zasenjc.mediatree.ui.components.DesignFilterChip
+import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MoviePosterCard
 import com.zasenjc.mediatree.ui.components.SyncChromeWithGridScroll
@@ -65,6 +66,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.Color
 
 private val favoriteFilters = listOf("全部", "单集", "剧集", "电影")
 
@@ -80,21 +82,28 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
-    fun refresh() {
-        loadPage(page = 0, replace = true)
+    fun refresh(providerType: ProviderType, activeLibrary: String = "") {
+        loadPage(providerType, activeLibrary, page = 0, replace = true)
     }
 
-    fun loadMore() {
+    fun loadMore(providerType: ProviderType, activeLibrary: String = "") {
         val s = _state.value
         if (s.loading || s.movies.size >= s.total && s.total > 0) return
-        loadPage(page = s.page + 1, replace = false)
+        if (activeLibrary.smbLibrarySourceId() != null) return
+        loadPage(providerType, activeLibrary, page = s.page + 1, replace = false)
     }
 
-    private fun loadPage(page: Int, replace: Boolean) {
+    private fun loadPage(providerType: ProviderType, activeLibrary: String, page: Int, replace: Boolean) {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             try {
-                val response = container.mediaProvider.favorites(limit = 48, offset = page * 48, sort = "release_date_desc")
+                val smbSourceId = activeLibrary.smbLibrarySourceId()
+                if (smbSourceId != null) {
+                    val movies = loadSmbMovies(smbSourceId)
+                    _state.update { it.copy(page = 0, loading = false, movies = movies, total = movies.size) }
+                    return@launch
+                }
+                val response = container.mediaProviderFor(providerType).favorites(limit = 48, offset = page * 48, sort = "release_date_desc")
                 _state.update {
                     it.copy(
                         page = page,
@@ -107,6 +116,27 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
                 _state.update { it.copy(loading = false, error = e) }
             }
         }
+    }
+
+    private suspend fun loadSmbMovies(sourceId: String): List<MovieDto> {
+        val source = container.clientStorageRepository.load()
+            .firstOrNull { it.id == sourceId && it.type == com.zasenjc.mediatree.data.ClientStorageType.SMB && it.enabled }
+            ?: throw IllegalArgumentException("SMB 存储源不可用")
+        return container.smbClient.list(source)
+            .filter { it.isPlayableVideo }
+            .map { entry ->
+                MovieDto(
+                    id = (source.id + ":" + entry.path).hashCode(),
+                    path = entry.path,
+                    code = entry.name,
+                    title = entry.name,
+                    displayTitle = entry.name,
+                    mediaRoot = "smb/$sourceId",
+                    fileSize = entry.sizeBytes,
+                    size = entry.sizeBytes,
+                )
+            }
+            .sortedBy { it.title.orEmpty() }
     }
 }
 
@@ -134,9 +164,9 @@ fun FavoritesScreen(
         onChromeVisibleChange(true)
     }
 
-    LaunchedEffect(session.serverUrl) {
+    LaunchedEffect(session.serverUrl, session.activeProviderType, session.activeLibrary) {
         if (shouldLoadRemoteContent(session)) {
-            vm.refresh()
+            vm.refresh(session.activeProviderType, session.activeLibrary)
         }
     }
 
@@ -149,8 +179,11 @@ fun FavoritesScreen(
             .filterFavorites(filter)
             .filterFavoritesQuery(query)
     }
+    val provider = remember(session.activeProviderType, container) {
+        container.mediaProviderFor(session.activeProviderType)
+    }
 
-    Scaffold { innerPadding ->
+    Scaffold(containerColor = Color.Transparent) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             if (!shouldLoadRemoteContent(session)) {
                 FavoriteEmptyState("请先在设置页连接 MediaTree 服务器")
@@ -161,17 +194,17 @@ fun FavoritesScreen(
                     state = gridState,
                     columns = GridCells.Adaptive(142.dp),
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, top = 82.dp, end = 16.dp, bottom = 112.dp),
+                    contentPadding = PaddingValues(start = 20.dp, top = 86.dp, end = 20.dp, bottom = 116.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(favoriteFilters) { item ->
-                            FilterChip(
+                            DesignFilterChip(
                                 selected = filter == item,
                                 onClick = { filter = item },
-                                label = { Text(item) },
+                                label = item,
                             )
                         }
                     }
@@ -201,15 +234,15 @@ fun FavoritesScreen(
                         if (movie.isEpisodeFavorite()) {
                             EpisodeLandscapeCard(
                                 movie = movie,
-                                imageUrl = container.mediaProvider.episodeStillUrl(session.serverUrl, movie.id),
-                                onClick = { onNavigate("detail/${movie.id}") },
+                                imageUrl = movie.mediaRoot?.smbLibrarySourceId()?.let { null } ?: provider.episodeStillUrl(session.serverUrl, movie.id),
+                                onClick = { onNavigate(movie.openRoute()) },
                                 showFavorite = true,
                             )
                         } else {
                             MoviePosterCard(
                                 movie = movie,
-                                imageUrl = container.mediaProvider.coverUrl(session.serverUrl, movie.id),
-                                onClick = { onNavigate("detail/${movie.id}") },
+                                imageUrl = movie.mediaRoot?.smbLibrarySourceId()?.let { null } ?: provider.coverUrl(session.serverUrl, movie.id),
+                                onClick = { onNavigate(movie.openRoute()) },
                             )
                         }
                     }
@@ -218,7 +251,7 @@ fun FavoritesScreen(
                             Button(
                                 onClick = {
                                     if (shouldLoadRemoteContent(session)) {
-                                        vm.loadMore()
+                                        vm.loadMore(session.activeProviderType, session.activeLibrary)
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -240,21 +273,14 @@ fun FavoritesScreen(
                 exit = topChromeExitTransition(),
                 modifier = Modifier.align(Alignment.TopCenter),
             ) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            "mediatree",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    },
+                DesignTopAppBar(
+                    title = "收藏",
                     actions = {
                         IconButton(onClick = { searchVisible = !searchVisible }) {
                             Icon(Icons.Default.Search, contentDescription = "搜索")
                         }
-                        IconButton(onClick = { }) {
-                            Icon(Icons.Default.Tune, contentDescription = "筛选")
+                        IconButton(onClick = {}, enabled = false) {
+                            Icon(Icons.Default.Tune, contentDescription = "筛选未实现")
                         }
                         Box {
                             IconButton(onClick = { moreVisible = true }) {
@@ -267,16 +293,13 @@ fun FavoritesScreen(
                                     onClick = {
                                         moreVisible = false
                                         if (shouldLoadRemoteContent(session)) {
-                                            vm.refresh()
+                                            vm.refresh(session.activeProviderType, session.activeLibrary)
                                         }
                                     },
                                 )
                             }
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                    ),
                 )
             }
         }
@@ -320,5 +343,16 @@ private fun List<MovieDto>.filterFavoritesQuery(query: String): List<MovieDto> {
             (it.displayTitle ?: "").lowercase().contains(q)
     }
 }
+
+private fun MovieDto.routeId(): Int = id
+
+private fun MovieDto.detailRoute(): String =
+    "detail/${routeId()}" + path.takeIf { it.isNotBlank() }?.let { "?providerItemId=${android.net.Uri.encode(it)}" }.orEmpty()
+
+private fun MovieDto.openRoute(): String =
+    mediaRoot?.smbLibrarySourceId()?.let { sourceId -> "smbPlayer/$sourceId?path=${android.net.Uri.encode(path)}" } ?: detailRoute()
+
+private fun String.toMovieRouteId(): Int =
+    takeLast(8).toUIntOrNull(16)?.toInt() ?: hashCode()
 
 private fun MovieDto.isEpisodeFavorite(): Boolean = tmdbEpisode != null || !episodeTitle.isNullOrBlank()

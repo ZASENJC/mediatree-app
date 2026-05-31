@@ -25,7 +25,8 @@ class MpvPlayerControllerTest {
         assertEquals(listOf("force-window" to "no"), backend.options)
         assertEquals(
             listOf(
-                listOf("set", "http-header-fields", "Authorization: Bearer token"),
+                listOf("change-list", "http-header-fields", "clr", ""),
+                listOf("change-list", "http-header-fields", "append", "Authorization: Bearer token"),
                 listOf("loadfile", "http://media.local/api/stream/42", "replace"),
                 listOf("seek", "12.5", "absolute", "exact"),
             ),
@@ -50,7 +51,8 @@ class MpvPlayerControllerTest {
 
         assertEquals(
             listOf(
-                listOf("set", "http-header-fields", "Authorization: Bearer token"),
+                listOf("change-list", "http-header-fields", "clr", ""),
+                listOf("change-list", "http-header-fields", "append", "Authorization: Bearer token"),
                 listOf("loadfile", "http://media.local/api/stream/42", "replace"),
                 listOf("seek", "12.5", "absolute", "exact"),
             ),
@@ -207,6 +209,7 @@ class MpvPlayerControllerTest {
         val backend = RecordingMpvBackend().apply {
             doubleProperties["time-pos"] = 15.25
             doubleProperties["duration"] = 120.0
+            doubleProperties["percent-pos"] = 12.7
             booleanValues["eof-reached"] = true
         }
         val controller = MpvPlayerController(appContext, backend)
@@ -214,7 +217,37 @@ class MpvPlayerControllerTest {
 
         assertEquals(15.25, controller.positionSeconds(), 0.001)
         assertEquals(120.0, controller.durationSeconds(), 0.001)
+        assertEquals(12.7, controller.percentPosition(), 0.001)
         assertTrue(controller.isEnded())
+    }
+
+    @Test
+    fun playbackPositionFallsBackToPlaybackTimeWhenTimePosIsUnavailable() {
+        val backend = RecordingMpvBackend().apply {
+            doubleProperties["time-pos"] = 0.0
+            doubleProperties["playback-time"] = 44.5
+        }
+        val controller = MpvPlayerController(appContext, backend)
+        controller.attachSurface(Any())
+
+        assertEquals(44.5, controller.positionSeconds(), 0.001)
+    }
+
+    @Test
+    fun playbackStateIgnoresInvalidMpvDoublesAndDerivesMissingDuration() {
+        val backend = RecordingMpvBackend().apply {
+            doubleProperties["time-pos"] = Double.NaN
+            doubleProperties["playback-time"] = 30.0
+            doubleProperties["duration"] = Double.NaN
+            doubleProperties["time-remaining"] = 90.0
+            doubleProperties["percent-pos"] = Double.NaN
+        }
+        val controller = MpvPlayerController(appContext, backend)
+        controller.attachSurface(Any())
+
+        assertEquals(30.0, controller.positionSeconds(), 0.001)
+        assertEquals(120.0, controller.durationSeconds(), 0.001)
+        assertEquals(25.0, controller.percentPosition(), 0.001)
     }
 
     @Test
@@ -294,6 +327,7 @@ class MpvPlayerControllerTest {
 
         assertEquals(0.0, controller.positionSeconds(), 0.001)
         assertEquals(0.0, controller.durationSeconds(), 0.001)
+        assertEquals(0.0, controller.percentPosition(), 0.001)
         assertFalse(controller.isEnded())
         assertEquals(emptyList<List<String>>(), backend.commands)
         assertEquals(emptyList<Pair<String, Boolean>>(), backend.booleanProperties)
@@ -333,6 +367,8 @@ class MpvPlayerControllerTest {
         assertTrue(mpvLib.contains("external fun create(context: Context)"))
         assertTrue(mpvLib.contains("external fun attachSurface"))
         assertTrue(mpvLib.contains("external fun detachSurface"))
+        assertTrue(mpvLib.contains("observedDouble"))
+        assertTrue(mpvLib.contains("ConcurrentHashMap"))
         assertTrue(mpvLib.contains("@JvmStatic fun eventProperty(name: String)"))
         assertTrue(mpvLib.contains("@JvmStatic fun eventProperty(name: String, value: Boolean)"))
         assertTrue(mpvLib.contains("@JvmStatic fun eventProperty(name: String, value: Long)"))
@@ -385,6 +421,14 @@ class MpvPlayerControllerTest {
         override fun setOptionString(name: String, value: String) {
             options += name to value
         }
+
+        override fun observeProperty(name: String, format: Int) = Unit
+
+        override fun observedPropertyDouble(name: String): Double? = null
+
+        override fun observedPropertyBoolean(name: String): Boolean? = null
+
+        override fun observedPropertyString(name: String): String? = null
 
         override fun setPropertyBoolean(name: String, value: Boolean) {
             booleanProperties += name to value

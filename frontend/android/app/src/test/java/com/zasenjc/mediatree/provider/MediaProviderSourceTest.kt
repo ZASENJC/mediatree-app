@@ -54,7 +54,9 @@ class MediaProviderSourceTest {
         val appContainerSource = dataRoot.resolve("AppContainer.kt").readText()
 
         assertTrue(appContainerSource.contains("private val mediaTreeApi = MediaTreeApi(sessionStore)"))
-        assertTrue(appContainerSource.contains("val mediaProvider: MediaProvider = MediaTreeProvider(mediaTreeApi)"))
+        assertTrue(appContainerSource.contains("val mediaTreeProvider: MediaProvider = MediaTreeProvider(mediaTreeApi)"))
+        assertTrue(appContainerSource.contains("val mediaProvider: MediaProvider = mediaTreeProvider"))
+        assertTrue(appContainerSource.contains("fun mediaProviderFor(type: ProviderType?)"))
         assertFalse(appContainerSource.contains("val api = MediaTreeApi"))
     }
 
