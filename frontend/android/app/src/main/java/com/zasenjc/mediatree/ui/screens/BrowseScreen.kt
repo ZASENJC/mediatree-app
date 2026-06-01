@@ -321,13 +321,14 @@ fun BrowseScreen(
     onNavigate: (String) -> Unit,
     onError: (Throwable) -> Unit,
     initialFolder: String,
+    viewMode: String,
+    onViewModeChange: (String) -> Unit,
     chromeVisible: Boolean = true,
     onChromeVisibleChange: (Boolean) -> Unit = {},
 ) {
     val vm: BrowseViewModel = viewModel(factory = viewModelFactory { BrowseViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
-    var viewMode by remember { mutableStateOf("compact") }
     val mountedVideoThumbnailLoader: MountedVideoThumbnailLoader = remember(vm) { vm::loadMountedVideoFrame }
     val listState = rememberLazyListState()
 
@@ -414,7 +415,7 @@ fun BrowseScreen(
                                 items(browseViewModes) { mode ->
                                     DesignFilterChip(
                                         selected = viewMode == mode.key,
-                                        onClick = { viewMode = mode.key },
+                                        onClick = { onViewModeChange(mode.key) },
                                         label = mode.label,
                                         icon = mode.icon,
                                     )

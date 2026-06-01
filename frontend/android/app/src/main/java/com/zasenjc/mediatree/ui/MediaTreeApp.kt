@@ -42,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -133,6 +134,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         pageCount = { topDestinations.size },
     )
     var browseFolder by remember { mutableStateOf("") }
+    var browseViewMode by rememberSaveable { mutableStateOf("compact") }
     var chromeVisible by remember { mutableStateOf(true) }
 
     LaunchedEffect(currentRoute) {
@@ -242,6 +244,8 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 onNavigate = ::handleAppNavigate,
                                 onError = onError,
                                 initialFolder = browseFolder,
+                                viewMode = browseViewMode,
+                                onViewModeChange = { browseViewMode = it },
                                 chromeVisible = chromeVisible,
                                 onChromeVisibleChange = { chromeVisible = it },
                             )

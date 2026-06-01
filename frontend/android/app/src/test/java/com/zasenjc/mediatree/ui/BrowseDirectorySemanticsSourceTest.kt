@@ -13,6 +13,11 @@ class BrowseDirectorySemanticsSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/BrowseScreen.kt")
             .readText()
 
+    private val appSource: String
+        get() = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/MediaTreeApp.kt")
+            .readText()
+
     @Test
     fun browseFolderTitleUsesOriginalFolderNameOnly() {
         val source = browseSource
@@ -41,7 +46,23 @@ class BrowseDirectorySemanticsSourceTest {
     fun browseScreenRemovesListModeAndDefaultsToCompact() {
         assertFalse(browseSource.contains("ViewList"))
         assertFalse(browseSource.contains("\"list\", \"列表\""))
-        assertTrue(browseSource.contains("mutableStateOf(\"compact\")"))
+        assertTrue(appSource.contains("var browseViewMode by rememberSaveable { mutableStateOf(\"compact\") }"))
+    }
+
+    @Test
+    fun browseViewModeIsHoistedSoReturningKeepsSelection() {
+        val browseSignature = browseSource
+            .substringAfter("fun BrowseScreen(")
+            .substringBefore(") {")
+        val appBrowseCall = appSource
+            .substringAfter("\"browse\" -> BrowseScreen(")
+            .substringBefore(")")
+
+        assertTrue(browseSignature.contains("viewMode: String"))
+        assertTrue(browseSignature.contains("onViewModeChange: (String) -> Unit"))
+        assertFalse(browseSource.contains("var viewMode by remember { mutableStateOf(\"compact\") }"))
+        assertTrue(appBrowseCall.contains("viewMode = browseViewMode"))
+        assertTrue(appBrowseCall.contains("onViewModeChange = { browseViewMode = it }"))
     }
 
     @Test
