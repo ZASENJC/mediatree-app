@@ -423,6 +423,7 @@ private fun PortraitPlayerCard(
                 .aspectRatio(16f / 9f)
                 .background(MaterialTheme.colorScheme.scrim),
         )
+        Spacer(Modifier.height(12.dp))
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),

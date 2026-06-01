@@ -144,6 +144,20 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
+    fun detailPagePortraitInfoStartsTwelveDpBelowPlayer() {
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+        val portraitStart = detailScreen.indexOf("private fun PortraitPlayerCard(")
+        val portraitEnd = detailScreen.indexOf("@OptIn(ExperimentalAnimationApi::class)", portraitStart + 1)
+        val portraitBlock = detailScreen.substring(portraitStart, portraitEnd)
+
+        assertTrue(portraitBlock.contains("Spacer(Modifier.height(12.dp))"))
+        assertTrue(portraitBlock.indexOf(".aspectRatio(16f / 9f)") < portraitBlock.indexOf("Spacer(Modifier.height(12.dp))"))
+        assertTrue(portraitBlock.indexOf("Spacer(Modifier.height(12.dp))") < portraitBlock.indexOf("Surface("))
+    }
+
+    @Test
     fun playerLoadEffectIgnoresSubtitleTrackListChanges() {
         val player = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
