@@ -1,9 +1,12 @@
 package com.zasenjc.mediatree.ui.screens
 
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -46,7 +49,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,12 +58,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.decode.VideoFrameDecoder
-import coil.request.ImageRequest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -92,8 +91,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.Color
+import java.util.concurrent.ConcurrentHashMap
 
 private val browseSortOptions = listOf(
     "name" to "名称",
@@ -791,12 +793,21 @@ private fun MountedVideoThumbnail(
     modifier: Modifier = Modifier,
     cornerRadius: androidx.compose.ui.unit.Dp = 12.dp,
 ) {
-    val context = LocalContext.current
-    val thumbnailSource = remember(container, source?.id, movie.mediaRoot, movie.path) {
-        mountedVideoThumbnailSource(container, source, movie)
+    val thumbnailCacheKey = remember(source?.id, source?.type, movie.path, movie.size, movie.fileSize) {
+        mountedVideoThumbnailCacheKey(source, movie)
     }
-    DisposableEffect(thumbnailSource) {
-        onDispose { thumbnailSource?.onClose?.invoke() }
+    var bitmap by remember(thumbnailCacheKey) {
+        mutableStateOf(thumbnailCacheKey?.let { mountedVideoFrameCache[it] })
+    }
+    LaunchedEffect(container, source?.id, movie.mediaRoot, movie.path, thumbnailCacheKey) {
+        if (bitmap == null) {
+            val sourceInfo = mountedVideoThumbnailSource(container, source, movie) ?: return@LaunchedEffect
+            try {
+                bitmap = loadMountedVideoFrame(sourceInfo)
+            } finally {
+                sourceInfo.onClose?.invoke()
+            }
+        }
     }
     Box(
         modifier = modifier
@@ -804,24 +815,15 @@ private fun MountedVideoThumbnail(
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
-        thumbnailSource?.let { sourceInfo ->
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(sourceInfo.uri)
-                    .headers(okhttp3.Headers.Builder().apply {
-                        sourceInfo.headers.forEach { (name, value) -> add(name, value) }
-                    }.build())
-                    .decoderFactory(VideoFrameDecoder.Factory())
-                    .crossfade(false)
-                    .memoryCacheKey(sourceInfo.cacheKey)
-                    .diskCacheKey(sourceInfo.cacheKey)
-                    .build(),
+        bitmap?.let { frame ->
+            Image(
+                bitmap = frame.asImageBitmap(),
                 contentDescription = movie.browseTitle(),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        if (thumbnailSource == null) {
+        if (bitmap == null) {
             Icon(
                 imageVector = Icons.Default.InsertDriveFile,
                 contentDescription = null,
@@ -832,7 +834,7 @@ private fun MountedVideoThumbnail(
         Surface(
             modifier = Modifier.align(Alignment.Center),
             shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = if (thumbnailSource == null) 0.92f else 0.78f),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = if (bitmap == null) 0.92f else 0.78f),
             contentColor = MaterialTheme.colorScheme.onPrimary,
         ) {
             Icon(
@@ -1086,6 +1088,33 @@ private data class MountedVideoThumbnailSource(
     val onClose: (() -> Unit)? = null,
 )
 
+private val mountedVideoFrameCache = ConcurrentHashMap<String, Bitmap>()
+
+private fun mountedVideoThumbnailCacheKey(
+    source: ClientStorageSource?,
+    movie: MovieDto,
+): String? {
+    if (!movie.isMountedLibraryItem()) return null
+    val resolvedSource = source ?: return null
+    val size = movie.size ?: movie.fileSize ?: 0L
+    return when (resolvedSource.type) {
+        ClientStorageType.SMB -> "smb-frame:${resolvedSource.id}:${movie.path}:$size"
+        ClientStorageType.WebDAV -> "webdav-frame:${resolvedSource.id}:${movie.path}:$size"
+    }
+}
+
+private suspend fun loadMountedVideoFrame(source: MountedVideoThumbnailSource): Bitmap? =
+    mountedVideoFrameCache[source.cacheKey] ?: withContext(Dispatchers.IO) {
+        runCatching {
+            MediaMetadataRetriever().use { retriever ->
+                retriever.setDataSource(source.uri, source.headers)
+                retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            }?.also { frame ->
+                mountedVideoFrameCache[source.cacheKey] = frame
+            }
+        }.getOrNull()
+    }
+
 private fun mountedVideoThumbnailSource(
     container: AppContainer,
     source: ClientStorageSource?,
@@ -1093,13 +1122,14 @@ private fun mountedVideoThumbnailSource(
 ): MountedVideoThumbnailSource? {
     if (!movie.isMountedLibraryItem()) return null
     val resolvedSource = source ?: return null
+    val cacheKey = mountedVideoThumbnailCacheKey(resolvedSource, movie) ?: return null
     return when (resolvedSource.type) {
         ClientStorageType.SMB -> {
             val playbackSource = container.smbRangeProxy.playbackSource(source = resolvedSource, path = movie.path)
             MountedVideoThumbnailSource(
                 uri = playbackSource.uri,
                 headers = playbackSource.headers,
-                cacheKey = "smb-frame:${resolvedSource.id}:${movie.path}:${movie.size ?: movie.fileSize ?: 0L}",
+                cacheKey = cacheKey,
                 onClose = playbackSource.onClose,
             )
         }
@@ -1108,7 +1138,7 @@ private fun mountedVideoThumbnailSource(
             MountedVideoThumbnailSource(
                 uri = playbackSource.uri,
                 headers = playbackSource.headers,
-                cacheKey = "webdav-frame:${resolvedSource.id}:${movie.path}:${movie.size ?: movie.fileSize ?: 0L}",
+                cacheKey = cacheKey,
             )
         }
     }

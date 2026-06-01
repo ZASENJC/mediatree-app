@@ -105,7 +105,10 @@ class BrowseDirectorySemanticsSourceTest {
         assertTrue(screenBlock.contains("MountedVideoPosterCard("))
         assertTrue(iconMovieRowBlock.contains("MountedVideoThumbnail("))
         assertTrue(browseSource.contains("private fun MountedVideoThumbnail"))
-        assertTrue(browseSource.contains("VideoFrameDecoder.Factory()"))
+        assertTrue(browseSource.contains("MediaMetadataRetriever"))
+        assertTrue(browseSource.contains("setDataSource(source.uri, source.headers)"))
+        assertTrue(browseSource.contains("mountedVideoFrameCache"))
+        assertTrue(browseSource.contains("sourceInfo.onClose?.invoke()"))
         assertTrue(browseSource.contains("container.smbRangeProxy.playbackSource"))
         assertTrue(browseSource.contains("PlaybackSource.webDav"))
     }
