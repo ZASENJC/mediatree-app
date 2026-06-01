@@ -45,4 +45,27 @@ class WebDavBrowserSourceTest {
         assertFalse(screenSource.contains("Smb"))
         assertFalse(screenSource.contains("MediaTreeApi"))
     }
+
+    @Test
+    fun webDavPlayerShowsOriginalPathAndSameFolderVideoSwitcher() {
+        val screenSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/WebDavBrowseScreen.kt")
+            .readText()
+        val sharedPlayerSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/ClientStoragePlayerDetails.kt")
+            .readText()
+
+        assertTrue(screenSource.contains("var currentPath by remember(path)"))
+        assertTrue(screenSource.contains("storageParentPath(currentPath)"))
+        assertTrue(screenSource.contains("container.webDavClient.list(loadedSource, storageParentPath(currentPath))"))
+        assertTrue(screenSource.contains("PlaybackSource.webDav(source = loadedSource, path = currentPath)"))
+        assertTrue(screenSource.contains("WebDavClient.buildResourceUrl(loadedSource, currentPath)"))
+        assertTrue(screenSource.contains("ClientStoragePlayerDetails("))
+        assertTrue(screenSource.contains("onSelectVideo = { item ->"))
+        assertTrue(screenSource.contains("currentPath = item.path"))
+        assertTrue(sharedPlayerSource.contains("原路径"))
+        assertTrue(sharedPlayerSource.contains("同文件夹"))
+        assertTrue(sharedPlayerSource.contains("SkipPrevious"))
+        assertTrue(sharedPlayerSource.contains("SkipNext"))
+    }
 }

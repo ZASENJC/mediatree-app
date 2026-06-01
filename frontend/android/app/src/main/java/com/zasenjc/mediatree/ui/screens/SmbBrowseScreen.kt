@@ -24,8 +24,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CardDefaults
@@ -59,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.ClientStorageType
+import com.zasenjc.mediatree.data.SmbClient
 import com.zasenjc.mediatree.data.SmbEntry
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.player.MediaTreePlayer
@@ -224,7 +225,7 @@ private fun SmbEntryRow(entry: SmbEntry, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.Default.InsertDriveFile,
+                imageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
                 contentDescription = null,
                 tint = if (entry.isPlayableVideo || entry.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(28.dp),
@@ -259,7 +260,9 @@ fun SmbPlayerScreen(
     val activity = context.findActivity()
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    var currentPath by remember(path) { mutableStateOf(path) }
     var source by remember { mutableStateOf<ClientStorageSource?>(null) }
+    var sameFolderVideos by remember { mutableStateOf<List<ClientStorageVideoItem>>(emptyList()) }
     var error by remember { mutableStateOf<Throwable?>(null) }
     var positionSeconds by remember { mutableDoubleStateOf(0.0) }
 
@@ -272,11 +275,30 @@ fun SmbPlayerScreen(
         }
     }
 
-    LaunchedEffect(sourceId) {
+    LaunchedEffect(sourceId, currentPath) {
         runCatching {
-            container.clientStorageRepository.load()
+            val loadedSource = container.clientStorageRepository.load()
                 .firstOrNull { it.id == sourceId && it.type == ClientStorageType.SMB && it.enabled }
                 ?: throw IllegalArgumentException("SMB 存储源不可用")
+            val entries = container.smbClient.list(loadedSource, storageParentPath(currentPath))
+            val currentItem = ClientStorageVideoItem(
+                name = storageFileName(currentPath),
+                path = currentPath,
+                originalPath = SmbClient.buildSmbUrl(loadedSource, currentPath),
+            )
+            source = loadedSource
+            sameFolderVideos = ensureCurrentVideo(
+                videos = entries.filter { it.isPlayableVideo }.map { entry ->
+                    ClientStorageVideoItem(
+                        name = entry.name,
+                        path = entry.path,
+                        originalPath = SmbClient.buildSmbUrl(loadedSource, entry.path),
+                    )
+                },
+                current = currentItem,
+            )
+            error = null
+            loadedSource
         }.onSuccess { source = it }
             .onFailure { error = it }
     }
@@ -285,8 +307,8 @@ fun SmbPlayerScreen(
         error?.let(onError)
     }
 
-    val playbackSource = remember(source?.id, path) {
-        source?.let { container.smbRangeProxy.playbackSource(source = it, path = path) }
+    val playbackSource = remember(source?.id, currentPath) {
+        source?.let { container.smbRangeProxy.playbackSource(source = it, path = currentPath) }
     }
 
     DisposableEffect(playbackSource) {
@@ -297,7 +319,7 @@ fun SmbPlayerScreen(
         topBar = {
             if (!isLandscape) {
                 TopAppBar(
-                    title = { Text(path.substringAfterLast('/').ifBlank { "SMB 播放" }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    title = { Text(storageFileName(currentPath).ifBlank { "SMB 播放" }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -357,8 +379,21 @@ fun SmbPlayerScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Spacer(Modifier.height(0.dp))
-                            Text(path.substringAfterLast('/'), style = MaterialTheme.typography.titleMedium)
-                            Text(source?.name.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            ClientStoragePlayerDetails(
+                                fileName = storageFileName(currentPath),
+                                originalPath = sameFolderVideos
+                                    .firstOrNull { it.path == currentPath }
+                                    ?.originalPath
+                                    ?: source?.let { SmbClient.buildSmbUrl(it, currentPath) }
+                                    .orEmpty(),
+                                currentPath = currentPath,
+                                videos = sameFolderVideos,
+                                onSelectVideo = { item ->
+                                    positionSeconds = 0.0
+                                    currentPath = item.path
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
                     }
                 }
