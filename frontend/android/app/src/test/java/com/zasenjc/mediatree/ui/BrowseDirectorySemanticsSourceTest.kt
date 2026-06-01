@@ -66,6 +66,16 @@ class BrowseDirectorySemanticsSourceTest {
     }
 
     @Test
+    fun activeLibraryChangeResetsBrowseFolderToRoot() {
+        val resetBlock = appSource
+            .substringAfter("LaunchedEffect(session.activeProviderType, session.activeLibrary)")
+            .substringBefore("fun navigateTopDestination")
+
+        assertTrue(resetBlock.contains("browseFolder = \"\""))
+        assertFalse(resetBlock.contains("browseViewMode = \"compact\""))
+    }
+
+    @Test
     fun compactRowsKeepRoundedShape() {
         val compactBrowserRow = browseSource
             .substringAfter("private fun CompactBrowserRow")

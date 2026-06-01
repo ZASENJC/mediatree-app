@@ -141,6 +141,10 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         chromeVisible = true
     }
 
+    LaunchedEffect(session.activeProviderType, session.activeLibrary) {
+        browseFolder = ""
+    }
+
     fun navigateTopDestination(route: String) {
         val page = topDestinations.indexOfFirst { it.route == route }
         if (page >= 0) {
