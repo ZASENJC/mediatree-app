@@ -149,6 +149,10 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("private fun ThinPlayerSliderTrack("))
         assertTrue(player.contains("modifier = modifier.height(20.dp)"))
         assertTrue(player.contains("Modifier.size(12.dp).background(Color.White, CircleShape)"))
+        assertTrue(player.contains("modifier = modifier.height(12.dp)"))
+        assertTrue(player.contains("contentAlignment = Alignment.CenterStart"))
+        assertTrue(player.contains(".height(2.dp)"))
+        assertTrue(player.contains(".background(trackColor, RoundedCornerShape(50))"))
     }
 
     @Test

@@ -690,9 +690,15 @@ private fun ThinPlayerSliderTrack(
     val activeColor = if (enabled) Color.White else Color.White.copy(alpha = 0.48f)
     val trackColor = if (enabled) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.22f)
     Box(
-        modifier = modifier.height(2.dp).fillMaxWidth().background(trackColor, RoundedCornerShape(50)),
+        modifier = modifier.height(12.dp).fillMaxWidth(),
         contentAlignment = Alignment.CenterStart,
     ) {
+        Box(
+            Modifier
+                .height(2.dp)
+                .fillMaxWidth()
+                .background(trackColor, RoundedCornerShape(50)),
+        )
         Box(
             Modifier
                 .fillMaxWidth(progress.coerceIn(0f, 1f))
