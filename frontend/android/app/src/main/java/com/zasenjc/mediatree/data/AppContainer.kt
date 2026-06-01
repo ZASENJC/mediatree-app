@@ -1,12 +1,18 @@
 package com.zasenjc.mediatree.data
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class AppContainer(context: Context) {
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val sessionStore = SessionStore(context)
     val uiPreferencesStore = UiPreferencesStore(context)
     val clientStorageStore = AndroidClientStorageStore(context)
     val clientStorageRepository = ClientStorageRepository(clientStorageStore)
+    val clientPlaybackProgressStore = AndroidClientPlaybackProgressStore(context)
+    val clientPlaybackProgressRepository = ClientPlaybackProgressRepository(clientPlaybackProgressStore)
     val webDavClient = WebDavClient()
     val smbClient = SmbClient()
     val smbRangeProxy = SmbRangeProxy(smbClient)

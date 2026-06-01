@@ -39,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -270,6 +271,24 @@ fun WebDavPlayerScreen(
     var sameFolderVideos by remember { mutableStateOf<List<ClientStorageVideoItem>>(emptyList()) }
     var error by remember { mutableStateOf<Throwable?>(null) }
     var positionSeconds by remember { mutableDoubleStateOf(0.0) }
+    var durationSeconds by remember { mutableDoubleStateOf(0.0) }
+    var playbackReadyPath by remember { mutableStateOf<String?>(null) }
+
+    fun saveClientPlaybackProgress(sourceId: String, path: String, positionSeconds: Double, durationSeconds: Double) {
+        container.applicationScope.launch {
+            container.clientPlaybackProgressRepository.save(
+                sourceId = sourceId,
+                path = path,
+                positionSeconds = positionSeconds,
+                durationSeconds = durationSeconds,
+            )
+        }
+    }
+
+    fun leavePlayer() {
+        saveClientPlaybackProgress(sourceId, currentPath, positionSeconds, durationSeconds)
+        onBack()
+    }
 
     val playerFullscreen = fullscreenRequested || isLandscape
     FullscreenSystemBarsEffect(playerFullscreen)
@@ -278,16 +297,20 @@ fun WebDavPlayerScreen(
             fullscreenRequested = false
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
         } else {
-            onBack()
+            leavePlayer()
         }
     }
 
     LaunchedEffect(sourceId, currentPath) {
+        playbackReadyPath = null
+        positionSeconds = 0.0
+        durationSeconds = 0.0
         runCatching {
             val loadedSource = container.clientStorageRepository.load()
                 .firstOrNull { it.id == sourceId && it.type == ClientStorageType.WebDAV && it.enabled }
                 ?: throw IllegalArgumentException("WebDAV 存储源不可用")
             val entries = container.webDavClient.list(loadedSource, storageParentPath(currentPath))
+            val resumePosition = container.clientPlaybackProgressRepository.resumePosition(sourceId, currentPath)
             val currentItem = ClientStorageVideoItem(
                 name = storageFileName(currentPath),
                 path = currentPath,
@@ -304,6 +327,8 @@ fun WebDavPlayerScreen(
                 },
                 current = currentItem,
             )
+            positionSeconds = resumePosition
+            playbackReadyPath = currentPath
             error = null
             loadedSource
         }.onSuccess { source = it }
@@ -318,13 +343,19 @@ fun WebDavPlayerScreen(
         PlaybackSource.webDav(source = loadedSource, path = currentPath)
     }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            saveClientPlaybackProgress(sourceId, currentPath, positionSeconds, durationSeconds)
+        }
+    }
+
     Scaffold(
         topBar = {
             if (!playerFullscreen) {
                 TopAppBar(
                     title = {},
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = ::leavePlayer) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                         }
                     },
@@ -349,13 +380,34 @@ fun WebDavPlayerScreen(
         ) {
             when {
                 error != null -> ErrorPane(message = error?.message ?: "WebDAV 播放源加载失败", modifier = Modifier.fillMaxSize())
-                playbackSource == null -> LoadingPane(Modifier.fillMaxSize())
+                playbackSource == null || playbackReadyPath != currentPath -> LoadingPane(Modifier.fillMaxSize())
                 else -> {
+                    val playingPath = currentPath
                     if (playerFullscreen) {
                         MediaTreePlayer(
                             playbackSource = playbackSource,
                             startPosition = positionSeconds,
-                            onPlaybackPositionChange = { pos, _ -> positionSeconds = pos },
+                            onPlaybackPositionChange = { pos, dur ->
+                                positionSeconds = pos
+                                durationSeconds = dur
+                            },
+                            onProgressUpdate = { pos, dur ->
+                                positionSeconds = pos
+                                durationSeconds = dur
+                                container.applicationScope.launch {
+                                    container.clientPlaybackProgressRepository.save(
+                                        sourceId = sourceId,
+                                        path = playingPath,
+                                        positionSeconds = pos,
+                                        durationSeconds = dur,
+                                    )
+                                }
+                            },
+                            onPlaybackComplete = { _, _ ->
+                                container.applicationScope.launch {
+                                    container.clientPlaybackProgressRepository.markFinished(sourceId, playingPath)
+                                }
+                            },
                             isFullscreen = true,
                             showFullscreenButton = true,
                             showAspectRatioControls = true,
@@ -374,7 +426,27 @@ fun WebDavPlayerScreen(
                             MediaTreePlayer(
                                 playbackSource = playbackSource,
                                 startPosition = positionSeconds,
-                                onPlaybackPositionChange = { pos, _ -> positionSeconds = pos },
+                                onPlaybackPositionChange = { pos, dur ->
+                                    positionSeconds = pos
+                                    durationSeconds = dur
+                                },
+                                onProgressUpdate = { pos, dur ->
+                                    positionSeconds = pos
+                                    durationSeconds = dur
+                                    container.applicationScope.launch {
+                                        container.clientPlaybackProgressRepository.save(
+                                            sourceId = sourceId,
+                                            path = playingPath,
+                                            positionSeconds = pos,
+                                            durationSeconds = dur,
+                                        )
+                                    }
+                                },
+                                onPlaybackComplete = { _, _ ->
+                                    container.applicationScope.launch {
+                                        container.clientPlaybackProgressRepository.markFinished(sourceId, playingPath)
+                                    }
+                                },
                                 isFullscreen = false,
                                 showFullscreenButton = true,
                                 showAspectRatioControls = false,
@@ -397,7 +469,10 @@ fun WebDavPlayerScreen(
                                 currentPath = currentPath,
                                 videos = sameFolderVideos,
                                 onSelectVideo = { item ->
+                                    saveClientPlaybackProgress(sourceId, currentPath, positionSeconds, durationSeconds)
                                     positionSeconds = 0.0
+                                    durationSeconds = 0.0
+                                    playbackReadyPath = null
                                     currentPath = item.path
                                 },
                                 modifier = Modifier

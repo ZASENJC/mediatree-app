@@ -62,6 +62,7 @@ class WebDavBrowserSourceTest {
         assertTrue(screenSource.contains("WebDavClient.buildResourceUrl(loadedSource, currentPath)"))
         assertTrue(screenSource.contains("ClientStoragePlayerDetails("))
         assertTrue(screenSource.contains("onSelectVideo = { item ->"))
+        assertTrue(screenSource.contains("saveClientPlaybackProgress(sourceId, currentPath, positionSeconds, durationSeconds)"))
         assertTrue(screenSource.contains("currentPath = item.path"))
         assertTrue(sharedPlayerSource.contains("原路径"))
         assertTrue(sharedPlayerSource.contains("同文件夹"))
@@ -80,5 +81,20 @@ class WebDavBrowserSourceTest {
         assertTrue(screenSource.contains("Spacer(Modifier.height(12.dp))"))
         assertTrue(screenSource.contains("ClientStoragePlayerDetails("))
         assertFalse(screenSource.contains(".align(Alignment.BottomCenter)"))
+    }
+
+    @Test
+    fun webDavPlayerRestoresAndPersistsClientPlaybackProgress() {
+        val screenSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/WebDavBrowseScreen.kt")
+            .readText()
+
+        assertTrue(screenSource.contains("container.clientPlaybackProgressRepository.resumePosition(sourceId, currentPath)"))
+        assertTrue(screenSource.contains("val playingPath = currentPath"))
+        assertTrue(screenSource.contains("onProgressUpdate = { pos, dur ->"))
+        assertTrue(screenSource.contains("container.clientPlaybackProgressRepository.save("))
+        assertTrue(screenSource.contains("path = playingPath"))
+        assertTrue(screenSource.contains("onPlaybackComplete = { _, _ ->"))
+        assertTrue(screenSource.contains("container.clientPlaybackProgressRepository.markFinished(sourceId, playingPath)"))
     }
 }
