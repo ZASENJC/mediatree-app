@@ -246,10 +246,10 @@ fun DesignSettingsRow(
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 1.dp,
-        shadowElevation = 2.dp,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),

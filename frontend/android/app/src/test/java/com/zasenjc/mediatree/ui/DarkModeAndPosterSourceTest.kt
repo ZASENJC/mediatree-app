@@ -64,4 +64,17 @@ class DarkModeAndPosterSourceTest {
         assertTrue(settingsRow.contains("contentColor = MaterialTheme.colorScheme.onSurface"))
         assertTrue(sectionCard.contains("contentColor = MaterialTheme.colorScheme.onSurface"))
     }
+
+    @Test
+    fun settingsRowsDoNotRenderInnerWhiteBackingFrames() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/components/SharedComponents.kt")
+            .readText()
+        val settingsRow = source.substringAfter("fun DesignSettingsRow").substringBefore("@Composable\nfun DesignSectionCard")
+
+        assertTrue(settingsRow.contains("color = Color.Transparent"))
+        assertFalse(settingsRow.contains("color = MaterialTheme.colorScheme.surfaceContainerLow"))
+        assertFalse(settingsRow.contains("tonalElevation = 1.dp"))
+        assertFalse(settingsRow.contains("shadowElevation = 2.dp"))
+    }
 }
