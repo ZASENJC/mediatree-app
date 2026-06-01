@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -93,6 +94,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.Color
@@ -115,6 +118,8 @@ private data class BrowseViewMode(
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
 )
 
+private typealias MountedVideoThumbnailLoader = suspend (ClientStorageSource?, MovieDto) -> Bitmap?
+
 class BrowseViewModel(private val container: AppContainer) : ViewModel() {
     data class UiState(
         val loading: Boolean = true,
@@ -130,6 +135,8 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
+    private val mountedVideoFrameCache = MountedVideoFrameMemoryCache()
+    private val mountedVideoFrameRequests = mutableMapOf<String, Deferred<Bitmap?>>()
 
     fun load(providerType: ProviderType, folder: String, mediaRoot: String, sort: String = _state.value.sortMode) {
         viewModelScope.launch {
@@ -284,6 +291,26 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
     }
+
+    suspend fun loadMountedVideoFrame(source: ClientStorageSource?, movie: MovieDto): Bitmap? {
+        val cacheKey = mountedVideoFrameCacheKey(source, movie) ?: return null
+        mountedVideoFrameCache.getCached(cacheKey)?.let { return it }
+        val request = mountedVideoFrameRequests[cacheKey] ?: viewModelScope.async {
+            val sourceInfo = mountedVideoThumbnailSource(container, source, movie) ?: return@async null
+            try {
+                extractMountedVideoFrame(sourceInfo)
+                    ?.also { frame -> mountedVideoFrameCache.putCached(cacheKey, frame) }
+            } finally {
+                sourceInfo.onClose?.invoke()
+            }
+        }.also { newRequest ->
+            mountedVideoFrameRequests[cacheKey] = newRequest
+            newRequest.invokeOnCompletion {
+                mountedVideoFrameRequests.remove(cacheKey)
+            }
+        }
+        return request.await()
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -301,6 +328,7 @@ fun BrowseScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
     var viewMode by remember { mutableStateOf("compact") }
+    val mountedVideoThumbnailLoader: MountedVideoThumbnailLoader = remember(vm) { vm::loadMountedVideoFrame }
     val listState = rememberLazyListState()
 
     SyncChromeWithListScroll(listState, onChromeVisibleChange)
@@ -448,7 +476,7 @@ fun BrowseScreen(
                                         row.forEach { movie ->
                                             if (movie.isMountedLibraryItem()) {
                                                 MountedVideoPosterCard(
-                                                    container = container,
+                                                    thumbnailLoader = mountedVideoThumbnailLoader,
                                                     source = state.mountedSource,
                                                     movie = movie,
                                                     onClick = { onNavigate(movie.openRoute()) },
@@ -470,7 +498,7 @@ fun BrowseScreen(
                             "icon" -> {
                                 items(iconMovieRows, key = { row -> row.joinToString("|") { it.id.toString() } }) { row ->
                                     IconMovieRow(
-                                        container = container,
+                                        thumbnailLoader = mountedVideoThumbnailLoader,
                                         source = state.mountedSource,
                                         row = row,
                                         onOpen = { movie -> onNavigate(movie.openRoute()) },
@@ -480,7 +508,7 @@ fun BrowseScreen(
                             "compact" -> {
                                 items(filteredMovies, key = { it.id }) { movie ->
                                     CompactMovieRow(
-                                        container = container,
+                                        thumbnailLoader = mountedVideoThumbnailLoader,
                                         source = state.mountedSource,
                                         movie = movie,
                                         onClick = { onNavigate(movie.openRoute()) },
@@ -490,7 +518,7 @@ fun BrowseScreen(
                             else -> {
                                 items(filteredMovies, key = { it.id }) { movie ->
                                     CompactMovieRow(
-                                        container = container,
+                                        thumbnailLoader = mountedVideoThumbnailLoader,
                                         source = state.mountedSource,
                                         movie = movie,
                                         onClick = { onNavigate(movie.openRoute()) },
@@ -682,7 +710,7 @@ private fun IconFolderRow(row: List<FolderNodeDto>, onOpen: (FolderNodeDto) -> U
 
 @Composable
 private fun IconMovieRow(
-    container: AppContainer,
+    thumbnailLoader: MountedVideoThumbnailLoader,
     source: ClientStorageSource?,
     row: List<MovieDto>,
     onOpen: (MovieDto) -> Unit,
@@ -691,7 +719,7 @@ private fun IconMovieRow(
         row.forEach { movie ->
             if (movie.isMountedLibraryItem()) {
                 MountedVideoIconTile(
-                    container = container,
+                    thumbnailLoader = thumbnailLoader,
                     source = source,
                     movie = movie,
                     onClick = { onOpen(movie) },
@@ -715,7 +743,7 @@ private fun IconMovieRow(
 
 @Composable
 private fun MountedVideoIconTile(
-    container: AppContainer,
+    thumbnailLoader: MountedVideoThumbnailLoader,
     source: ClientStorageSource?,
     movie: MovieDto,
     onClick: () -> Unit,
@@ -727,7 +755,7 @@ private fun MountedVideoIconTile(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         MountedVideoThumbnail(
-            container = container,
+            thumbnailLoader = thumbnailLoader,
             source = source,
             movie = movie,
             modifier = Modifier
@@ -787,7 +815,7 @@ private fun IconTile(
 
 @Composable
 private fun MountedVideoPosterCard(
-    container: AppContainer,
+    thumbnailLoader: MountedVideoThumbnailLoader,
     source: ClientStorageSource?,
     movie: MovieDto,
     onClick: () -> Unit,
@@ -795,7 +823,7 @@ private fun MountedVideoPosterCard(
 ) {
     Column(modifier = modifier.clickable(onClick = onClick), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         MountedVideoThumbnail(
-            container = container,
+            thumbnailLoader = thumbnailLoader,
             source = source,
             movie = movie,
             modifier = Modifier
@@ -822,24 +850,19 @@ private fun MountedVideoPosterCard(
 
 @Composable
 private fun MountedVideoThumbnail(
-    container: AppContainer,
+    thumbnailLoader: MountedVideoThumbnailLoader,
     source: ClientStorageSource?,
     movie: MovieDto,
     modifier: Modifier = Modifier,
     cornerRadius: androidx.compose.ui.unit.Dp = 12.dp,
     showPlayIcon: Boolean = true,
 ) {
-    var bitmap by remember(source?.id, source?.type, movie.path) {
+    var bitmap by remember(source?.id, source?.type, movie.path, movie.fileSize, movie.size) {
         mutableStateOf<Bitmap?>(null)
     }
-    LaunchedEffect(container, source?.id, movie.mediaRoot, movie.path) {
+    LaunchedEffect(thumbnailLoader, source?.id, movie.mediaRoot, movie.path, movie.fileSize, movie.size) {
         if (bitmap == null) {
-            val sourceInfo = mountedVideoThumbnailSource(container, source, movie) ?: return@LaunchedEffect
-            try {
-                bitmap = loadMountedVideoFrame(sourceInfo)
-            } finally {
-                sourceInfo.onClose?.invoke()
-            }
+            bitmap = thumbnailLoader(source, movie)
         }
     }
     Box(
@@ -965,7 +988,7 @@ private fun CompactFolderRow(folder: FolderNodeDto, onClick: () -> Unit) {
 
 @Composable
 private fun CompactMovieRow(
-    container: AppContainer,
+    thumbnailLoader: MountedVideoThumbnailLoader,
     source: ClientStorageSource?,
     movie: MovieDto,
     onClick: () -> Unit,
@@ -977,7 +1000,7 @@ private fun CompactMovieRow(
         icon = {
             if (movie.isMountedLibraryItem()) {
                 MountedVideoThumbnail(
-                    container = container,
+                    thumbnailLoader = thumbnailLoader,
                     source = source,
                     movie = movie,
                     modifier = Modifier.size(width = 52.dp, height = 32.dp),
@@ -1133,8 +1156,59 @@ private data class MountedVideoThumbnailSource(
 private val mountedVideoFrameDispatcher = Dispatchers.IO.limitedParallelism(4)
 private const val MountedVideoFrameWidth = 240
 private const val MountedVideoFrameHeight = 360
+private const val MountedVideoFrameCacheTtlMillis = 2 * 60 * 1000L
+private const val MountedVideoFrameCacheMaxBytes = 32 * 1024 * 1024L
 
-private suspend fun loadMountedVideoFrame(source: MountedVideoThumbnailSource): Bitmap? =
+private class MountedVideoFrameMemoryCache(
+    private val ttlMillis: Long = MountedVideoFrameCacheTtlMillis,
+    private val maxBytes: Long = MountedVideoFrameCacheMaxBytes,
+) {
+    private data class Entry(
+        val bitmap: Bitmap,
+        val createdAtMillis: Long,
+        val bytes: Long,
+    )
+
+    private val entries = LinkedHashMap<String, Entry>(0, 0.75f, true)
+    private var totalBytes = 0L
+
+    @Synchronized
+    fun getCached(key: String): Bitmap? {
+        val entry = entries[key] ?: return null
+        if (SystemClock.elapsedRealtime() - entry.createdAtMillis > ttlMillis) {
+            removeEntry(key)
+            return null
+        }
+        return entry.bitmap
+    }
+
+    @Synchronized
+    fun putCached(key: String, bitmap: Bitmap) {
+        removeEntry(key)
+        val bytes = bitmap.allocationByteCount.toLong()
+        entries[key] = Entry(
+            bitmap = bitmap,
+            createdAtMillis = SystemClock.elapsedRealtime(),
+            bytes = bytes,
+        )
+        totalBytes += bytes
+        while (totalBytes > maxBytes && entries.isNotEmpty()) {
+            removeOldestCacheEntry()
+        }
+    }
+
+    @Synchronized
+    fun removeOldestCacheEntry() {
+        val oldestKey = entries.entries.firstOrNull()?.key ?: return
+        removeEntry(oldestKey)
+    }
+
+    private fun removeEntry(key: String) {
+        entries.remove(key)?.let { removed -> totalBytes -= removed.bytes }
+    }
+}
+
+private suspend fun extractMountedVideoFrame(source: MountedVideoThumbnailSource): Bitmap? =
     withContext(mountedVideoFrameDispatcher) {
         runCatching {
             MediaMetadataRetriever().use { retriever ->
@@ -1156,6 +1230,18 @@ private fun MediaMetadataRetriever.scaledFrameAtStart(): Bitmap? =
         getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
             ?.let { Bitmap.createScaledBitmap(it, MountedVideoFrameWidth, MountedVideoFrameHeight, true) }
     }
+
+private fun mountedVideoFrameCacheKey(source: ClientStorageSource?, movie: MovieDto): String? {
+    val resolvedSource = source ?: return null
+    if (!movie.isMountedLibraryItem()) return null
+    val version = movie.fileSize ?: movie.size ?: 0L
+    return listOf(
+        resolvedSource.type.name,
+        resolvedSource.id,
+        movie.path,
+        version.toString(),
+    ).joinToString("|")
+}
 
 private fun mountedVideoThumbnailSource(
     container: AppContainer,
