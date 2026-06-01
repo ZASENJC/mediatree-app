@@ -93,7 +93,7 @@ class BrowseDirectorySemanticsSourceTest {
     }
 
     @Test
-    fun mountedVideosUseThumbnailStyleInPosterAndIconModes() {
+    fun mountedVideosUseRealFrameThumbnailsInPosterAndIconModes() {
         val screenBlock = browseSource
             .substringAfter("fun BrowseScreen(")
             .substringBefore("@Composable\nprivate fun DesignFolderRow")
@@ -105,7 +105,9 @@ class BrowseDirectorySemanticsSourceTest {
         assertTrue(screenBlock.contains("MountedVideoPosterCard("))
         assertTrue(iconMovieRowBlock.contains("MountedVideoThumbnail("))
         assertTrue(browseSource.contains("private fun MountedVideoThumbnail"))
-        assertTrue(browseSource.contains("private fun MovieDto.fileExtensionLabel()"))
+        assertTrue(browseSource.contains("VideoFrameDecoder.Factory()"))
+        assertTrue(browseSource.contains("container.smbRangeProxy.playbackSource"))
+        assertTrue(browseSource.contains("PlaybackSource.webDav"))
     }
 
     @Test

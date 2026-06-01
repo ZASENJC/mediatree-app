@@ -46,6 +46,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,13 +55,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.decode.VideoFrameDecoder
+import coil.request.ImageRequest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zasenjc.mediatree.data.AppContainer
+import com.zasenjc.mediatree.data.ClientStorageSource
+import com.zasenjc.mediatree.data.ClientStorageType
 import com.zasenjc.mediatree.data.FolderNodeDto
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.ProviderType
@@ -69,6 +77,7 @@ import com.zasenjc.mediatree.data.webDavLibraryPath
 import com.zasenjc.mediatree.data.webDavLibrarySourceId
 import com.zasenjc.mediatree.data.smbLibrarySourceId
 import com.zasenjc.mediatree.data.viewModelFactory
+import com.zasenjc.mediatree.playback.PlaybackSource
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MediaAsyncImage
 import com.zasenjc.mediatree.ui.components.MoviePosterCard
@@ -113,6 +122,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
         val page: Int = 0,
         val currentFolder: String = "",
         val sortMode: String = "name",
+        val mountedSource: ClientStorageSource? = null,
         val error: Throwable? = null,
     )
 
@@ -155,6 +165,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                         currentFolder = folder,
                         page = 0,
                         sortMode = sort,
+                        mountedSource = null,
                     )
                 }
             } catch (e: Throwable) {
@@ -202,6 +213,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                 currentFolder = folder,
                 page = 0,
                 sortMode = sort,
+                mountedSource = source,
             )
         }
     }
@@ -245,6 +257,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                 currentFolder = folder,
                 page = 0,
                 sortMode = sort,
+                mountedSource = source,
             )
         }
     }
@@ -433,6 +446,8 @@ fun BrowseScreen(
                                         row.forEach { movie ->
                                             if (movie.isMountedLibraryItem()) {
                                                 MountedVideoPosterCard(
+                                                    container = container,
+                                                    source = state.mountedSource,
                                                     movie = movie,
                                                     onClick = { onNavigate(movie.openRoute()) },
                                                     modifier = Modifier.weight(1f),
@@ -453,6 +468,8 @@ fun BrowseScreen(
                             "icon" -> {
                                 items(iconMovieRows, key = { row -> row.joinToString("|") { it.id.toString() } }) { row ->
                                     IconMovieRow(
+                                        container = container,
+                                        source = state.mountedSource,
                                         row = row,
                                         onOpen = { movie -> onNavigate(movie.openRoute()) },
                                     )
@@ -652,7 +669,12 @@ private fun IconFolderRow(row: List<FolderNodeDto>, onOpen: (FolderNodeDto) -> U
 }
 
 @Composable
-private fun IconMovieRow(row: List<MovieDto>, onOpen: (MovieDto) -> Unit) {
+private fun IconMovieRow(
+    container: AppContainer,
+    source: ClientStorageSource?,
+    row: List<MovieDto>,
+    onOpen: (MovieDto) -> Unit,
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         row.forEach { movie ->
             IconTile(
@@ -661,6 +683,8 @@ private fun IconMovieRow(row: List<MovieDto>, onOpen: (MovieDto) -> Unit) {
                 icon = {
                     if (movie.isMountedLibraryItem()) {
                         MountedVideoThumbnail(
+                            container = container,
+                            source = source,
                             movie = movie,
                             modifier = Modifier.size(width = 72.dp, height = 46.dp),
                         )
@@ -726,12 +750,16 @@ private fun IconTile(
 
 @Composable
 private fun MountedVideoPosterCard(
+    container: AppContainer,
+    source: ClientStorageSource?,
     movie: MovieDto,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.clickable(onClick = onClick), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         MountedVideoThumbnail(
+            container = container,
+            source = source,
             movie = movie,
             modifier = Modifier
                 .fillMaxWidth()
@@ -757,25 +785,54 @@ private fun MountedVideoPosterCard(
 
 @Composable
 private fun MountedVideoThumbnail(
+    container: AppContainer,
+    source: ClientStorageSource?,
     movie: MovieDto,
     modifier: Modifier = Modifier,
     cornerRadius: androidx.compose.ui.unit.Dp = 12.dp,
 ) {
+    val context = LocalContext.current
+    val thumbnailSource = remember(container, source?.id, movie.mediaRoot, movie.path) {
+        mountedVideoThumbnailSource(container, source, movie)
+    }
+    DisposableEffect(thumbnailSource) {
+        onDispose { thumbnailSource?.onClose?.invoke() }
+    }
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = Icons.Default.InsertDriveFile,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f),
-            modifier = Modifier.fillMaxSize(0.34f),
-        )
+        thumbnailSource?.let { sourceInfo ->
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(sourceInfo.uri)
+                    .headers(okhttp3.Headers.Builder().apply {
+                        sourceInfo.headers.forEach { (name, value) -> add(name, value) }
+                    }.build())
+                    .decoderFactory(VideoFrameDecoder.Factory())
+                    .crossfade(false)
+                    .memoryCacheKey(sourceInfo.cacheKey)
+                    .diskCacheKey(sourceInfo.cacheKey)
+                    .build(),
+                contentDescription = movie.browseTitle(),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        if (thumbnailSource == null) {
+            Icon(
+                imageVector = Icons.Default.InsertDriveFile,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f),
+                modifier = Modifier.fillMaxSize(0.34f),
+            )
+        }
         Surface(
+            modifier = Modifier.align(Alignment.Center),
             shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = if (thumbnailSource == null) 0.92f else 0.78f),
             contentColor = MaterialTheme.colorScheme.onPrimary,
         ) {
             Icon(
@@ -1021,6 +1078,41 @@ private fun MovieDto.openRoute(): String =
 
 private fun MovieDto.isMountedLibraryItem(): Boolean =
     mediaRoot?.mountedLibrarySourceId() != null
+
+private data class MountedVideoThumbnailSource(
+    val uri: String,
+    val headers: Map<String, String>,
+    val cacheKey: String,
+    val onClose: (() -> Unit)? = null,
+)
+
+private fun mountedVideoThumbnailSource(
+    container: AppContainer,
+    source: ClientStorageSource?,
+    movie: MovieDto,
+): MountedVideoThumbnailSource? {
+    if (!movie.isMountedLibraryItem()) return null
+    val resolvedSource = source ?: return null
+    return when (resolvedSource.type) {
+        ClientStorageType.SMB -> {
+            val playbackSource = container.smbRangeProxy.playbackSource(source = resolvedSource, path = movie.path)
+            MountedVideoThumbnailSource(
+                uri = playbackSource.uri,
+                headers = playbackSource.headers,
+                cacheKey = "smb-frame:${resolvedSource.id}:${movie.path}:${movie.size ?: movie.fileSize ?: 0L}",
+                onClose = playbackSource.onClose,
+            )
+        }
+        ClientStorageType.WebDAV -> {
+            val playbackSource = PlaybackSource.webDav(source = resolvedSource, path = movie.path)
+            MountedVideoThumbnailSource(
+                uri = playbackSource.uri,
+                headers = playbackSource.headers,
+                cacheKey = "webdav-frame:${resolvedSource.id}:${movie.path}:${movie.size ?: movie.fileSize ?: 0L}",
+            )
+        }
+    }
+}
 
 private fun mediaRootPath(sourceId: String): String = "smb/$sourceId"
 
