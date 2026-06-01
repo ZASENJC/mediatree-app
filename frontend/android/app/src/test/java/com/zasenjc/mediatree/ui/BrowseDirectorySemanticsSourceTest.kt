@@ -100,10 +100,23 @@ class BrowseDirectorySemanticsSourceTest {
         val iconMovieRowBlock = browseSource
             .substringAfter("private fun IconMovieRow")
             .substringBefore("@Composable\nprivate fun IconTile")
+        val mountedIconTileBlock = browseSource
+            .substringAfter("private fun MountedVideoIconTile")
+            .substringBefore("@Composable\nprivate fun IconTile")
+        val compactMovieRowBlock = browseSource
+            .substringAfter("private fun CompactMovieRow")
+            .substringBefore("@Composable\nprivate fun CompactBrowserRow")
 
         assertTrue(screenBlock.contains("movie.isMountedLibraryItem()"))
         assertTrue(screenBlock.contains("MountedVideoPosterCard("))
+        assertTrue(screenBlock.contains("CompactMovieRow("))
         assertTrue(iconMovieRowBlock.contains("MountedVideoThumbnail("))
+        assertTrue(mountedIconTileBlock.contains("showPlayIcon = false"))
+        assertTrue(mountedIconTileBlock.contains("maxLines = 1"))
+        assertFalse(mountedIconTileBlock.contains("movie.iconMovieMeta()"))
+        assertFalse(mountedIconTileBlock.contains("ElevatedCard("))
+        assertTrue(compactMovieRowBlock.contains("MountedVideoThumbnail("))
+        assertTrue(compactMovieRowBlock.contains("framedIcon = !movie.isMountedLibraryItem()"))
         assertTrue(browseSource.contains("private fun MountedVideoThumbnail"))
         assertTrue(browseSource.contains("MediaMetadataRetriever"))
         assertTrue(browseSource.contains("setDataSource(source.uri, source.headers)"))

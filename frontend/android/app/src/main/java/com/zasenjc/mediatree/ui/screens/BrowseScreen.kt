@@ -480,12 +480,22 @@ fun BrowseScreen(
                             }
                             "compact" -> {
                                 items(filteredMovies, key = { it.id }) { movie ->
-                                    CompactMovieRow(movie = movie, onClick = { onNavigate(movie.openRoute()) })
+                                    CompactMovieRow(
+                                        container = container,
+                                        source = state.mountedSource,
+                                        movie = movie,
+                                        onClick = { onNavigate(movie.openRoute()) },
+                                    )
                                 }
                             }
                             else -> {
                                 items(filteredMovies, key = { it.id }) { movie ->
-                                    CompactMovieRow(movie = movie, onClick = { onNavigate(movie.openRoute()) })
+                                    CompactMovieRow(
+                                        container = container,
+                                        source = state.mountedSource,
+                                        movie = movie,
+                                        onClick = { onNavigate(movie.openRoute()) },
+                                    )
                                 }
                             }
                         }
@@ -680,27 +690,59 @@ private fun IconMovieRow(
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         row.forEach { movie ->
-            IconTile(
-                title = movie.browseTitle(),
-                subtitle = movie.iconMovieMeta(),
-                icon = {
-                    if (movie.isMountedLibraryItem()) {
-                        MountedVideoThumbnail(
-                            container = container,
-                            source = source,
-                            movie = movie,
-                            modifier = Modifier.size(width = 72.dp, height = 46.dp),
-                        )
-                    } else {
+            if (movie.isMountedLibraryItem()) {
+                MountedVideoIconTile(
+                    container = container,
+                    source = source,
+                    movie = movie,
+                    onClick = { onOpen(movie) },
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                IconTile(
+                    title = movie.browseTitle(),
+                    subtitle = movie.iconMovieMeta(),
+                    icon = {
                         Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(34.dp))
-                    }
-                },
-                framedIcon = !movie.isMountedLibraryItem(),
-                onClick = { onOpen(movie) },
-                modifier = Modifier.weight(1f),
-            )
+                    },
+                    onClick = { onOpen(movie) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
         repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+    }
+}
+
+@Composable
+private fun MountedVideoIconTile(
+    container: AppContainer,
+    source: ClientStorageSource?,
+    movie: MovieDto,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        MountedVideoThumbnail(
+            container = container,
+            source = source,
+            movie = movie,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f),
+            showPlayIcon = false,
+        )
+        Text(
+            text = movie.browseTitle(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -711,7 +753,6 @@ private fun IconTile(
     icon: @Composable () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    framedIcon: Boolean = true,
 ) {
     ElevatedCard(
         modifier = modifier.defaultMinSize(minHeight = 112.dp).clickable(onClick = onClick),
@@ -726,18 +767,12 @@ private fun IconTile(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (framedIcon) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                ) {
-                    Box(Modifier.padding(12.dp), contentAlignment = Alignment.Center) { icon() }
-                }
-            } else {
-                Box(contentAlignment = Alignment.Center) {
-                    icon()
-                }
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.primary,
+            ) {
+                Box(Modifier.padding(12.dp), contentAlignment = Alignment.Center) { icon() }
             }
             Text(
                 title,
@@ -793,6 +828,7 @@ private fun MountedVideoThumbnail(
     movie: MovieDto,
     modifier: Modifier = Modifier,
     cornerRadius: androidx.compose.ui.unit.Dp = 12.dp,
+    showPlayIcon: Boolean = true,
 ) {
     val thumbnailCacheKey = remember(source?.id, source?.type, movie.path, movie.size, movie.fileSize) {
         mountedVideoThumbnailCacheKey(source, movie)
@@ -832,17 +868,19 @@ private fun MountedVideoThumbnail(
                 modifier = Modifier.fillMaxSize(0.34f),
             )
         }
-        Surface(
-            modifier = Modifier.align(Alignment.Center),
-            shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = if (bitmap == null) 0.92f else 0.78f),
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-        ) {
-            Icon(
-                Icons.Default.PlayArrow,
-                contentDescription = null,
-                modifier = Modifier.padding(7.dp).size(20.dp),
-            )
+        if (showPlayIcon) {
+            Surface(
+                modifier = Modifier.align(Alignment.Center),
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = if (bitmap == null) 0.92f else 0.78f),
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.padding(7.dp).size(20.dp),
+                )
+            }
         }
     }
 }
@@ -930,12 +968,31 @@ private fun CompactFolderRow(folder: FolderNodeDto, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CompactMovieRow(movie: MovieDto, onClick: () -> Unit) {
+private fun CompactMovieRow(
+    container: AppContainer,
+    source: ClientStorageSource?,
+    movie: MovieDto,
+    onClick: () -> Unit,
+) {
     CompactBrowserRow(
         title = movie.browseTitle(),
         meta = movie.releaseDate?.take(4) ?: movie.duration?.let { "${it} 分钟" }.orEmpty(),
         onClick = onClick,
-        icon = { Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(20.dp)) },
+        icon = {
+            if (movie.isMountedLibraryItem()) {
+                MountedVideoThumbnail(
+                    container = container,
+                    source = source,
+                    movie = movie,
+                    modifier = Modifier.size(width = 52.dp, height = 32.dp),
+                    cornerRadius = 8.dp,
+                    showPlayIcon = false,
+                )
+            } else {
+                Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(20.dp))
+            }
+        },
+        framedIcon = !movie.isMountedLibraryItem(),
     )
 }
 
@@ -945,6 +1002,7 @@ private fun CompactBrowserRow(
     meta: String,
     onClick: () -> Unit,
     icon: @Composable () -> Unit,
+    framedIcon: Boolean = true,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().height(46.dp).clickable(onClick = onClick),
@@ -957,12 +1015,16 @@ private fun CompactBrowserRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentColor = MaterialTheme.colorScheme.primary,
-            ) {
-                Box(Modifier.padding(7.dp), contentAlignment = Alignment.Center) { icon() }
+            if (framedIcon) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                ) {
+                    Box(Modifier.padding(7.dp), contentAlignment = Alignment.Center) { icon() }
+                }
+            } else {
+                icon()
             }
             Text(
                 title,
