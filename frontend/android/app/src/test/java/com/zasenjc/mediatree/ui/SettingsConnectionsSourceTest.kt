@@ -50,6 +50,6 @@ class SettingsConnectionsSourceTest {
         assertTrue(source.contains("saveServerProfile(profileId, providerType, serverUrl, profileName)"))
         assertTrue(source.contains("loginServerProfile(profileId, providerType, serverUrl, profileName, username, password)"))
         assertTrue(source.contains("title = profile.displayName()"))
-        assertTrue(source.contains("library.profileName"))
+        assertTrue(source.contains("title = firstLibrary.profileName"))
     }
 }

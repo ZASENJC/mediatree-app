@@ -54,8 +54,27 @@ class SettingsDisplaySelectionSourceTest {
         assertTrue(block.contains("selectBackendLibrary"))
         assertTrue(block.contains("smbLibraryPath(source.id)"))
         assertTrue(block.contains("webDavLibraryPath(source.id)"))
-        assertTrue(block.contains("session.activeProfileId == library.profileId"))
-        assertTrue(block.contains("session.activeLibrary == library.root.path"))
+        assertTrue(block.contains("activeProfileId = session.activeProfileId"))
+        assertTrue(block.contains("activeLibrary = session.activeLibrary"))
+    }
+
+    @Test
+    fun backendLibraryDisplayGroupsLibrariesUnderBackendRows() {
+        val block = settingsSource
+            .substringAfter("SettingsSectionCard(title = \"媒体库显示\"")
+            .substringBefore("state.clientStorageSources")
+
+        assertTrue(block.contains("groupBy { it.profileId }"))
+        assertTrue(block.contains("backendLibraryGroups"))
+        assertTrue(block.contains("BackendLibrarySelectorRow("))
+        assertTrue(settingsSource.contains("private fun BackendLibrarySelectorRow("))
+        assertTrue(settingsSource.contains("DropdownMenu("))
+        assertTrue(settingsSource.contains("DropdownMenuItem("))
+        assertTrue(settingsSource.contains("val selectedLibrary = libraries.firstOrNull"))
+        assertTrue(settingsSource.contains("val backendSelected = selectedLibrary != null"))
+        assertTrue(settingsSource.contains("if (backendSelected)"))
+        assertTrue(settingsSource.contains("if (isSelected) Icon(Icons.Default.CheckCircle"))
+        assertTrue(settingsSource.contains("onSelect(library.profileId, library.root.path)"))
     }
 
     @Test

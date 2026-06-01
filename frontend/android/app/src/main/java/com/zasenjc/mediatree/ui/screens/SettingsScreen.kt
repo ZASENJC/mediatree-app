@@ -522,17 +522,13 @@ fun SettingsScreen(
             }
             item {
                 SettingsSectionCard(title = "媒体库显示", icon = Icons.Default.Folder) {
-                    state.backendLibraries.forEach { library ->
-                        DesignSettingsRow(
-                            title = library.root.label.ifBlank { library.root.path.substringAfterLast("/") },
-                            subtitle = "${library.profileName} · ${library.providerType.labelText()} 媒体库 · ${library.root.movieCount} 项",
-                            icon = library.providerType.connectionIcon(),
-                            trailing = {
-                                if (session.activeProfileId == library.profileId && session.activeLibrary == library.root.path) {
-                                    Icon(Icons.Default.CheckCircle, contentDescription = "当前")
-                                }
-                            },
-                            onClick = { vm.selectBackendLibrary(library.profileId, library.root.path) },
+                    val backendLibraryGroups = state.backendLibraries.groupBy { it.profileId }
+                    backendLibraryGroups.forEach { (_, libraries) ->
+                        BackendLibrarySelectorRow(
+                            libraries = libraries,
+                            activeProfileId = session.activeProfileId,
+                            activeLibrary = session.activeLibrary,
+                            onSelect = vm::selectBackendLibrary,
                         )
                     }
                     state.clientStorageSources
@@ -626,6 +622,55 @@ fun SettingsScreen(
                 editingConnection = null
             },
         )
+    }
+}
+
+@Composable
+private fun BackendLibrarySelectorRow(
+    libraries: List<SettingsViewModel.BackendLibraryItem>,
+    activeProfileId: String,
+    activeLibrary: String,
+    onSelect: (String, String) -> Unit,
+) {
+    val firstLibrary = libraries.firstOrNull() ?: return
+    var expanded by remember(firstLibrary.profileId, libraries) { mutableStateOf(false) }
+    val selectedLibrary = libraries.firstOrNull {
+        activeProfileId == it.profileId && activeLibrary == it.root.path
+    }
+    val backendSelected = selectedLibrary != null
+    Box {
+        DesignSettingsRow(
+            title = firstLibrary.profileName,
+            subtitle = selectedLibrary?.let { library ->
+                "${library.root.displayName()} · ${library.root.movieCount} 项"
+            } ?: "${firstLibrary.providerType.labelText()} 后端 · ${libraries.size} 个媒体库",
+            icon = firstLibrary.providerType.connectionIcon(),
+            trailing = {
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (backendSelected) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
+                    Icon(Icons.Default.ChevronRight, contentDescription = null)
+                }
+            },
+            onClick = { expanded = true },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            libraries.forEach { library ->
+                val isSelected = activeProfileId == library.profileId && activeLibrary == library.root.path
+                DropdownMenuItem(
+                    text = {
+                        Text("${library.root.displayName()} · ${library.root.movieCount} 项")
+                    },
+                    leadingIcon = { Icon(library.providerType.connectionIcon(), contentDescription = null) },
+                    trailingIcon = {
+                        if (isSelected) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
+                    },
+                    onClick = {
+                        expanded = false
+                        onSelect(library.profileId, library.root.path)
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -1006,6 +1051,9 @@ private fun ServerProfile.connectionStatus(session: Session): String = when {
 
 private fun ServerProfile.displayName(): String =
     displayName.ifBlank { serverUrl.ifBlank { type.labelText() } }
+
+private fun MediaRootDto.displayName(): String =
+    label.ifBlank { path.substringAfterLast("/") }.ifBlank { path }
 
 private fun ServerProfile.canLoadMediaRoots(): Boolean = when (type) {
     ProviderType.MediaTree -> serverUrl.isNotBlank()
