@@ -111,16 +111,19 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
-    fun subtitleMenuUsesCompactTriggerLabel() {
+    fun playerControlMenusUseIconOnlyTriggers() {
         val player = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
             .readText()
-        val menuStart = player.indexOf("private fun SubtitleTrackMenu(")
-        val menuEnd = player.indexOf("@Composable\nprivate fun AudioTrackMenu", menuStart)
-        val subtitleMenu = player.substring(menuStart, menuEnd)
 
-        assertTrue(subtitleMenu.contains("label = \"字幕\""))
-        assertFalse(subtitleMenu.contains("subtitleLabel() ?: \"字幕\""))
+        assertFalse(player.contains("AssistChip("))
+        assertFalse(player.contains("private fun PlayerMenuChip("))
+        assertTrue(player.contains("private fun PlayerIconMenuButton("))
+        assertTrue(player.contains("contentDescription = \"播放速度\""))
+        assertTrue(player.contains("contentDescription = \"字幕\""))
+        assertTrue(player.contains("contentDescription = \"音轨\""))
+        assertTrue(player.contains("contentDescription = \"画面比例\""))
+        assertTrue(player.contains("contentDescription = if (isFullscreen) \"退出全屏\" else \"全屏\""))
     }
 
     @Test

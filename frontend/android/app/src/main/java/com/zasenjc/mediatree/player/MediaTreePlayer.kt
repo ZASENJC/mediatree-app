@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.SyncProblem
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -56,9 +55,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -690,17 +689,16 @@ private fun LockButton(playerLocked: Boolean, onToggleLock: () -> Unit) {
 
 @Composable
 private fun FullscreenControl(isFullscreen: Boolean, onFullscreenRequest: () -> Unit) {
-    PlayerMenuChip(
-        icon = {
-            Icon(
-                if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                contentDescription = null,
-            )
-        },
-        label = if (isFullscreen) "退出全屏" else "全屏",
-        expanded = false,
-        onExpandedChange = { onFullscreenRequest() },
+    IconButton(
+        onClick = onFullscreenRequest,
+        modifier = Modifier.size(40.dp),
     ) {
+        Icon(
+            imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+            contentDescription = if (isFullscreen) "退出全屏" else "全屏",
+            tint = Color.White,
+            modifier = Modifier.size(21.dp),
+        )
     }
 }
 
@@ -719,15 +717,15 @@ private fun PlayerLock(playerLocked: Boolean, modifier: Modifier = Modifier, onT
 @Composable
 private fun PlaybackSpeedMenu(selectedSpeed: Double, onSpeedChange: (Double) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    PlayerMenuChip(
-        icon = { Icon(Icons.Default.Speed, contentDescription = null) },
-        label = "${selectedSpeed.formatSpeed()}x",
+    PlayerIconMenuButton(
+        imageVector = Icons.Default.Speed,
+        contentDescription = "播放速度",
         expanded = expanded,
         onExpandedChange = { expanded = it },
     ) {
         PlayerSpeeds.forEach { speed ->
             DropdownMenuItem(
-                text = { Text("${speed.formatSpeed()}x") },
+                text = { Text(if (speed == selectedSpeed) "${speed.formatSpeed()}x · 当前" else "${speed.formatSpeed()}x") },
                 onClick = {
                     expanded = false
                     onSpeedChange(speed)
@@ -744,14 +742,14 @@ private fun SubtitleTrackMenu(
     onSubtitleChange: (PlaybackSubtitleTrack?) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    PlayerMenuChip(
-        icon = { Icon(Icons.Default.Subtitles, contentDescription = null) },
-        label = "字幕",
+    PlayerIconMenuButton(
+        imageVector = Icons.Default.Subtitles,
+        contentDescription = "字幕",
         expanded = expanded,
         onExpandedChange = { expanded = it },
     ) {
         DropdownMenuItem(
-            text = { Text("关闭字幕") },
+            text = { Text(if (selectedSubtitle < 0) "关闭字幕 · 当前" else "关闭字幕") },
             onClick = {
                 expanded = false
                 onSubtitleChange(null)
@@ -777,10 +775,9 @@ private fun AudioTrackMenu(
     onAudioTrackChange: (MpvTrackOption) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val label = tracks.firstOrNull { it.id == selectedAudioTrackId }?.label ?: "音轨"
-    PlayerMenuChip(
-        icon = { Icon(Icons.Default.Audiotrack, contentDescription = null) },
-        label = label,
+    PlayerIconMenuButton(
+        imageVector = Icons.Default.Audiotrack,
+        contentDescription = "音轨",
         expanded = expanded,
         onExpandedChange = {
             if (it) onAudioMenuOpen()
@@ -790,7 +787,7 @@ private fun AudioTrackMenu(
     ) {
         tracks.forEach { track ->
             DropdownMenuItem(
-                text = { Text(track.label) },
+                text = { Text(if (track.id == selectedAudioTrackId) "${track.label} · 当前" else track.label) },
                 onClick = {
                     expanded = false
                     onAudioTrackChange(track)
@@ -806,16 +803,15 @@ private fun AspectRatioMenu(
     onAspectRatioChange: (PlayerMenuOption) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val label = AspectRatioOptions.firstOrNull { it.id == selectedAspectRatio }?.label ?: "默认"
-    PlayerMenuChip(
-        icon = { Icon(Icons.Default.AspectRatio, contentDescription = null) },
-        label = label,
+    PlayerIconMenuButton(
+        imageVector = Icons.Default.AspectRatio,
+        contentDescription = "画面比例",
         expanded = expanded,
         onExpandedChange = { expanded = it },
     ) {
         AspectRatioOptions.forEach { option ->
             DropdownMenuItem(
-                text = { Text(option.label) },
+                text = { Text(if (option.id == selectedAspectRatio) "${option.label} · 当前" else option.label) },
                 onClick = {
                     expanded = false
                     onAspectRatioChange(option)
@@ -826,32 +822,27 @@ private fun AspectRatioMenu(
 }
 
 @Composable
-private fun PlayerMenuChip(
-    icon: @Composable () -> Unit,
-    label: String,
+private fun PlayerIconMenuButton(
+    imageVector: ImageVector,
+    contentDescription: String,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     Box {
-        AssistChip(
+        IconButton(
             enabled = enabled,
             onClick = { onExpandedChange(true) },
-            leadingIcon = {
-                Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
-                    icon()
-                }
-            },
-            label = {
-                Text(
-                    label,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-        )
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(
+                imageVector = imageVector,
+                contentDescription = contentDescription,
+                tint = Color.White,
+                modifier = Modifier.size(21.dp),
+            )
+        }
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { onExpandedChange(false) },
