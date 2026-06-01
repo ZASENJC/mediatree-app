@@ -43,7 +43,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -379,15 +378,6 @@ fun MediaTreePlayer(
             }
         }
 
-        if (!showOverlay && !playerLocked) {
-            PlayerProgressBar(
-                progress = playbackProgress(positionSeconds, durationSeconds, percentPosition),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth(),
-            )
-        }
-
         if (showOverlay) {
             LaunchedEffect(showOverlay, playerLocked) {
                 if (!playerLocked) {
@@ -626,16 +616,6 @@ private fun PlayerControlsOverlay(
 }
 
 @Composable
-private fun PlayerProgressBar(progress: Float, modifier: Modifier = Modifier) {
-    LinearProgressIndicator(
-        progress = { progress },
-        modifier = modifier.height(2.dp),
-        color = Color.White,
-        trackColor = Color.White.copy(alpha = 0.22f),
-    )
-}
-
-@Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun PlayerSeekBar(
     positionSeconds: Double,
@@ -674,7 +654,7 @@ private fun PlayerSeekBar(
             disabledInactiveTrackColor = Color.White.copy(alpha = 0.22f),
         ),
         thumb = {
-            Box(Modifier.offset(y = (-6).dp).size(12.dp).background(Color.White, CircleShape))
+            Box(Modifier.offset(y = 4.dp).size(12.dp).background(Color.White, CircleShape))
         },
         track = { sliderState ->
             ThinPlayerSliderTrack(progress = sliderState.value, enabled = durationSeconds > 0.0)

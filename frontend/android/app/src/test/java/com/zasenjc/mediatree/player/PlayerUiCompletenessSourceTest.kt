@@ -27,8 +27,9 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("AudioTrackMenu"))
         assertTrue(player.contains("AspectRatioMenu"))
         assertTrue(player.contains("PlayerErrorOverlay"))
-        assertTrue(player.contains("PlayerProgressBar"))
         assertTrue(player.contains("PlayerSeekBar"))
+        assertFalse(player.contains("PlayerProgressBar"))
+        assertFalse(player.contains("LinearProgressIndicator"))
         assertTrue(player.contains("Slider("))
         assertTrue(player.contains("controller.seekTo"))
         assertTrue(player.contains("controller.seekBy(deltaSeconds)"))
@@ -134,8 +135,11 @@ class PlayerUiCompletenessSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
             .readText()
         val overlayStart = player.indexOf("private fun PlayerControlsOverlay(")
-        val overlayEnd = player.indexOf("@Composable\nprivate fun PlayerProgressBar", overlayStart)
+        val overlayEnd = player.indexOf("@Composable\n@OptIn(ExperimentalMaterial3Api::class)\nprivate fun PlayerSeekBar", overlayStart)
         val overlayBlock = player.substring(overlayStart, overlayEnd)
+        val trackBlock = player
+            .substringAfter("private fun ThinPlayerSliderTrack(")
+            .substringBefore("@Composable\nprivate fun PlayPauseControl")
         val playIndex = overlayBlock.indexOf("PlayPauseControl(isPlaying = isPlaying, onTogglePlay = onTogglePlay)")
         val speedIndex = overlayBlock.indexOf("PlaybackSpeedMenu(selectedSpeed = playbackSpeed")
 
@@ -145,12 +149,24 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(speedIndex > playIndex)
         assertFalse(overlayBlock.contains(".align(Alignment.Center)"))
         assertFalse(overlayBlock.contains("Color.Black.copy(alpha = 0.36f)"))
-        assertTrue(player.contains("modifier = modifier.height(2.dp)"))
         assertTrue(player.contains("private fun ThinPlayerSliderTrack("))
         assertTrue(player.contains("modifier = modifier.height(20.dp)"))
-        assertTrue(player.contains("Modifier.offset(y = (-6).dp).size(12.dp).background(Color.White, CircleShape)"))
-        assertTrue(player.contains(".height(2.dp)"))
-        assertTrue(player.contains(".background(trackColor, RoundedCornerShape(50))"))
+        assertTrue(player.contains("Modifier.offset(y = 4.dp).size(12.dp).background(Color.White, CircleShape)"))
+        assertTrue(trackBlock.contains(".height(2.dp)"))
+        assertTrue(trackBlock.contains(".background(trackColor, RoundedCornerShape(50))"))
+    }
+
+    @Test
+    fun playerDoesNotShowCollapsedBottomProgressBar() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+
+        assertFalse(player.contains("if (!showOverlay && !playerLocked)"))
+        assertFalse(player.contains("PlayerProgressBar("))
+        assertFalse(player.contains("private fun PlayerProgressBar"))
+        assertFalse(player.contains("LinearProgressIndicator"))
+        assertTrue(player.contains("PlayerSeekBar("))
     }
 
     @Test
@@ -166,7 +182,7 @@ class PlayerUiCompletenessSourceTest {
             .substringBefore("@Composable\nprivate fun PlayPauseControl")
 
         assertTrue(seekBarBlock.contains("thumb = {"))
-        assertTrue(seekBarBlock.contains("Modifier.offset(y = (-6).dp).size(12.dp).background(Color.White, CircleShape)"))
+        assertTrue(seekBarBlock.contains("Modifier.offset(y = 4.dp).size(12.dp).background(Color.White, CircleShape)"))
         assertTrue(trackBlock.contains("modifier = modifier.height(12.dp).fillMaxWidth()"))
         assertTrue(trackBlock.contains("contentAlignment = Alignment.CenterStart"))
         assertTrue(trackBlock.contains(".background(trackColor, RoundedCornerShape(50))"))
