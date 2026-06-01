@@ -223,6 +223,24 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
+    fun mediaTreeDetailSyncsPlaybackProgressWhenLeavingOrSwitchingEpisodes() {
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+
+        assertTrue(detailScreen.contains("fun syncPlaybackProgress(providerType: ProviderType, movieId: Int, snapshot: PlaybackPositionSnapshot?)"))
+        assertTrue(detailScreen.contains("mediaTreeResumePosition(provider.progress(movieId))"))
+        assertTrue(detailScreen.contains("vm.syncPlaybackProgress(session.activeProviderType, movieId, snapshot)"))
+        assertTrue(detailScreen.contains("capturePlaybackPosition(syncToBackend = true)"))
+        assertTrue(detailScreen.contains("val onSelectEpisode: (Int) -> Unit = { episodeId ->"))
+        assertTrue(detailScreen.contains("capturePlaybackPosition(syncToBackend = true)"))
+        assertTrue(detailScreen.contains("DisposableEffect(activeMovieId, session.activeProviderType)"))
+        assertTrue(detailScreen.contains("val playingMovieId = activeMovieId"))
+        assertTrue(detailScreen.contains("onDispose { capturePlaybackPosition(movieId = playingMovieId, syncToBackend = true) }"))
+        assertTrue(detailScreen.contains("stopped = true"))
+    }
+
+    @Test
     fun detailPagePortraitInfoStartsTwelveDpBelowPlayer() {
         val detailScreen = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")

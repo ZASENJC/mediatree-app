@@ -88,6 +88,7 @@ import com.zasenjc.mediatree.data.MediaInfoDto
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.PersonCreditDto
 import com.zasenjc.mediatree.data.ProviderType
+import com.zasenjc.mediatree.data.ProgressDto
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.SubtitleTrackDto
 import com.zasenjc.mediatree.data.viewModelFactory
@@ -114,6 +115,12 @@ import androidx.compose.ui.graphics.Color
 
 private const val ExitPlayerReleaseDelayMillis = 120L
 
+fun mediaTreeResumePosition(progress: ProgressDto): Double {
+    val position = progress.position.takeIf { it.isFinite() && it >= 5.0 } ?: return 0.0
+    if (progress.played || progress.progressPercent >= 95.0) return 0.0
+    return position
+}
+
 class DetailViewModel(private val container: AppContainer) : ViewModel() {
     data class UiState(
         val loading: Boolean = true,
@@ -135,7 +142,7 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
             try {
                 val provider = container.mediaProviderFor(providerType)
                 val movie = provider.detail(movieId)
-                val resume = provider.progress(movieId).position
+                val resume = mediaTreeResumePosition(provider.progress(movieId))
                 val subs = runCatching { provider.subtitleTracks(movieId) }.getOrDefault(emptyList())
                 val mediaInfo = runCatching { provider.mediaInfo(movieId) }.getOrNull()
                 val seriesFolder = seriesFolderFor(movie)
@@ -199,6 +206,21 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun syncPlaybackProgress(providerType: ProviderType, movieId: Int, snapshot: PlaybackPositionSnapshot?) {
+        val position = snapshot?.positionSeconds?.takeIf { it.isFinite() && it > 0.0 } ?: return
+        val duration = snapshot.durationSeconds.takeIf { it.isFinite() && it > 0.0 }
+        viewModelScope.launch {
+            runCatching {
+                container.mediaProviderFor(providerType).saveProgress(
+                    movieId = movieId,
+                    position = position,
+                    duration = duration,
+                    stopped = true,
+                )
+            }
+        }
+    }
+
     fun onPlaybackComplete(providerType: ProviderType, movieId: Int, position: Double, duration: Double) {
         viewModelScope.launch {
             val provider = container.mediaProviderFor(providerType)
@@ -238,13 +260,17 @@ fun DetailScreen(
     val contentSnapshots = remember { mutableStateMapOf<Int, DetailViewModel.UiState>() }
     val activeMovie = state.movie?.takeIf { it.id == activeMovieId }
 
-    fun leaveDetail() {
-        leavingDetail = true
+    fun capturePlaybackPosition(movieId: Int = activeMovieId, syncToBackend: Boolean = false) {
+        val snapshot = playbackPositionSnapshot?.invoke() ?: return
+        playbackPositions[movieId] = snapshot.positionSeconds
+        if (syncToBackend) {
+            vm.syncPlaybackProgress(session.activeProviderType, movieId, snapshot)
+        }
     }
 
-    fun capturePlaybackPosition() {
-        val snapshot = playbackPositionSnapshot?.invoke() ?: return
-        playbackPositions[activeMovieId] = snapshot.positionSeconds
+    fun leaveDetail() {
+        capturePlaybackPosition(syncToBackend = true)
+        leavingDetail = true
     }
 
     val playerFullscreen = fullscreenRequested || isLandscape
@@ -254,6 +280,10 @@ fun DetailScreen(
     }
     DisposableEffect(Unit) {
         onDispose { onChromeVisibleChange(true) }
+    }
+    DisposableEffect(activeMovieId, session.activeProviderType) {
+        val playingMovieId = activeMovieId
+        onDispose { capturePlaybackPosition(movieId = playingMovieId, syncToBackend = true) }
     }
     BackHandler {
         if (playerFullscreen) {
@@ -323,6 +353,7 @@ fun DetailScreen(
 
     val onSelectEpisode: (Int) -> Unit = { episodeId ->
         if (episodeId != activeMovieId) {
+            capturePlaybackPosition(syncToBackend = true)
             activeMovieId = episodeId
         }
     }
