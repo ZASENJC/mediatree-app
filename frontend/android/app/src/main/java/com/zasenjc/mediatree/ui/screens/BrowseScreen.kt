@@ -1,6 +1,7 @@
 package com.zasenjc.mediatree.ui.screens
 
 import android.graphics.Bitmap
+import android.os.Build
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -843,22 +844,6 @@ private fun MountedVideoThumbnail(
                 modifier = Modifier.padding(7.dp).size(20.dp),
             )
         }
-        val extension = movie.fileExtensionLabel()
-        if (extension.isNotBlank()) {
-            Surface(
-                modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
-                shape = RoundedCornerShape(6.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ) {
-                Text(
-                    text = extension,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    maxLines = 1,
-                )
-            }
-        }
     }
 }
 
@@ -1089,6 +1074,9 @@ private data class MountedVideoThumbnailSource(
 )
 
 private val mountedVideoFrameCache = ConcurrentHashMap<String, Bitmap>()
+private val mountedVideoFrameDispatcher = Dispatchers.IO.limitedParallelism(2)
+private const val MountedVideoFrameWidth = 360
+private const val MountedVideoFrameHeight = 540
 
 private fun mountedVideoThumbnailCacheKey(
     source: ClientStorageSource?,
@@ -1104,15 +1092,28 @@ private fun mountedVideoThumbnailCacheKey(
 }
 
 private suspend fun loadMountedVideoFrame(source: MountedVideoThumbnailSource): Bitmap? =
-    mountedVideoFrameCache[source.cacheKey] ?: withContext(Dispatchers.IO) {
+    mountedVideoFrameCache[source.cacheKey] ?: withContext(mountedVideoFrameDispatcher) {
         runCatching {
             MediaMetadataRetriever().use { retriever ->
                 retriever.setDataSource(source.uri, source.headers)
-                retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                retriever.scaledFrameAtStart()
             }?.also { frame ->
                 mountedVideoFrameCache[source.cacheKey] = frame
             }
         }.getOrNull()
+    }
+
+private fun MediaMetadataRetriever.scaledFrameAtStart(): Bitmap? =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+        getScaledFrameAtTime(
+            0L,
+            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+            MountedVideoFrameWidth,
+            MountedVideoFrameHeight,
+        )
+    } else {
+        getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            ?.let { Bitmap.createScaledBitmap(it, MountedVideoFrameWidth, MountedVideoFrameHeight, true) }
     }
 
 private fun mountedVideoThumbnailSource(
