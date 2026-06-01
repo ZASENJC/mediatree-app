@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -366,25 +365,12 @@ fun DetailScreen(
                     onFavorite = { vm.toggleFavorite(session.activeProviderType) },
                     onWatched = { vm.markWatched(session.activeProviderType) },
                 )
-                isLandscape -> LandscapeDetailScaffold(
-                    activeMovie = activeMovie,
-                    state = state,
-                    contentSnapshots = contentSnapshots,
-                    container = container,
-                    session = session,
-                    onSelectEpisode = onSelectEpisode,
-                    onNavigate = onNavigate,
-                    onFavorite = { vm.toggleFavorite(session.activeProviderType) },
-                    onWatched = { vm.markWatched(session.activeProviderType) },
-                )
             }
 
             if (activeMovie != null && !leavingDetail) {
                 val playerModifier = if (isLandscape) {
                     Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(0.58f)
-                        .align(Alignment.CenterStart)
+                        .fillMaxSize()
                 } else {
                     Modifier
                         .fillMaxWidth()
