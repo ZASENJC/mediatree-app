@@ -239,6 +239,8 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 session = session,
                                 onNavigate = ::handleAppNavigate,
                                 onError = onError,
+                                browseViewMode = browseViewMode,
+                                onBrowseViewModeChange = { browseViewMode = it },
                                 chromeVisible = chromeVisible,
                                 onChromeVisibleChange = { chromeVisible = it },
                             )

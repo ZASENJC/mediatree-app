@@ -36,7 +36,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -260,20 +259,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun openDirectoryItem(item: FolderNodeDto, onNavigate: (String) -> Unit) {
-        if (_state.value.openingPath == item.path) return
-        _state.update { it.copy(openingPath = item.path, error = null) }
-        val smbSourceId = item.mediaRoot?.smbLibrarySourceId()
-        val webDavSourceId = item.mediaRoot?.webDavLibrarySourceId()
-        if (smbSourceId != null) {
-            onNavigate("smb/$smbSourceId?path=${android.net.Uri.encode(item.path)}")
-        } else if (webDavSourceId != null) {
-            onNavigate("webdav/$webDavSourceId?path=${android.net.Uri.encode(item.path)}")
-        } else {
-            onNavigate("browse?folder=${android.net.Uri.encode(item.path)}")
-        }
-        _state.update { it.copy(openingPath = null) }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -283,16 +268,33 @@ fun HomeScreen(
     session: Session,
     onNavigate: (String) -> Unit,
     onError: (Throwable) -> Unit,
+    browseViewMode: String,
+    onBrowseViewModeChange: (String) -> Unit,
     chromeVisible: Boolean = true,
     onChromeVisibleChange: (Boolean) -> Unit = {},
 ) {
+    val homeLayout by container.uiPreferencesStore.homeLayoutFlow.collectAsStateWithLifecycle(initialValue = HomeLayoutPreference.MediaFeed)
+    if (homeLayout == HomeLayoutPreference.DirectoryFirst) {
+        BrowseScreen(
+            container = container,
+            session = session,
+            onNavigate = onNavigate,
+            onError = onError,
+            initialFolder = "",
+            viewMode = browseViewMode,
+            onViewModeChange = onBrowseViewModeChange,
+            chromeVisible = chromeVisible,
+            onChromeVisibleChange = onChromeVisibleChange,
+        )
+        return
+    }
+
     val vm: HomeViewModel = viewModel(factory = viewModelFactory { HomeViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
     var showSearch by remember { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
     var showMore by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
-    val homeLayout by container.uiPreferencesStore.homeLayoutFlow.collectAsStateWithLifecycle(initialValue = HomeLayoutPreference.MediaFeed)
 
     SyncChromeWithGridScroll(gridState, onChromeVisibleChange)
 
@@ -317,7 +319,6 @@ fun HomeScreen(
     val provider = remember(session.activeProviderType, container) {
         container.mediaProviderFor(session.activeProviderType)
     }
-    val showMediaFeed = homeLayout == HomeLayoutPreference.MediaFeed
 
     Scaffold(containerColor = Color.Transparent) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -329,7 +330,7 @@ fun HomeScreen(
                 EmptyMediaState("请先在设置页连接 MediaTree 服务器")
             } else if (state.loading) {
                 LoadingPane(Modifier.fillMaxSize())
-            } else if (showMediaFeed) {
+            } else {
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Adaptive(104.dp),
@@ -371,33 +372,6 @@ fun HomeScreen(
                                         providerType = session.activeProviderType,
                                         item = item,
                                         fallbackMediaRoot = session.activeLibrary,
-                                        onNavigate = onNavigate,
-                                    )
-                                },
-                            )
-                        }
-                    }
-                }
-            } else {
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Fixed(1),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 20.dp, top = 86.dp, end = 20.dp, bottom = 116.dp),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    item(contentType = "section") { HomeSectionHeader("目录") }
-                    if (state.libraryItems.isEmpty()) {
-                        item(contentType = "empty") { EmptyMediaState("暂无目录") }
-                    } else {
-                        items(state.libraryItems, key = { it.path }, contentType = { "directory-row" }) { item ->
-                            HomeDirectoryRow(
-                                item = item,
-                                opening = state.openingPath == item.path,
-                                onClick = {
-                                    vm.openDirectoryItem(
-                                        item = item,
                                         onNavigate = onNavigate,
                                     )
                                 },
@@ -594,57 +568,6 @@ private fun HomeMediaPosterCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )
-    }
-}
-
-@Composable
-private fun HomeDirectoryRow(
-    item: FolderNodeDto,
-    opening: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val title = item.name.ifBlank { item.path.substringAfterLast("/").ifBlank { item.displayTitle ?: item.path } }
-    Surface(
-        modifier = modifier.fillMaxWidth().clickable(enabled = !opening, onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 1.dp,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.primary,
-            ) {
-                Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.padding(9.dp).size(24.dp))
-            }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = item.directoryMeta(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (opening) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp))
-            } else {
-                Icon(Icons.Default.MoreVert, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
     }
 }
 
@@ -1012,12 +935,6 @@ private fun WebDavEntry.toMovieDto(source: ClientStorageSource): MovieDto = Movi
 )
 
 private fun FolderNodeDto.homeTitle(): String = displayTitle ?: name.ifBlank { path }
-
-private fun FolderNodeDto.directoryMeta(): String {
-    val count = if (movieCount > 0) "$movieCount 项" else "文件夹"
-    val location = path.takeIf { it.isNotBlank() } ?: mediaRoot.orEmpty()
-    return listOf(count, location).filter { it.isNotBlank() }.joinToString(" · ")
-}
 
 private fun FolderNodeDto.detailRoute(): String =
     "detail/${path.toMovieRouteId()}?providerItemId=${Uri.encode(path)}"

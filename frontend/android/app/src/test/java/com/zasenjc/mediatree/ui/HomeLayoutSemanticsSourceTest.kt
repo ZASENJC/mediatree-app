@@ -9,27 +9,28 @@ class HomeLayoutSemanticsSourceTest {
     private val appRoot = File(System.getProperty("user.dir") ?: ".")
 
     @Test
-    fun mediaFeedUsesGroupedMediaPostersAndDirectoryFirstUsesFolderRows() {
+    fun mediaFeedUsesGroupedMediaPostersAndDirectoryFirstReusesBrowseScreen() {
         val source = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
             .readText()
         val mediaFeedBlock = source
             .substringAfter("} else if (showMediaFeed) {")
-            .substringBefore("columns = GridCells.Fixed(1)")
-        val directoryBlock = source
-            .substringAfter("columns = GridCells.Fixed(1)")
             .substringBefore("AnimatedVisibility(")
+        val directoryFirstBlock = source
+            .substringAfter("if (homeLayout == HomeLayoutPreference.DirectoryFirst) {")
+            .substringBefore("val vm: HomeViewModel")
 
         assertTrue(mediaFeedBlock.contains("state.libraryItems"))
         assertTrue(mediaFeedBlock.contains("HomeMediaPosterCard"))
         assertTrue(mediaFeedBlock.contains("vm.openLibraryItem"))
         assertFalse(mediaFeedBlock.contains("state.feedMovies.isEmpty()"))
 
-        assertTrue(directoryBlock.contains("HomeDirectoryRow"))
-        assertTrue(directoryBlock.contains("vm.openDirectoryItem"))
-        assertTrue(source.contains("columns = GridCells.Fixed(1)"))
+        assertTrue(directoryFirstBlock.contains("BrowseScreen("))
+        assertTrue(directoryFirstBlock.contains("initialFolder = \"\""))
+        assertTrue(directoryFirstBlock.contains("viewMode = browseViewMode"))
+        assertTrue(directoryFirstBlock.contains("onViewModeChange = onBrowseViewModeChange"))
         assertTrue(source.contains("webDavLibrarySourceId"))
-        assertFalse(directoryBlock.contains("HomeMediaPosterCard"))
+        assertFalse(source.contains("HomeDirectoryRow("))
     }
 
     @Test
