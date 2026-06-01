@@ -1,5 +1,6 @@
 package com.zasenjc.mediatree.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -638,7 +639,7 @@ private fun BackendLibrarySelectorRow(
         activeProfileId == it.profileId && activeLibrary == it.root.path
     }
     val backendSelected = selectedLibrary != null
-    Box {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         DesignSettingsRow(
             title = firstLibrary.profileName,
             subtitle = selectedLibrary?.let { library ->
@@ -651,24 +652,26 @@ private fun BackendLibrarySelectorRow(
                     Icon(Icons.Default.ChevronRight, contentDescription = null)
                 }
             },
-            onClick = { expanded = true },
+            onClick = { expanded = !expanded },
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            libraries.forEach { library ->
-                val isSelected = activeProfileId == library.profileId && activeLibrary == library.root.path
-                DropdownMenuItem(
-                    text = {
-                        Text("${library.root.displayName()} · ${library.root.movieCount} 项")
-                    },
-                    leadingIcon = { Icon(library.providerType.connectionIcon(), contentDescription = null) },
-                    trailingIcon = {
-                        if (isSelected) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
-                    },
-                    onClick = {
-                        expanded = false
-                        onSelect(library.profileId, library.root.path)
-                    },
-                )
+        AnimatedVisibility(visible = expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                libraries.forEach { library ->
+                    val isSelected = activeProfileId == library.profileId && activeLibrary == library.root.path
+                    DesignSettingsRow(
+                        title = library.root.displayName(),
+                        subtitle = "${firstLibrary.providerType.labelText()} 媒体库 · ${library.root.movieCount} 项",
+                        icon = library.providerType.connectionIcon(),
+                        modifier = Modifier.padding(start = 18.dp),
+                        trailing = {
+                            if (isSelected) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
+                        },
+                        onClick = {
+                            expanded = false
+                            onSelect(library.profileId, library.root.path)
+                        },
+                    )
+                }
             }
         }
     }

@@ -68,8 +68,15 @@ class SettingsDisplaySelectionSourceTest {
         assertTrue(block.contains("backendLibraryGroups"))
         assertTrue(block.contains("BackendLibrarySelectorRow("))
         assertTrue(settingsSource.contains("private fun BackendLibrarySelectorRow("))
-        assertTrue(settingsSource.contains("DropdownMenu("))
-        assertTrue(settingsSource.contains("DropdownMenuItem("))
+        val selectorBlock = settingsSource
+            .substringAfter("private fun BackendLibrarySelectorRow(")
+            .substringBefore("@Composable\nprivate fun ConnectionsSection")
+
+        assertFalse(selectorBlock.contains("DropdownMenu("))
+        assertFalse(selectorBlock.contains("DropdownMenuItem("))
+        assertTrue(selectorBlock.contains("AnimatedVisibility(visible = expanded)"))
+        assertTrue(selectorBlock.contains("DesignSettingsRow("))
+        assertTrue(selectorBlock.contains("Modifier.padding(start = 18.dp)"))
         assertTrue(settingsSource.contains("val selectedLibrary = libraries.firstOrNull"))
         assertTrue(settingsSource.contains("val backendSelected = selectedLibrary != null"))
         assertTrue(settingsSource.contains("if (backendSelected)"))
