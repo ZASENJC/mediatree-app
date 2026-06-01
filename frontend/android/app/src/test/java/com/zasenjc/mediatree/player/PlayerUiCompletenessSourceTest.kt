@@ -184,4 +184,15 @@ class PlayerUiCompletenessSourceTest {
         assertFalse(player.contains("import androidx.compose.ui.graphics.graphicsLayer"))
         assertFalse(player.contains(".graphicsLayer"))
     }
+
+    @Test
+    fun playbackKeepsScreenAwakeOnlyWhilePlayerIsComposed() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+
+        assertTrue(player.contains("WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON"))
+        assertTrue(player.contains("window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)"))
+        assertTrue(player.contains("window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)"))
+    }
 }

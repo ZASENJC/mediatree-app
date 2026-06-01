@@ -71,4 +71,17 @@ class SmbBrowserSourceTest {
         assertTrue(sharedPlayerSource.contains("SkipPrevious"))
         assertTrue(sharedPlayerSource.contains("SkipNext"))
     }
+
+    @Test
+    fun smbPlayerDetailsSitDirectlyBelowPlayerWithoutTopTitle() {
+        val screenSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SmbBrowseScreen.kt")
+            .readText()
+
+        assertFalse(screenSource.contains("title = { Text(storageFileName(currentPath)"))
+        assertTrue(screenSource.contains("title = {},"))
+        assertTrue(screenSource.contains("Spacer(Modifier.height(12.dp))"))
+        assertTrue(screenSource.contains("ClientStoragePlayerDetails("))
+        assertFalse(screenSource.contains(".align(Alignment.BottomCenter)"))
+    }
 }

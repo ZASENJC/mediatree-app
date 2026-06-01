@@ -315,7 +315,7 @@ fun WebDavPlayerScreen(
         topBar = {
             if (!isLandscape) {
                 TopAppBar(
-                    title = { Text(storageFileName(currentPath).ifBlank { "WebDAV 播放" }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    title = {},
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -341,40 +341,40 @@ fun WebDavPlayerScreen(
                 error != null -> ErrorPane(message = error?.message ?: "WebDAV 播放源加载失败", modifier = Modifier.fillMaxSize())
                 playbackSource == null -> LoadingPane(Modifier.fillMaxSize())
                 else -> {
-                    val playerModifier = if (isLandscape) {
-                        Modifier.fillMaxSize()
+                    if (isLandscape) {
+                        MediaTreePlayer(
+                            playbackSource = playbackSource,
+                            startPosition = positionSeconds,
+                            onPlaybackPositionChange = { pos, _ -> positionSeconds = pos },
+                            isFullscreen = true,
+                            showFullscreenButton = true,
+                            showAspectRatioControls = true,
+                            onFullscreenRequest = {
+                                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     } else {
-                        Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
-                            .align(Alignment.TopCenter)
-                    }
-                    MediaTreePlayer(
-                        playbackSource = playbackSource,
-                        startPosition = positionSeconds,
-                        onPlaybackPositionChange = { pos, _ -> positionSeconds = pos },
-                        isFullscreen = isLandscape,
-                        showFullscreenButton = true,
-                        showAspectRatioControls = isLandscape,
-                        onFullscreenRequest = {
-                            activity?.requestedOrientation = if (isLandscape) {
-                                ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
-                            } else {
-                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                            }
-                        },
-                        modifier = playerModifier,
-                    )
-                    if (!isLandscape) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 16.dp)
-                                .align(Alignment.BottomCenter)
-                                .padding(horizontal = 16.dp, vertical = 24.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                .align(Alignment.TopCenter),
                         ) {
-                            Spacer(Modifier.height(0.dp))
+                            MediaTreePlayer(
+                                playbackSource = playbackSource,
+                                startPosition = positionSeconds,
+                                onPlaybackPositionChange = { pos, _ -> positionSeconds = pos },
+                                isFullscreen = false,
+                                showFullscreenButton = true,
+                                showAspectRatioControls = false,
+                                onFullscreenRequest = {
+                                    activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(16f / 9f),
+                            )
+                            Spacer(Modifier.height(12.dp))
                             ClientStoragePlayerDetails(
                                 fileName = storageFileName(currentPath),
                                 originalPath = sameFolderVideos
@@ -388,7 +388,9 @@ fun WebDavPlayerScreen(
                                     positionSeconds = 0.0
                                     currentPath = item.path
                                 },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
                             )
                         }
                     }
