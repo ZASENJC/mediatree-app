@@ -54,10 +54,12 @@ class PlayerUiCompletenessSourceTest {
 
     @Test
     fun doubleTapUsesSideZonesAndCenterPause() {
+        assertEquals(PlayerDoubleTapAction.TogglePlay, playerDoubleTapAction(tapX = 70f, width = 300))
         assertEquals(PlayerDoubleTapAction.Rewind, playerDoubleTapAction(tapX = 20f, width = 300))
         assertEquals(PlayerDoubleTapAction.TogglePlay, playerDoubleTapAction(tapX = 100f, width = 300))
         assertEquals(PlayerDoubleTapAction.TogglePlay, playerDoubleTapAction(tapX = 150f, width = 300))
         assertEquals(PlayerDoubleTapAction.TogglePlay, playerDoubleTapAction(tapX = 200f, width = 300))
+        assertEquals(PlayerDoubleTapAction.TogglePlay, playerDoubleTapAction(tapX = 230f, width = 300))
         assertEquals(PlayerDoubleTapAction.Forward, playerDoubleTapAction(tapX = 280f, width = 300))
     }
 
@@ -124,6 +126,29 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("contentDescription = \"音轨\""))
         assertTrue(player.contains("contentDescription = \"画面比例\""))
         assertTrue(player.contains("contentDescription = if (isFullscreen) \"退出全屏\" else \"全屏\""))
+    }
+
+    @Test
+    fun playerPlayButtonLivesInBottomIconControlsAndProgressIsThin() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+        val overlayStart = player.indexOf("private fun PlayerControlsOverlay(")
+        val overlayEnd = player.indexOf("@Composable\nprivate fun PlayerProgressBar", overlayStart)
+        val overlayBlock = player.substring(overlayStart, overlayEnd)
+        val playIndex = overlayBlock.indexOf("PlayPauseControl(isPlaying = isPlaying, onTogglePlay = onTogglePlay)")
+        val speedIndex = overlayBlock.indexOf("PlaybackSpeedMenu(selectedSpeed = playbackSpeed")
+
+        assertTrue(player.contains("private const val DoubleTapSideZoneFraction = 0.22f"))
+        assertTrue(player.contains("private fun PlayPauseControl("))
+        assertTrue(playIndex >= 0)
+        assertTrue(speedIndex > playIndex)
+        assertFalse(overlayBlock.contains(".align(Alignment.Center)"))
+        assertFalse(overlayBlock.contains("Color.Black.copy(alpha = 0.36f)"))
+        assertTrue(player.contains("modifier = modifier.height(2.dp)"))
+        assertTrue(player.contains("private fun ThinPlayerSliderTrack("))
+        assertTrue(player.contains("modifier = modifier.height(20.dp)"))
+        assertTrue(player.contains("Modifier.size(12.dp).background(Color.White, CircleShape)"))
     }
 
     @Test

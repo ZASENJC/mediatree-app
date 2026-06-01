@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.SyncProblem
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -73,6 +75,7 @@ private const val OverlayAutoHideMillis = 3_500L
 private const val HudAutoHideMillis = 1_500L
 private const val LockedButtonAutoHideMillis = 5_000L
 private const val HorizontalSeekSecondsPerScreen = 90.0
+private const val DoubleTapSideZoneFraction = 0.22f
 
 private val PlayerSpeeds = listOf(0.75, 1.0, 1.25, 1.5, 2.0)
 private val AspectRatioOptions = listOf(
@@ -90,7 +93,7 @@ enum class PlayerDoubleTapAction {
 
 fun playerDoubleTapAction(tapX: Float, width: Int): PlayerDoubleTapAction {
     if (width <= 0) return PlayerDoubleTapAction.TogglePlay
-    val sideZone = width * 0.3f
+    val sideZone = width * DoubleTapSideZoneFraction
     return when {
         tapX < sideZone -> PlayerDoubleTapAction.Rewind
         tapX > width - sideZone -> PlayerDoubleTapAction.Forward
@@ -571,20 +574,6 @@ private fun PlayerControlsOverlay(
         }
 
         if (!playerLocked) {
-            IconButton(
-                onClick = onTogglePlay,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .background(Color.Black.copy(alpha = 0.36f), RoundedCornerShape(24.dp)),
-            ) {
-                Icon(
-                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "暂停" else "播放",
-                    tint = Color.White,
-                    modifier = Modifier.size(36.dp),
-                )
-            }
-
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -609,6 +598,7 @@ private fun PlayerControlsOverlay(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    PlayPauseControl(isPlaying = isPlaying, onTogglePlay = onTogglePlay)
                     PlaybackSpeedMenu(selectedSpeed = playbackSpeed, onSpeedChange = onSpeedChange)
                     SubtitleTrackMenu(
                         selectedSubtitle = selectedSubtitle,
@@ -638,13 +628,14 @@ private fun PlayerControlsOverlay(
 private fun PlayerProgressBar(progress: Float, modifier: Modifier = Modifier) {
     LinearProgressIndicator(
         progress = { progress },
-        modifier = modifier.height(3.dp),
+        modifier = modifier.height(2.dp),
         color = Color.White,
         trackColor = Color.White.copy(alpha = 0.22f),
     )
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun PlayerSeekBar(
     positionSeconds: Double,
     durationSeconds: Double,
@@ -672,7 +663,7 @@ private fun PlayerSeekBar(
             }
         },
         enabled = durationSeconds > 0.0,
-        modifier = modifier.height(28.dp),
+        modifier = modifier.height(20.dp),
         colors = SliderDefaults.colors(
             thumbColor = Color.White,
             activeTrackColor = Color.White,
@@ -681,7 +672,49 @@ private fun PlayerSeekBar(
             disabledActiveTrackColor = Color.White.copy(alpha = 0.48f),
             disabledInactiveTrackColor = Color.White.copy(alpha = 0.22f),
         ),
+        thumb = {
+            Box(Modifier.size(12.dp).background(Color.White, CircleShape))
+        },
+        track = { sliderState ->
+            ThinPlayerSliderTrack(progress = sliderState.value, enabled = durationSeconds > 0.0)
+        },
     )
+}
+
+@Composable
+private fun ThinPlayerSliderTrack(
+    progress: Float,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val activeColor = if (enabled) Color.White else Color.White.copy(alpha = 0.48f)
+    val trackColor = if (enabled) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.22f)
+    Box(
+        modifier = modifier.height(2.dp).fillMaxWidth().background(trackColor, RoundedCornerShape(50)),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .height(2.dp)
+                .background(activeColor, RoundedCornerShape(50)),
+        )
+    }
+}
+
+@Composable
+private fun PlayPauseControl(isPlaying: Boolean, onTogglePlay: () -> Unit) {
+    IconButton(
+        onClick = onTogglePlay,
+        modifier = Modifier.size(40.dp),
+    ) {
+        Icon(
+            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            contentDescription = if (isPlaying) "暂停" else "播放",
+            tint = Color.White,
+            modifier = Modifier.size(24.dp),
+        )
+    }
 }
 
 @Composable
