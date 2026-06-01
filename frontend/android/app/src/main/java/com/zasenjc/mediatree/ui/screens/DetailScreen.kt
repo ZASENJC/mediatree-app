@@ -83,6 +83,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.CrewCreditDto
+import com.zasenjc.mediatree.data.FullscreenModePreference
 import com.zasenjc.mediatree.data.MediaInfoDto
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.PersonCreditDto
@@ -223,8 +224,12 @@ fun DetailScreen(
     val activity = context.findActivity()
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val fullscreenModePreference by container.uiPreferencesStore.fullscreenModeFlow.collectAsStateWithLifecycle(
+        initialValue = FullscreenModePreference.Landscape,
+    )
     var activeMovieId by remember(movieId) { mutableStateOf(movieId) }
     var leavingDetail by remember { mutableStateOf(false) }
+    var fullscreenRequested by remember { mutableStateOf(false) }
     val playbackPositions = remember { mutableMapOf<Int, Double>() }
     var playbackPositionSnapshot by remember { mutableStateOf<(() -> PlaybackPositionSnapshot?)?>(null) }
 
@@ -242,16 +247,18 @@ fun DetailScreen(
         playbackPositions[activeMovieId] = snapshot.positionSeconds
     }
 
-    FullscreenSystemBarsEffect(isLandscape)
-    LaunchedEffect(isLandscape) {
-        onChromeVisibleChange(!isLandscape)
+    val playerFullscreen = fullscreenRequested || isLandscape
+    FullscreenSystemBarsEffect(playerFullscreen)
+    LaunchedEffect(playerFullscreen) {
+        onChromeVisibleChange(!playerFullscreen)
     }
     DisposableEffect(Unit) {
         onDispose { onChromeVisibleChange(true) }
     }
     BackHandler {
-        if (isLandscape) {
+        if (playerFullscreen) {
             capturePlaybackPosition()
+            fullscreenRequested = false
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
         } else {
             leaveDetail()
@@ -323,7 +330,7 @@ fun DetailScreen(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            if (!isLandscape) {
+            if (!playerFullscreen) {
                 DesignTopAppBar(
                     title = "",
                     navigationIcon = {
@@ -333,9 +340,10 @@ fun DetailScreen(
                     },
                     actions = {
                         IconButton(onClick = {
-                            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            fullscreenRequested = true
+                            requestFullscreenOrientation(activity, fullscreenModePreference)
                         }) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "横屏播放")
+                            Icon(Icons.Default.PlayArrow, contentDescription = "全屏播放")
                         }
                     },
                 )
@@ -345,7 +353,7 @@ fun DetailScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (isLandscape) Modifier else Modifier.padding(padding))
+                .then(if (playerFullscreen) Modifier else Modifier.padding(padding))
                 .background(MaterialTheme.colorScheme.background),
         ) {
             when {
@@ -354,7 +362,7 @@ fun DetailScreen(
                     message = state.error?.message ?: "影片加载失败",
                     onRetry = { vm.load(session.activeProviderType, activeMovieId, session.activeLibrary) },
                 )
-                !isLandscape -> PortraitPlayerCard(
+                !playerFullscreen -> PortraitPlayerCard(
                     activeMovie = activeMovie,
                     state = state,
                     contentSnapshots = contentSnapshots,
@@ -368,7 +376,7 @@ fun DetailScreen(
             }
 
             if (activeMovie != null && !leavingDetail) {
-                val playerModifier = if (isLandscape) {
+                val playerModifier = if (playerFullscreen) {
                     Modifier
                         .fillMaxSize()
                 } else {
@@ -385,15 +393,17 @@ fun DetailScreen(
                     onPlaybackPositionSnapshot = { playbackPositionSnapshot = it },
                     onProgressUpdate = { pos, dur -> vm.saveProgress(session.activeProviderType, activeMovieId, pos, dur) },
                     onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(session.activeProviderType, activeMovieId, pos, dur) },
-                    isFullscreen = isLandscape,
+                    isFullscreen = playerFullscreen,
                     showFullscreenButton = true,
-                    showAspectRatioControls = isLandscape,
+                    showAspectRatioControls = playerFullscreen,
                     onFullscreenRequest = {
                         capturePlaybackPosition()
-                        activity?.requestedOrientation = if (isLandscape) {
-                            ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                        if (playerFullscreen) {
+                            fullscreenRequested = false
+                            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
                         } else {
-                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            fullscreenRequested = true
+                            requestFullscreenOrientation(activity, fullscreenModePreference)
                         }
                     },
                     modifier = playerModifier,

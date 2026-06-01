@@ -18,6 +18,12 @@ enum class ThemeModePreference(val value: String) {
     Dark("dark"),
 }
 
+enum class FullscreenModePreference(val value: String) {
+    Portrait("portrait"),
+    Landscape("landscape"),
+    Auto("auto"),
+}
+
 private val Context.uiPreferencesDataStore by preferencesDataStore("mediatree_ui_preferences")
 
 class UiPreferencesStore(context: Context) {
@@ -38,6 +44,14 @@ class UiPreferencesStore(context: Context) {
         }
     }
 
+    val fullscreenModeFlow: Flow<FullscreenModePreference> = appContext.uiPreferencesDataStore.data.map { prefs ->
+        when (prefs[FULLSCREEN_MODE]) {
+            FullscreenModePreference.Portrait.value -> FullscreenModePreference.Portrait
+            FullscreenModePreference.Auto.value -> FullscreenModePreference.Auto
+            else -> FullscreenModePreference.Landscape
+        }
+    }
+
     suspend fun setHomeLayoutPreference(preference: HomeLayoutPreference) {
         appContext.uiPreferencesDataStore.edit { prefs ->
             prefs[HOME_LAYOUT] = preference.value
@@ -50,8 +64,15 @@ class UiPreferencesStore(context: Context) {
         }
     }
 
+    suspend fun setFullscreenModePreference(preference: FullscreenModePreference) {
+        appContext.uiPreferencesDataStore.edit { prefs ->
+            prefs[FULLSCREEN_MODE] = preference.value
+        }
+    }
+
     companion object {
         private val HOME_LAYOUT = stringPreferencesKey("home_layout")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
+        private val FULLSCREEN_MODE = stringPreferencesKey("fullscreen_mode")
     }
 }

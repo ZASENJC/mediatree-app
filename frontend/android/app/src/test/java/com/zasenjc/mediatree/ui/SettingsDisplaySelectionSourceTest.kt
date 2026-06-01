@@ -26,6 +26,25 @@ class SettingsDisplaySelectionSourceTest {
     }
 
     @Test
+    fun displayPreferenceUsesExpandableSettingRowsForThemeAndFullscreen() {
+        val block = settingsSource
+            .substringAfter("SettingsSectionCard(title = \"显示偏好\"")
+            .substringBefore("ConnectionsSection(")
+
+        assertTrue(block.contains("Text(\"深浅色模式\""))
+        assertTrue(block.contains("PreferenceExpandableRow("))
+        assertTrue(block.contains("title = \"首页布局\""))
+        assertTrue(block.contains("title = \"主题模式\""))
+        assertTrue(block.contains("title = \"播放全屏模式\""))
+        assertTrue(block.contains("selectedLabel = state.themeModePreference.labelText()"))
+        assertTrue(block.contains("selectedLabel = state.fullscreenModePreference.labelText()"))
+        assertTrue(block.contains("FullscreenModePreference.Portrait"))
+        assertTrue(block.contains("FullscreenModePreference.Landscape"))
+        assertTrue(block.contains("FullscreenModePreference.Auto"))
+        assertFalse(block.contains("Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth())"))
+    }
+
+    @Test
     fun connectionsSectionDoesNotExposeEnableOrBrowseActions() {
         val block = settingsSource
             .substringAfter("private fun ConnectionsSection")
@@ -108,5 +127,6 @@ class SettingsDisplaySelectionSourceTest {
         assertFalse(block.contains("title = \"主题\""))
         assertFalse(block.contains("Icons.Default.Palette"))
         assertFalse(block.contains("themeModePreference.labelText()"))
+        assertFalse(block.contains("播放全屏模式"))
     }
 }

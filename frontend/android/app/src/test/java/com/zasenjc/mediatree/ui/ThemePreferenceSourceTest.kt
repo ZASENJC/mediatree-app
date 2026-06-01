@@ -22,6 +22,21 @@ class ThemePreferenceSourceTest {
     }
 
     @Test
+    fun uiPreferencesStorePersistsFullscreenModePreference() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/data/UiPreferencesStore.kt")
+            .readText()
+
+        assertTrue(source.contains("enum class FullscreenModePreference"))
+        assertTrue(source.contains("Portrait(\"portrait\")"))
+        assertTrue(source.contains("Landscape(\"landscape\")"))
+        assertTrue(source.contains("Auto(\"auto\")"))
+        assertTrue(source.contains("val fullscreenModeFlow"))
+        assertTrue(source.contains("setFullscreenModePreference"))
+        assertTrue(source.contains("private val FULLSCREEN_MODE = stringPreferencesKey(\"fullscreen_mode\")"))
+    }
+
+    @Test
     fun mainActivityAppliesSystemOrManualThemeMode() {
         val source = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/MainActivity.kt")
@@ -45,5 +60,25 @@ class ThemePreferenceSourceTest {
         assertTrue(source.contains("跟随系统"))
         assertTrue(source.contains("浅色模式"))
         assertTrue(source.contains("深色模式"))
+    }
+
+    @Test
+    fun playerScreensApplyFullscreenModePreference() {
+        val detail = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+        val smb = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SmbBrowseScreen.kt")
+            .readText()
+        val webDav = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/WebDavBrowseScreen.kt")
+            .readText()
+
+        assertTrue(detail.contains("fullscreenModeFlow.collectAsStateWithLifecycle"))
+        assertTrue(detail.contains("requestFullscreenOrientation(activity, fullscreenModePreference)"))
+        assertTrue(smb.contains("fullscreenModeFlow.collectAsStateWithLifecycle"))
+        assertTrue(smb.contains("requestFullscreenOrientation(activity, fullscreenModePreference)"))
+        assertTrue(webDav.contains("fullscreenModeFlow.collectAsStateWithLifecycle"))
+        assertTrue(webDav.contains("requestFullscreenOrientation(activity, fullscreenModePreference)"))
     }
 }

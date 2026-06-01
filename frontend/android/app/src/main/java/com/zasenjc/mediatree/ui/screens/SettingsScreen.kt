@@ -64,6 +64,7 @@ import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageAuthType
 import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.ClientStorageType
+import com.zasenjc.mediatree.data.FullscreenModePreference
 import com.zasenjc.mediatree.data.HomeLayoutPreference
 import com.zasenjc.mediatree.data.MediaRootDto
 import com.zasenjc.mediatree.data.ProviderType
@@ -146,6 +147,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         val smbPassword: String = "",
         val homeLayoutPreference: HomeLayoutPreference = HomeLayoutPreference.MediaFeed,
         val themeModePreference: ThemeModePreference = ThemeModePreference.System,
+        val fullscreenModePreference: FullscreenModePreference = FullscreenModePreference.Landscape,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -165,6 +167,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.uiPreferencesStore.themeModeFlow.collect { preference ->
                 _state.update { it.copy(themeModePreference = preference) }
+            }
+        }
+        viewModelScope.launch {
+            container.uiPreferencesStore.fullscreenModeFlow.collect { preference ->
+                _state.update { it.copy(fullscreenModePreference = preference) }
             }
         }
     }
@@ -202,6 +209,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setThemeModePreference(value: ThemeModePreference) {
         viewModelScope.launch { container.uiPreferencesStore.setThemeModePreference(value) }
+    }
+
+    fun setFullscreenModePreference(value: FullscreenModePreference) {
+        viewModelScope.launch { container.uiPreferencesStore.setFullscreenModePreference(value) }
     }
 
     fun saveServerProfile(profileId: String?, providerType: ProviderType, serverUrl: String, profileName: String) {
@@ -490,24 +501,41 @@ fun SettingsScreen(
         ) {
             item {
                 SettingsSectionCard(title = "显示偏好", icon = Icons.Default.Visibility) {
-                    Text("首页布局", style = MaterialTheme.typography.titleSmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        DesignFilterChip(
-                            selected = state.homeLayoutPreference == HomeLayoutPreference.MediaFeed,
-                            onClick = { vm.setHomeLayoutPreference(HomeLayoutPreference.MediaFeed) },
-                            label = "媒体流",
-                            modifier = Modifier.weight(1f),
-                        )
-                        DesignFilterChip(
-                            selected = state.homeLayoutPreference == HomeLayoutPreference.DirectoryFirst,
-                            onClick = { vm.setHomeLayoutPreference(HomeLayoutPreference.DirectoryFirst) },
-                            label = "目录优先",
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    ThemeModeSelector(
+                    PreferenceExpandableRow(
+                        title = "首页布局",
+                        selectedLabel = state.homeLayoutPreference.labelText(),
+                        icon = Icons.Default.Folder,
+                        options = listOf(
+                            HomeLayoutPreference.MediaFeed to "媒体流",
+                            HomeLayoutPreference.DirectoryFirst to "目录优先",
+                        ),
+                        selected = state.homeLayoutPreference,
+                        onSelect = vm::setHomeLayoutPreference,
+                    )
+                    Text("深浅色模式", style = MaterialTheme.typography.titleSmall)
+                    PreferenceExpandableRow(
+                        title = "主题模式",
+                        selectedLabel = state.themeModePreference.labelText(),
+                        icon = Icons.Default.Visibility,
+                        options = listOf(
+                            ThemeModePreference.System to "跟随系统",
+                            ThemeModePreference.Light to "浅色模式",
+                            ThemeModePreference.Dark to "深色模式",
+                        ),
                         selected = state.themeModePreference,
                         onSelect = vm::setThemeModePreference,
+                    )
+                    PreferenceExpandableRow(
+                        title = "播放全屏模式",
+                        selectedLabel = state.fullscreenModePreference.labelText(),
+                        icon = Icons.Default.PlayArrow,
+                        options = listOf(
+                            FullscreenModePreference.Portrait to "竖向",
+                            FullscreenModePreference.Landscape to "横向",
+                            FullscreenModePreference.Auto to "自适应",
+                        ),
+                        selected = state.fullscreenModePreference,
+                        onSelect = vm::setFullscreenModePreference,
                     )
                 }
             }
@@ -997,6 +1025,47 @@ private sealed interface ConnectionEditorTarget {
 }
 
 @Composable
+private fun <T> PreferenceExpandableRow(
+    title: String,
+    selectedLabel: String,
+    icon: ImageVector,
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+) {
+    var expanded by remember(title) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        DesignSettingsRow(
+            title = title,
+            subtitle = selectedLabel,
+            icon = icon,
+            trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+            onClick = { expanded = !expanded },
+        )
+        AnimatedVisibility(visible = expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                options.forEach { (value, label) ->
+                    val isSelected = value == selected
+                    DesignSettingsRow(
+                        title = label,
+                        subtitle = "",
+                        icon = icon,
+                        modifier = Modifier.padding(start = 18.dp),
+                        trailing = {
+                            if (isSelected) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
+                        },
+                        onClick = {
+                            expanded = false
+                            onSelect(value)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ThemeModeSelector(
     selected: ThemeModePreference,
     onSelect: (ThemeModePreference) -> Unit,
@@ -1017,10 +1086,21 @@ private fun ThemeModeSelector(
     }
 }
 
+private fun HomeLayoutPreference.labelText(): String = when (this) {
+    HomeLayoutPreference.MediaFeed -> "媒体流"
+    HomeLayoutPreference.DirectoryFirst -> "目录优先"
+}
+
 private fun ThemeModePreference.labelText(): String = when (this) {
     ThemeModePreference.System -> "跟随系统"
     ThemeModePreference.Light -> "浅色模式"
     ThemeModePreference.Dark -> "深色模式"
+}
+
+private fun FullscreenModePreference.labelText(): String = when (this) {
+    FullscreenModePreference.Portrait -> "竖向"
+    FullscreenModePreference.Landscape -> "横向"
+    FullscreenModePreference.Auto -> "自适应"
 }
 
 @Composable

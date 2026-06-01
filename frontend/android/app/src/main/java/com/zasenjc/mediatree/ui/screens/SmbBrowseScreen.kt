@@ -59,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.ClientStorageType
+import com.zasenjc.mediatree.data.FullscreenModePreference
 import com.zasenjc.mediatree.data.SmbClient
 import com.zasenjc.mediatree.data.SmbEntry
 import com.zasenjc.mediatree.data.viewModelFactory
@@ -260,15 +261,21 @@ fun SmbPlayerScreen(
     val activity = context.findActivity()
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val fullscreenModePreference by container.uiPreferencesStore.fullscreenModeFlow.collectAsStateWithLifecycle(
+        initialValue = FullscreenModePreference.Landscape,
+    )
     var currentPath by remember(path) { mutableStateOf(path) }
+    var fullscreenRequested by remember { mutableStateOf(false) }
     var source by remember { mutableStateOf<ClientStorageSource?>(null) }
     var sameFolderVideos by remember { mutableStateOf<List<ClientStorageVideoItem>>(emptyList()) }
     var error by remember { mutableStateOf<Throwable?>(null) }
     var positionSeconds by remember { mutableDoubleStateOf(0.0) }
 
-    FullscreenSystemBarsEffect(isLandscape)
+    val playerFullscreen = fullscreenRequested || isLandscape
+    FullscreenSystemBarsEffect(playerFullscreen)
     BackHandler {
-        if (isLandscape) {
+        if (playerFullscreen) {
+            fullscreenRequested = false
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
         } else {
             onBack()
@@ -317,7 +324,7 @@ fun SmbPlayerScreen(
 
     Scaffold(
         topBar = {
-            if (!isLandscape) {
+            if (!playerFullscreen) {
                 TopAppBar(
                     title = {},
                     navigationIcon = {
@@ -326,8 +333,11 @@ fun SmbPlayerScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE }) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "横屏播放")
+                        IconButton(onClick = {
+                            fullscreenRequested = true
+                            requestFullscreenOrientation(activity, fullscreenModePreference)
+                        }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "全屏播放")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -338,14 +348,14 @@ fun SmbPlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (isLandscape) Modifier else Modifier.padding(padding))
+                .then(if (playerFullscreen) Modifier else Modifier.padding(padding))
                 .background(MaterialTheme.colorScheme.background),
         ) {
             when {
                 error != null -> ErrorPane(message = error?.message ?: "SMB 播放源加载失败", modifier = Modifier.fillMaxSize())
                 playbackSource == null -> LoadingPane(Modifier.fillMaxSize())
                 else -> {
-                    if (isLandscape) {
+                    if (playerFullscreen) {
                         MediaTreePlayer(
                             playbackSource = playbackSource,
                             startPosition = positionSeconds,
@@ -354,6 +364,7 @@ fun SmbPlayerScreen(
                             showFullscreenButton = true,
                             showAspectRatioControls = true,
                             onFullscreenRequest = {
+                                fullscreenRequested = false
                                 activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
                             },
                             modifier = Modifier.fillMaxSize(),
@@ -372,7 +383,8 @@ fun SmbPlayerScreen(
                                 showFullscreenButton = true,
                                 showAspectRatioControls = false,
                                 onFullscreenRequest = {
-                                    activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                    fullscreenRequested = true
+                                    requestFullscreenOrientation(activity, fullscreenModePreference)
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()

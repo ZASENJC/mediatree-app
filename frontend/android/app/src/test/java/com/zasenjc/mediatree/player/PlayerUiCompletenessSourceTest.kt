@@ -86,10 +86,10 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(detailScreen.contains("onPlaybackPositionChange"))
         assertTrue(detailScreen.contains("ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT"))
         assertTrue(detailScreen.contains("onChromeVisibleChange"))
-        assertTrue(detailScreen.contains("onChromeVisibleChange(!isLandscape)"))
+        assertTrue(detailScreen.contains("onChromeVisibleChange(!playerFullscreen)"))
         assertTrue(detailScreen.contains("onDispose { onChromeVisibleChange(true) }"))
-        assertTrue(detailScreen.contains("isFullscreen = isLandscape"))
-        assertTrue(detailScreen.contains("showAspectRatioControls = isLandscape"))
+        assertTrue(detailScreen.contains("isFullscreen = playerFullscreen"))
+        assertTrue(detailScreen.contains("showAspectRatioControls = playerFullscreen"))
     }
 
     @Test
@@ -148,11 +148,28 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("modifier = modifier.height(2.dp)"))
         assertTrue(player.contains("private fun ThinPlayerSliderTrack("))
         assertTrue(player.contains("modifier = modifier.height(20.dp)"))
-        assertTrue(player.contains("Modifier.size(12.dp).background(Color.White, CircleShape)"))
-        assertTrue(player.contains("modifier = modifier.height(12.dp)"))
-        assertTrue(player.contains("contentAlignment = Alignment.CenterStart"))
+        assertTrue(player.contains("Modifier.offset(y = (-6).dp).size(12.dp).background(Color.White, CircleShape)"))
         assertTrue(player.contains(".height(2.dp)"))
         assertTrue(player.contains(".background(trackColor, RoundedCornerShape(50))"))
+    }
+
+    @Test
+    fun playerSeekThumbIsAdjustedWithoutMovingThinTrack() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+        val seekBarBlock = player
+            .substringAfter("private fun PlayerSeekBar(")
+            .substringBefore("@Composable\nprivate fun ThinPlayerSliderTrack")
+        val trackBlock = player
+            .substringAfter("private fun ThinPlayerSliderTrack(")
+            .substringBefore("@Composable\nprivate fun PlayPauseControl")
+
+        assertTrue(seekBarBlock.contains("thumb = {"))
+        assertTrue(seekBarBlock.contains("Modifier.offset(y = (-6).dp).size(12.dp).background(Color.White, CircleShape)"))
+        assertTrue(trackBlock.contains("modifier = modifier.height(12.dp).fillMaxWidth()"))
+        assertTrue(trackBlock.contains("contentAlignment = Alignment.CenterStart"))
+        assertTrue(trackBlock.contains(".background(trackColor, RoundedCornerShape(50))"))
     }
 
     @Test
@@ -162,7 +179,7 @@ class PlayerUiCompletenessSourceTest {
             .readText()
 
         assertEquals(1, Regex("""MediaTreePlayer\(""").findAll(detailScreen).count())
-        assertTrue(detailScreen.contains("val playerModifier = if (isLandscape)"))
+        assertTrue(detailScreen.contains("val playerModifier = if (playerFullscreen)"))
         assertTrue(detailScreen.contains("modifier = playerModifier"))
         assertFalse(detailScreen.contains("SubtitleSelector("))
         assertFalse(detailScreen.contains("private fun SubtitleSelector"))
