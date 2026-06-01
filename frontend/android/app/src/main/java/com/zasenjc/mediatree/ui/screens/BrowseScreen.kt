@@ -96,7 +96,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.Color
-import java.util.concurrent.ConcurrentHashMap
 
 private val browseSortOptions = listOf(
     "name" to "名称",
@@ -830,13 +829,10 @@ private fun MountedVideoThumbnail(
     cornerRadius: androidx.compose.ui.unit.Dp = 12.dp,
     showPlayIcon: Boolean = true,
 ) {
-    val thumbnailCacheKey = remember(source?.id, source?.type, movie.path, movie.size, movie.fileSize) {
-        mountedVideoThumbnailCacheKey(source, movie)
+    var bitmap by remember(source?.id, source?.type, movie.path) {
+        mutableStateOf<Bitmap?>(null)
     }
-    var bitmap by remember(thumbnailCacheKey) {
-        mutableStateOf(thumbnailCacheKey?.let { mountedVideoFrameCache[it] })
-    }
-    LaunchedEffect(container, source?.id, movie.mediaRoot, movie.path, thumbnailCacheKey) {
+    LaunchedEffect(container, source?.id, movie.mediaRoot, movie.path) {
         if (bitmap == null) {
             val sourceInfo = mountedVideoThumbnailSource(container, source, movie) ?: return@LaunchedEffect
             try {
@@ -1131,36 +1127,19 @@ private fun MovieDto.isMountedLibraryItem(): Boolean =
 private data class MountedVideoThumbnailSource(
     val uri: String,
     val headers: Map<String, String>,
-    val cacheKey: String,
     val onClose: (() -> Unit)? = null,
 )
 
-private val mountedVideoFrameCache = ConcurrentHashMap<String, Bitmap>()
-private val mountedVideoFrameDispatcher = Dispatchers.IO.limitedParallelism(2)
-private const val MountedVideoFrameWidth = 360
-private const val MountedVideoFrameHeight = 540
-
-private fun mountedVideoThumbnailCacheKey(
-    source: ClientStorageSource?,
-    movie: MovieDto,
-): String? {
-    if (!movie.isMountedLibraryItem()) return null
-    val resolvedSource = source ?: return null
-    val size = movie.size ?: movie.fileSize ?: 0L
-    return when (resolvedSource.type) {
-        ClientStorageType.SMB -> "smb-frame:${resolvedSource.id}:${movie.path}:$size"
-        ClientStorageType.WebDAV -> "webdav-frame:${resolvedSource.id}:${movie.path}:$size"
-    }
-}
+private val mountedVideoFrameDispatcher = Dispatchers.IO.limitedParallelism(4)
+private const val MountedVideoFrameWidth = 240
+private const val MountedVideoFrameHeight = 360
 
 private suspend fun loadMountedVideoFrame(source: MountedVideoThumbnailSource): Bitmap? =
-    mountedVideoFrameCache[source.cacheKey] ?: withContext(mountedVideoFrameDispatcher) {
+    withContext(mountedVideoFrameDispatcher) {
         runCatching {
             MediaMetadataRetriever().use { retriever ->
                 retriever.setDataSource(source.uri, source.headers)
                 retriever.scaledFrameAtStart()
-            }?.also { frame ->
-                mountedVideoFrameCache[source.cacheKey] = frame
             }
         }.getOrNull()
     }
@@ -1185,14 +1164,12 @@ private fun mountedVideoThumbnailSource(
 ): MountedVideoThumbnailSource? {
     if (!movie.isMountedLibraryItem()) return null
     val resolvedSource = source ?: return null
-    val cacheKey = mountedVideoThumbnailCacheKey(resolvedSource, movie) ?: return null
     return when (resolvedSource.type) {
         ClientStorageType.SMB -> {
             val playbackSource = container.smbRangeProxy.playbackSource(source = resolvedSource, path = movie.path)
             MountedVideoThumbnailSource(
                 uri = playbackSource.uri,
                 headers = playbackSource.headers,
-                cacheKey = cacheKey,
                 onClose = playbackSource.onClose,
             )
         }
@@ -1201,7 +1178,6 @@ private fun mountedVideoThumbnailSource(
             MountedVideoThumbnailSource(
                 uri = playbackSource.uri,
                 headers = playbackSource.headers,
-                cacheKey = cacheKey,
             )
         }
     }
