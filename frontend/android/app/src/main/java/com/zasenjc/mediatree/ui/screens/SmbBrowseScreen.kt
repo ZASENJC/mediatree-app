@@ -5,6 +5,8 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +69,10 @@ import com.zasenjc.mediatree.player.MediaTreePlayer
 import com.zasenjc.mediatree.ui.components.ErrorPane
 import com.zasenjc.mediatree.ui.components.FullscreenSystemBarsEffect
 import com.zasenjc.mediatree.ui.components.LoadingPane
+import com.zasenjc.mediatree.ui.motion.PlayerExitNavigationDelayMillis
+import com.zasenjc.mediatree.ui.motion.PlayerRouteScrimFadeInMillis
+import com.zasenjc.mediatree.ui.motion.PlayerRouteScrimFadeOutMillis
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -272,6 +278,8 @@ fun SmbPlayerScreen(
     var positionSeconds by remember { mutableDoubleStateOf(0.0) }
     var durationSeconds by remember { mutableDoubleStateOf(0.0) }
     var playbackReadyPath by remember { mutableStateOf<String?>(null) }
+    var leavingPlayer by remember { mutableStateOf(false) }
+    var routeScrimVisible by remember { mutableStateOf(true) }
 
     fun saveClientPlaybackProgress(sourceId: String, path: String, positionSeconds: Double, durationSeconds: Double) {
         container.applicationScope.launch {
@@ -286,11 +294,25 @@ fun SmbPlayerScreen(
 
     fun leavePlayer() {
         saveClientPlaybackProgress(sourceId, currentPath, positionSeconds, durationSeconds)
-        onBack()
+        leavingPlayer = true
     }
 
     val playerFullscreen = fullscreenRequested || isLandscape
     FullscreenSystemBarsEffect(playerFullscreen)
+    LaunchedEffect(Unit) {
+        routeScrimVisible = false
+    }
+    val routeScrimAlpha by animateFloatAsState(
+        targetValue = if (routeScrimVisible || leavingPlayer) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (routeScrimVisible || leavingPlayer) {
+                PlayerRouteScrimFadeInMillis
+            } else {
+                PlayerRouteScrimFadeOutMillis
+            },
+        ),
+        label = "smbPlayerRouteScrimAlpha",
+    )
     BackHandler {
         if (playerFullscreen) {
             fullscreenRequested = false
@@ -336,6 +358,13 @@ fun SmbPlayerScreen(
 
     LaunchedEffect(error) {
         error?.let(onError)
+    }
+
+    LaunchedEffect(leavingPlayer) {
+        if (leavingPlayer) {
+            delay(PlayerExitNavigationDelayMillis)
+            onBack()
+        }
     }
 
     val playbackSource = remember(source?.id, currentPath) {
@@ -485,6 +514,13 @@ fun SmbPlayerScreen(
                         }
                     }
                 }
+            }
+            if (routeScrimAlpha > 0.01f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = routeScrimAlpha)),
+                )
             }
         }
     }

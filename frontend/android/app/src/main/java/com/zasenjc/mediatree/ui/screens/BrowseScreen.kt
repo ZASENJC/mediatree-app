@@ -5,7 +5,9 @@ import android.os.Build
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.SystemClock
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
@@ -88,6 +90,7 @@ import com.zasenjc.mediatree.ui.components.DesignFilterChip
 import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.topChromeExitTransition
+import com.zasenjc.mediatree.ui.motion.folderContentTransform
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
 import kotlinx.coroutines.Job
@@ -122,6 +125,27 @@ private data class BrowseViewMode(
 )
 
 private typealias MountedVideoThumbnailLoader = suspend (ClientStorageSource?, MovieDto) -> Bitmap?
+
+private data class BrowseContentSnapshot(
+    val folders: List<FolderNodeDto> = emptyList(),
+    val movies: List<MovieDto> = emptyList(),
+    val total: Int = 0,
+    val currentFolder: String = "",
+    val sortMode: String = "name",
+    val mountedSource: ClientStorageSource? = null,
+) {
+    companion object {
+        fun from(state: BrowseViewModel.UiState): BrowseContentSnapshot =
+            BrowseContentSnapshot(
+                folders = state.folders,
+                movies = state.movies,
+                total = state.total,
+                currentFolder = state.currentFolder,
+                sortMode = state.sortMode,
+                mountedSource = state.mountedSource,
+            )
+    }
+}
 
 class BrowseViewModel(private val container: AppContainer) : ViewModel() {
     data class UiState(
@@ -398,7 +422,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(
     container: AppContainer,
@@ -418,9 +442,8 @@ fun BrowseScreen(
     val scope = rememberCoroutineScope()
     var searchJob by remember { mutableStateOf<Job?>(null) }
     val mountedVideoThumbnailLoader: MountedVideoThumbnailLoader = remember(vm) { vm::loadMountedVideoFrame }
-    val listState = rememberLazyListState()
-
-    SyncChromeWithListScroll(listState, onChromeVisibleChange)
+    var contentSnapshot by remember { mutableStateOf(BrowseContentSnapshot()) }
+    var hasContentSnapshot by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         onChromeVisibleChange(true)
@@ -454,6 +477,22 @@ fun BrowseScreen(
         state.error?.let(onError)
     }
 
+    LaunchedEffect(
+        state.loading,
+        state.error,
+        state.currentFolder,
+        state.folders,
+        state.movies,
+        state.total,
+        state.sortMode,
+        state.mountedSource,
+    ) {
+        if (!state.loading && state.error == null) {
+            contentSnapshot = BrowseContentSnapshot.from(state)
+            hasContentSnapshot = true
+        }
+    }
+
     val title = state.currentFolder.substringAfterLast("/").ifBlank { "浏览" }
     fun openFolderNode(folder: FolderNodeDto) {
         if (folder.isLeaf && session.activeProviderType != ProviderType.MediaTree) {
@@ -462,15 +501,11 @@ fun BrowseScreen(
             onNavigate("browse?folder=${Uri.encode(folder.path)}")
         }
     }
-    val filteredFolders = state.folders
-    val filteredMovies = state.movies
     val provider = remember(session.activeProviderType, container) {
         container.mediaProviderFor(session.activeProviderType)
     }
-    val posterFolderRows = remember(filteredFolders) { filteredFolders.chunked(3) }
-    val iconFolderRows = posterFolderRows
-    val posterMovieRows = remember(filteredMovies) { filteredMovies.chunked(2) }
-    val iconMovieRows = remember(filteredMovies) { filteredMovies.chunked(3) }
+    val filteredFolders = state.folders
+    val filteredMovies = state.movies
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -489,165 +524,179 @@ fun BrowseScreen(
                 !shouldLoadRemoteContent(session) &&
                     session.activeLibrary.smbLibrarySourceId() == null &&
                     session.activeLibrary.webDavLibrarySourceId() == null -> EmptyBrowseState("请先在设置页连接 MediaTree 服务器")
-                state.loading -> LoadingPane(Modifier.fillMaxSize())
+                state.loading && !hasContentSnapshot -> LoadingPane(Modifier.fillMaxSize())
                 else -> {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 20.dp, top = 86.dp, end = 20.dp, bottom = 116.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedTextField(
-                                value = query,
-                                onValueChange = { value ->
-                                    query = value
-                                    searchJob?.cancel()
-                                    val request = value.trim()
-                                    searchJob = scope.launch {
-                                        delay(260)
-                                        reloadBrowse(request = request)
-                                    }
-                                },
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                placeholder = { Text("搜索项目") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(browseViewModes) { mode ->
-                                    DesignFilterChip(
-                                        selected = viewMode == mode.key,
-                                        onClick = { onViewModeChange(mode.key) },
-                                        label = mode.label,
-                                        icon = mode.icon,
-                                    )
-                                }
-                            }
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(browseSortOptions) { (key, label) ->
-                                    DesignFilterChip(
-                                        selected = state.sortMode == key,
-                                        onClick = {
-                                            reloadBrowse(sort = key)
+                    AnimatedContent(
+                        targetState = contentSnapshot,
+                        transitionSpec = { folderContentTransform(initialState.currentFolder, targetState.currentFolder) },
+                        label = "browseFolderContent",
+                    ) { snapshot ->
+                        val filteredFolders = snapshot.folders
+                        val filteredMovies = snapshot.movies
+                        val posterFolderRows = remember(filteredFolders) { filteredFolders.chunked(3) }
+                        val iconFolderRows = posterFolderRows
+                        val posterMovieRows = remember(filteredMovies) { filteredMovies.chunked(2) }
+                        val iconMovieRows = remember(filteredMovies) { filteredMovies.chunked(3) }
+                        val snapshotListState = rememberLazyListState()
+                        SyncChromeWithListScroll(snapshotListState, onChromeVisibleChange)
+                        LazyColumn(
+                            state = snapshotListState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(start = 20.dp, top = 86.dp, end = 20.dp, bottom = 116.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            item {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    OutlinedTextField(
+                                        value = query,
+                                        onValueChange = { value ->
+                                            query = value
+                                            searchJob?.cancel()
+                                            val request = value.trim()
+                                            searchJob = scope.launch {
+                                                delay(260)
+                                                reloadBrowse(request = request)
+                                            }
                                         },
-                                        label = label,
+                                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                        placeholder = { Text("搜索项目") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
                                     )
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        items(browseViewModes) { mode ->
+                                            DesignFilterChip(
+                                                selected = viewMode == mode.key,
+                                                onClick = { onViewModeChange(mode.key) },
+                                                label = mode.label,
+                                                icon = mode.icon,
+                                            )
+                                        }
+                                    }
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        items(browseSortOptions) { (key, label) ->
+                                            DesignFilterChip(
+                                                selected = snapshot.sortMode == key,
+                                                onClick = {
+                                                    reloadBrowse(sort = key)
+                                                },
+                                                label = label,
+                                            )
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                    if (filteredFolders.isNotEmpty()) {
-                        when (viewMode) {
-                            "poster" -> {
-                                items(posterFolderRows, key = { row -> row.joinToString("|") { it.path } }) { row ->
-                                    PosterFolderRow(
-                                        row = row,
-                                        serverUrl = session.serverUrl,
-                                        onOpen = ::openFolderNode,
-                                    )
+                            if (filteredFolders.isNotEmpty()) {
+                                when (viewMode) {
+                                    "poster" -> {
+                                        items(posterFolderRows, key = { row -> row.joinToString("|") { it.path } }) { row ->
+                                            PosterFolderRow(
+                                                row = row,
+                                                serverUrl = session.serverUrl,
+                                                onOpen = ::openFolderNode,
+                                            )
+                                        }
+                                    }
+                                    "icon" -> {
+                                        items(iconFolderRows, key = { row -> row.joinToString("|") { it.path } }) { row ->
+                                            IconFolderRow(
+                                                row = row,
+                                                onOpen = ::openFolderNode,
+                                            )
+                                        }
+                                    }
+                                    "compact" -> {
+                                        items(filteredFolders, key = { it.path }) { folder ->
+                                            CompactFolderRow(folder = folder, onClick = { openFolderNode(folder) })
+                                        }
+                                    }
+                                    else -> {
+                                        items(filteredFolders, key = { it.path }) { folder ->
+                                            CompactFolderRow(folder = folder, onClick = { openFolderNode(folder) })
+                                        }
+                                    }
                                 }
                             }
-                            "icon" -> {
-                                items(iconFolderRows, key = { row -> row.joinToString("|") { it.path } }) { row ->
-                                    IconFolderRow(
-                                        row = row,
-                                        onOpen = ::openFolderNode,
-                                    )
-                                }
-                            }
-                            "compact" -> {
-                                items(filteredFolders, key = { it.path }) { folder ->
-                                    CompactFolderRow(folder = folder, onClick = { openFolderNode(folder) })
-                                }
-                            }
-                            else -> {
-                                items(filteredFolders, key = { it.path }) { folder ->
-                                    CompactFolderRow(folder = folder, onClick = { openFolderNode(folder) })
-                                }
-                            }
-                        }
-                    }
-                    if (filteredMovies.isNotEmpty() || state.currentFolder.isNotBlank()) {
-                        when (viewMode) {
-                            "poster" -> {
-                                items(posterMovieRows, key = { row -> row.joinToString("|") { it.id.toString() } }) { row ->
-                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                                        row.forEach { movie ->
-                                            if (movie.isMountedLibraryItem()) {
-                                                MountedVideoPosterCard(
-                                                    thumbnailLoader = mountedVideoThumbnailLoader,
-                                                    source = state.mountedSource,
-                                                    movie = movie,
-                                                    onClick = { onNavigate(movie.openRoute()) },
-                                                    modifier = Modifier.weight(1f),
-                                                )
-                                            } else {
-                                                MoviePosterCard(
-                                                    movie = movie,
-                                                    imageUrl = provider.coverUrl(session.serverUrl, movie.id),
-                                                    onClick = { onNavigate(movie.openRoute()) },
-                                                    modifier = Modifier.weight(1f),
-                                                )
+                            if (filteredMovies.isNotEmpty() || snapshot.currentFolder.isNotBlank()) {
+                                when (viewMode) {
+                                    "poster" -> {
+                                        items(posterMovieRows, key = { row -> row.joinToString("|") { it.id.toString() } }) { row ->
+                                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                                                row.forEach { movie ->
+                                                    if (movie.isMountedLibraryItem()) {
+                                                        MountedVideoPosterCard(
+                                                            thumbnailLoader = mountedVideoThumbnailLoader,
+                                                            source = snapshot.mountedSource,
+                                                            movie = movie,
+                                                            onClick = { onNavigate(movie.openRoute()) },
+                                                            modifier = Modifier.weight(1f),
+                                                        )
+                                                    } else {
+                                                        MoviePosterCard(
+                                                            movie = movie,
+                                                            imageUrl = provider.coverUrl(session.serverUrl, movie.id),
+                                                            onClick = { onNavigate(movie.openRoute()) },
+                                                            modifier = Modifier.weight(1f),
+                                                        )
+                                                    }
+                                                }
+                                                if (row.size == 1) Spacer(Modifier.weight(1f))
                                             }
                                         }
-                                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                                    }
+                                    "icon" -> {
+                                        items(iconMovieRows, key = { row -> row.joinToString("|") { it.id.toString() } }) { row ->
+                                            IconMovieRow(
+                                                thumbnailLoader = mountedVideoThumbnailLoader,
+                                                source = snapshot.mountedSource,
+                                                row = row,
+                                                onOpen = { movie -> onNavigate(movie.openRoute()) },
+                                            )
+                                        }
+                                    }
+                                    "compact" -> {
+                                        items(filteredMovies, key = { it.id }) { movie ->
+                                            CompactMovieRow(
+                                                thumbnailLoader = mountedVideoThumbnailLoader,
+                                                source = snapshot.mountedSource,
+                                                movie = movie,
+                                                onClick = { onNavigate(movie.openRoute()) },
+                                            )
+                                        }
+                                    }
+                                    else -> {
+                                        items(filteredMovies, key = { it.id }) { movie ->
+                                            CompactMovieRow(
+                                                thumbnailLoader = mountedVideoThumbnailLoader,
+                                                source = snapshot.mountedSource,
+                                                movie = movie,
+                                                onClick = { onNavigate(movie.openRoute()) },
+                                            )
+                                        }
+                                    }
+                                }
+                                if (snapshot.movies.size < snapshot.total) {
+                                    item {
+                                        Button(
+                                            onClick = {
+                                                if (shouldLoadRemoteContent(session)) {
+                                                    vm.loadMore(session.activeProviderType, snapshot.currentFolder, session.activeLibrary)
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Text("加载更多")
+                                        }
                                     }
                                 }
                             }
-                            "icon" -> {
-                                items(iconMovieRows, key = { row -> row.joinToString("|") { it.id.toString() } }) { row ->
-                                    IconMovieRow(
-                                        thumbnailLoader = mountedVideoThumbnailLoader,
-                                        source = state.mountedSource,
-                                        row = row,
-                                        onOpen = { movie -> onNavigate(movie.openRoute()) },
-                                    )
-                                }
+                            if (filteredFolders.isEmpty() && filteredMovies.isEmpty()) {
+                                item { EmptyBrowseState(if (snapshot.currentFolder.isBlank()) "没有匹配的项目" else "此目录没有可显示项目") }
                             }
-                            "compact" -> {
-                                items(filteredMovies, key = { it.id }) { movie ->
-                                    CompactMovieRow(
-                                        thumbnailLoader = mountedVideoThumbnailLoader,
-                                        source = state.mountedSource,
-                                        movie = movie,
-                                        onClick = { onNavigate(movie.openRoute()) },
-                                    )
-                                }
-                            }
-                            else -> {
-                                items(filteredMovies, key = { it.id }) { movie ->
-                                    CompactMovieRow(
-                                        thumbnailLoader = mountedVideoThumbnailLoader,
-                                        source = state.mountedSource,
-                                        movie = movie,
-                                        onClick = { onNavigate(movie.openRoute()) },
-                                    )
-                                }
-                            }
-                        }
-                        if (state.movies.size < state.total) {
-                            item {
-                                Button(
-                                    onClick = {
-                                        if (shouldLoadRemoteContent(session)) {
-                                            vm.loadMore(session.activeProviderType, state.currentFolder, session.activeLibrary)
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) {
-                                    Text("加载更多")
-                                }
-                            }
+                            item { Spacer(Modifier.height(16.dp)) }
                         }
                     }
-                    if (filteredFolders.isEmpty() && filteredMovies.isEmpty()) {
-                        item { EmptyBrowseState(if (state.currentFolder.isBlank()) "没有匹配的项目" else "此目录没有可显示项目") }
-                    }
-                    item { Spacer(Modifier.height(16.dp)) }
                 }
-            }
             }
             AnimatedVisibility(
                 visible = chromeVisible,
