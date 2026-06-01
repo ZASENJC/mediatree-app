@@ -424,37 +424,29 @@ private fun PortraitPlayerCard(
                 .background(MaterialTheme.colorScheme.scrim),
         )
         Spacer(Modifier.height(12.dp))
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            tonalElevation = 3.dp,
-            shadowElevation = 6.dp,
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                item {
-                    AnimatedContent(
-                        targetState = activeMovie.id,
-                        transitionSpec = { detailEpisodeContentTransform() },
-                        label = "detailMetadataContent",
-                    ) { contentMovieId ->
-                        val targetState = contentSnapshots[contentMovieId] ?: state
-                        val targetMovie = targetState.movie!!
-                        DetailMetadataContent(
-                            container = container,
-                            session = session,
-                            state = targetState,
-                            movie = targetMovie,
-                            onSelectEpisode = onSelectEpisode,
-                            onNavigate = onNavigate,
-                            onFavorite = onFavorite,
-                            onWatched = onWatched,
-                        )
-                    }
+            item {
+                AnimatedContent(
+                    targetState = activeMovie.id,
+                    transitionSpec = { detailEpisodeContentTransform() },
+                    label = "detailMetadataContent",
+                ) { contentMovieId ->
+                    val targetState = contentSnapshots[contentMovieId] ?: state
+                    val targetMovie = targetState.movie!!
+                    DetailMetadataContent(
+                        container = container,
+                        session = session,
+                        state = targetState,
+                        movie = targetMovie,
+                        onSelectEpisode = onSelectEpisode,
+                        onNavigate = onNavigate,
+                        onFavorite = onFavorite,
+                        onWatched = onWatched,
+                    )
                 }
             }
         }
@@ -533,8 +525,15 @@ private fun DetailMetadataContent(
     onWatched: () -> Unit,
 ) {
     var episodesExpanded by remember(movie.id) { mutableStateOf(false) }
+    var selectedDetailTab by remember(movie.id) { mutableStateOf("信息") }
     var selectedSeasonKey by remember(movie.id, state.seriesItems) {
         mutableStateOf(seasonKey(movie))
+    }
+    val provider = remember(session.activeProviderType, container) {
+        container.mediaProviderFor(session.activeProviderType)
+    }
+    val fallbackStill = remember(session.serverUrl, session.activeProviderType, movie.id) {
+        provider.episodeStillUrl(session.serverUrl, movie.id)
     }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         MovieInfoHeader(
@@ -552,38 +551,41 @@ private fun DetailMetadataContent(
             onFavorite = onFavorite,
             onWatched = onWatched,
         )
-        DetailTabStrip()
-        CastSection(movie = movie, serverUrl = session.serverUrl)
-        val provider = remember(session.activeProviderType, container) {
-            container.mediaProviderFor(session.activeProviderType)
-        }
-        val fallbackStill = remember(session.serverUrl, session.activeProviderType, movie.id) {
-            provider.episodeStillUrl(session.serverUrl, movie.id)
-        }
-        ThumbnailStrip(
-            movie = movie,
-            serverUrl = session.serverUrl,
-            fallbackStill = fallbackStill,
+        DetailTabStrip(
+            selectedTab = selectedDetailTab,
+            onSelectTab = { selectedDetailTab = it },
         )
-        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            InfoBlock("简介", movie.episodeOverview ?: movie.overview ?: "暂无简介")
-            InfoLine("导演", directorText(movie))
-            InfoLine("类型", movie.genre.orEmpty())
-            InfoLine("片商", movie.studio ?: movie.studios.orEmpty())
-            InfoLine("目录", movie.folderLevels.orEmpty())
-            CrewSection(movie.crew)
+        if (selectedDetailTab == "剧照") {
+            ThumbnailStrip(
+                movie = movie,
+                serverUrl = session.serverUrl,
+                fallbackStill = fallbackStill,
+            )
+        } else {
+            CastSection(movie = movie, serverUrl = session.serverUrl)
+            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                InfoBlock("简介", movie.episodeOverview ?: movie.overview ?: "暂无简介")
+                InfoLine("导演", directorText(movie))
+                InfoLine("类型", movie.genre.orEmpty())
+                InfoLine("片商", movie.studio ?: movie.studios.orEmpty())
+                InfoLine("目录", movie.folderLevels.orEmpty())
+                CrewSection(movie.crew)
+            }
         }
     }
 }
 
 @Composable
-private fun DetailTabStrip() {
+private fun DetailTabStrip(
+    selectedTab: String,
+    onSelectTab: (String) -> Unit,
+) {
     LazyRow(
         modifier = Modifier.padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(listOf("信息", "剧照", "演员", "相关单集")) { label ->
-            DesignFilterChip(label = label, selected = label == "信息", onClick = {})
+        items(listOf("信息", "剧照")) { label ->
+            DesignFilterChip(label = label, selected = label == selectedTab, onClick = { onSelectTab(label) })
         }
     }
 }
@@ -619,6 +621,7 @@ private fun MovieInfoHeader(
                 text = movie.title ?: movie.displayTitle ?: movie.code,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -720,7 +723,13 @@ private fun PersonCard(person: PersonCreditDto, serverUrl: String) {
                 modifier = Modifier.size(54.dp).clip(CircleShape),
             )
         }
-        Text(person.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            person.name,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Text(
             text = person.character ?: person.role.orEmpty(),
             style = MaterialTheme.typography.labelSmall,
@@ -888,7 +897,6 @@ private fun ThumbnailStrip(movie: MovieDto, serverUrl: String, fallbackStill: St
     }
     if (thumbnails.isEmpty()) return
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SectionHeader("精彩剧照")
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(thumbnails, key = { it }) { url ->
                 AsyncImage(

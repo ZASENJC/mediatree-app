@@ -130,7 +130,7 @@ fun SectionHeader(text: String) {
 fun InfoBlock(label: String, value: String) {
     if (value.isBlank()) return
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = MaterialTheme.typography.titleMedium)
+        Text(label, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
         Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -140,7 +140,7 @@ fun InfoLine(label: String, value: String) {
     if (value.isBlank()) return
     androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 8.dp))
-        Text(value, modifier = Modifier.weight(1f))
+        Text(value, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
     }
 }
 

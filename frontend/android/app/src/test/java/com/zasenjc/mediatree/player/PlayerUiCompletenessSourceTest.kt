@@ -154,7 +154,39 @@ class PlayerUiCompletenessSourceTest {
 
         assertTrue(portraitBlock.contains("Spacer(Modifier.height(12.dp))"))
         assertTrue(portraitBlock.indexOf(".aspectRatio(16f / 9f)") < portraitBlock.indexOf("Spacer(Modifier.height(12.dp))"))
-        assertTrue(portraitBlock.indexOf("Spacer(Modifier.height(12.dp))") < portraitBlock.indexOf("Surface("))
+        assertTrue(portraitBlock.indexOf("Spacer(Modifier.height(12.dp))") < portraitBlock.indexOf("LazyColumn("))
+    }
+
+    @Test
+    fun detailPagePortraitMetadataIsUnframedAndUsesThemeTextColors() {
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+        val sharedComponents = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/components/SharedComponents.kt")
+            .readText()
+        val portraitStart = detailScreen.indexOf("private fun PortraitPlayerCard(")
+        val portraitEnd = detailScreen.indexOf("@OptIn(ExperimentalAnimationApi::class)", portraitStart + 1)
+        val portraitBlock = detailScreen.substring(portraitStart, portraitEnd)
+
+        assertFalse(portraitBlock.contains("Surface("))
+        assertTrue(portraitBlock.contains("LazyColumn("))
+        assertTrue(detailScreen.contains("color = MaterialTheme.colorScheme.onBackground"))
+        assertTrue(sharedComponents.contains("color = MaterialTheme.colorScheme.onBackground"))
+    }
+
+    @Test
+    fun detailPageTabsOnlyExposeInfoAndStills() {
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+
+        assertTrue(detailScreen.contains("items(listOf(\"信息\", \"剧照\"))"))
+        assertTrue(detailScreen.contains("var selectedDetailTab by remember(movie.id)"))
+        assertTrue(detailScreen.contains("selectedTab = selectedDetailTab"))
+        assertTrue(detailScreen.contains("if (selectedDetailTab == \"剧照\")"))
+        assertFalse(detailScreen.contains("items(listOf(\"信息\", \"剧照\", \"演员\", \"相关单集\"))"))
+        assertFalse(detailScreen.contains("SectionHeader(\"精彩剧照\")"))
     }
 
     @Test
