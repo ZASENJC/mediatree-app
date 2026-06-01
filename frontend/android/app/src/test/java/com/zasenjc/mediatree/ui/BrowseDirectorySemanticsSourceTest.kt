@@ -18,6 +18,11 @@ class BrowseDirectorySemanticsSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/ui/MediaTreeApp.kt")
             .readText()
 
+    private val homeSource: String
+        get() = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
+            .readText()
+
     @Test
     fun browseFolderTitleUsesOriginalFolderNameOnly() {
         val source = browseSource
@@ -111,6 +116,52 @@ class BrowseDirectorySemanticsSourceTest {
         assertFalse(browseSource.contains("private suspend fun webDavDirectoryChildCount"))
         assertTrue(browseSource.contains("webDavLibraryPath(sourceId)"))
         assertTrue(browseSource.contains("webdavPlayer/${'$'}sourceId?path="))
+    }
+
+    @Test
+    fun homeMediaFeedMountedFoldersOpenRecursiveBrowseVideoMode() {
+        val openLibraryItemBlock = homeSource
+            .substringAfter("fun openLibraryItem")
+            .substringBefore("fun HomeScreen(")
+        val handleNavigateBlock = appSource
+            .substringAfter("fun handleAppNavigate(route: String)")
+            .substringBefore("BackHandler(")
+
+        assertTrue(openLibraryItemBlock.contains("browse?folder="))
+        assertTrue(openLibraryItemBlock.contains("recursiveVideos=true"))
+        assertFalse(openLibraryItemBlock.contains("onNavigate(\"smb/"))
+        assertFalse(openLibraryItemBlock.contains("onNavigate(\"webdav/"))
+        assertTrue(handleNavigateBlock.contains("browseRecursiveVideos"))
+        assertTrue(handleNavigateBlock.contains("recursiveVideos"))
+    }
+
+    @Test
+    fun mountedRecursiveBrowseModeLoadsDescendantVideosOnly() {
+        val browseSignature = browseSource
+            .substringAfter("fun BrowseScreen(")
+            .substringBefore(") {")
+        val loadSmbBlock = browseSource
+            .substringAfter("private suspend fun loadSmb")
+            .substringBefore("private suspend fun loadWebDav")
+        val loadWebDavBlock = browseSource
+            .substringAfter("private suspend fun loadWebDav")
+            .substringBefore("fun loadMore")
+        val appBrowseCall = appSource
+            .substringAfter("\"browse\" -> BrowseScreen(")
+            .substringBefore(")")
+
+        assertTrue(browseSignature.contains("recursiveVideosOnly: Boolean"))
+        assertTrue(appBrowseCall.contains("recursiveVideosOnly = browseRecursiveVideos"))
+        assertTrue(loadSmbBlock.contains("recursiveVideosOnly"))
+        assertTrue(loadSmbBlock.contains("collectSmbVideoEntries(source, folder)"))
+        assertTrue(loadSmbBlock.contains("folders = if (recursiveVideosOnly) emptyList()"))
+        assertTrue(loadWebDavBlock.contains("recursiveVideosOnly"))
+        assertTrue(loadWebDavBlock.contains("collectWebDavVideoEntries(source, folder)"))
+        assertTrue(loadWebDavBlock.contains("folders = if (recursiveVideosOnly) emptyList()"))
+        assertTrue(browseSource.contains("container.smbClient.list(source, currentFolder)"))
+        assertTrue(browseSource.contains("container.webDavClient.list(source, currentFolder)"))
+        assertTrue(browseSource.contains("MountedVideoPosterCard("))
+        assertTrue(browseSource.contains("MountedVideoThumbnail("))
     }
 
     @Test

@@ -138,18 +138,24 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
     private val mountedVideoFrameCache = MountedVideoFrameMemoryCache()
     private val mountedVideoFrameRequests = mutableMapOf<String, Deferred<Bitmap?>>()
 
-    fun load(providerType: ProviderType, folder: String, mediaRoot: String, sort: String = _state.value.sortMode) {
+    fun load(
+        providerType: ProviderType,
+        folder: String,
+        mediaRoot: String,
+        sort: String = _state.value.sortMode,
+        recursiveVideosOnly: Boolean = false,
+    ) {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null, sortMode = sort) }
             try {
                 val smbSourceId = mediaRoot.smbLibrarySourceId()
                 if (smbSourceId != null) {
-                    loadSmb(smbSourceId, folder, sort)
+                    loadSmb(smbSourceId, folder, sort, recursiveVideosOnly)
                     return@launch
                 }
                 val webDavSourceId = mediaRoot.webDavLibrarySourceId()
                 if (webDavSourceId != null) {
-                    loadWebDav(webDavSourceId, folder, sort)
+                    loadWebDav(webDavSourceId, folder, sort, recursiveVideosOnly)
                     return@launch
                 }
                 val provider = container.mediaProviderFor(providerType)
@@ -183,12 +189,16 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    private suspend fun loadSmb(sourceId: String, folder: String, sort: String) {
+    private suspend fun loadSmb(sourceId: String, folder: String, sort: String, recursiveVideosOnly: Boolean) {
         val source = container.clientStorageRepository.load()
             .firstOrNull { it.id == sourceId && it.type == com.zasenjc.mediatree.data.ClientStorageType.SMB && it.enabled }
             ?: throw IllegalArgumentException("SMB 存储源不可用")
-        val entries = container.smbClient.list(source, folder)
-        val folders = entries.filter { it.isDirectory }
+        val entries = if (recursiveVideosOnly) {
+            collectSmbVideoEntries(source, folder)
+        } else {
+            container.smbClient.list(source, folder)
+        }
+        val folders = if (recursiveVideosOnly) emptyList() else entries.filter { it.isDirectory }
             .map { entry ->
                 FolderNodeDto(
                     name = entry.name,
@@ -227,12 +237,34 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    private suspend fun loadWebDav(sourceId: String, folder: String, sort: String) {
+    private suspend fun collectSmbVideoEntries(source: ClientStorageSource, folder: String): List<com.zasenjc.mediatree.data.SmbEntry> {
+        val pending = ArrayDeque<String>()
+        val visited = mutableSetOf<String>()
+        val videos = mutableListOf<com.zasenjc.mediatree.data.SmbEntry>()
+        pending.add(folder)
+        while (pending.isNotEmpty()) {
+            val currentFolder = pending.removeFirst()
+            if (!visited.add(currentFolder)) continue
+            container.smbClient.list(source, currentFolder).forEach { entry ->
+                when {
+                    entry.isDirectory -> pending.add(entry.path)
+                    entry.isPlayableVideo -> videos.add(entry)
+                }
+            }
+        }
+        return videos
+    }
+
+    private suspend fun loadWebDav(sourceId: String, folder: String, sort: String, recursiveVideosOnly: Boolean) {
         val source = container.clientStorageRepository.load()
             .firstOrNull { it.id == sourceId && it.type == com.zasenjc.mediatree.data.ClientStorageType.WebDAV && it.enabled }
             ?: throw IllegalArgumentException("WebDAV 存储源不可用")
-        val entries = container.webDavClient.list(source, folder)
-        val folders = entries.filter { it.isDirectory }
+        val entries = if (recursiveVideosOnly) {
+            collectWebDavVideoEntries(source, folder)
+        } else {
+            container.webDavClient.list(source, folder)
+        }
+        val folders = if (recursiveVideosOnly) emptyList() else entries.filter { it.isDirectory }
             .map { entry ->
                 FolderNodeDto(
                     name = entry.name,
@@ -292,6 +324,24 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    private suspend fun collectWebDavVideoEntries(source: ClientStorageSource, folder: String): List<com.zasenjc.mediatree.data.WebDavEntry> {
+        val pending = ArrayDeque<String>()
+        val visited = mutableSetOf<String>()
+        val videos = mutableListOf<com.zasenjc.mediatree.data.WebDavEntry>()
+        pending.add(folder)
+        while (pending.isNotEmpty()) {
+            val currentFolder = pending.removeFirst()
+            if (!visited.add(currentFolder)) continue
+            container.webDavClient.list(source, currentFolder).forEach { entry ->
+                when {
+                    entry.isDirectory -> pending.add(entry.path)
+                    entry.isPlayableVideo -> videos.add(entry)
+                }
+            }
+        }
+        return videos
+    }
+
     suspend fun loadMountedVideoFrame(source: ClientStorageSource?, movie: MovieDto): Bitmap? {
         val cacheKey = mountedVideoFrameCacheKey(source, movie) ?: return null
         mountedVideoFrameCache.getCached(cacheKey)?.let { return it }
@@ -321,6 +371,7 @@ fun BrowseScreen(
     onNavigate: (String) -> Unit,
     onError: (Throwable) -> Unit,
     initialFolder: String,
+    recursiveVideosOnly: Boolean = false,
     viewMode: String,
     onViewModeChange: (String) -> Unit,
     chromeVisible: Boolean = true,
@@ -338,11 +389,16 @@ fun BrowseScreen(
         onChromeVisibleChange(true)
     }
 
-    LaunchedEffect(session.serverUrl, session.activeProviderType, session.activeLibrary, initialFolder) {
+    LaunchedEffect(session.serverUrl, session.activeProviderType, session.activeLibrary, initialFolder, recursiveVideosOnly) {
         val smbSourceId = session.activeLibrary.smbLibrarySourceId()
         val webDavSourceId = session.activeLibrary.webDavLibrarySourceId()
         if (shouldLoadRemoteContent(session) || smbSourceId != null || webDavSourceId != null) {
-            vm.load(session.activeProviderType, initialFolder, session.activeLibrary)
+            vm.load(
+                providerType = session.activeProviderType,
+                folder = initialFolder,
+                mediaRoot = session.activeLibrary,
+                recursiveVideosOnly = recursiveVideosOnly,
+            )
         }
     }
 
@@ -380,7 +436,13 @@ fun BrowseScreen(
                     val smbSourceId = session.activeLibrary.smbLibrarySourceId()
                     val webDavSourceId = session.activeLibrary.webDavLibrarySourceId()
                     if (shouldLoadRemoteContent(session) || smbSourceId != null || webDavSourceId != null) {
-                        vm.load(session.activeProviderType, initialFolder, session.activeLibrary, state.sortMode)
+                        vm.load(
+                            providerType = session.activeProviderType,
+                            folder = initialFolder,
+                            mediaRoot = session.activeLibrary,
+                            sort = state.sortMode,
+                            recursiveVideosOnly = recursiveVideosOnly,
+                        )
                     }
                 },
             ) {
@@ -429,7 +491,13 @@ fun BrowseScreen(
                                             val smbSourceId = session.activeLibrary.smbLibrarySourceId()
                                             val webDavSourceId = session.activeLibrary.webDavLibrarySourceId()
                                             if (shouldLoadRemoteContent(session) || smbSourceId != null || webDavSourceId != null) {
-                                                vm.load(session.activeProviderType, initialFolder, session.activeLibrary, key)
+                                                vm.load(
+                                                    providerType = session.activeProviderType,
+                                                    folder = initialFolder,
+                                                    mediaRoot = session.activeLibrary,
+                                                    sort = key,
+                                                    recursiveVideosOnly = recursiveVideosOnly,
+                                                )
                                             }
                                         },
                                         label = label,

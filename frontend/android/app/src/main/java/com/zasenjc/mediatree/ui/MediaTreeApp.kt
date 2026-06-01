@@ -135,6 +135,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     )
     var browseFolder by remember { mutableStateOf("") }
     var browseViewMode by rememberSaveable { mutableStateOf("compact") }
+    var browseRecursiveVideos by remember { mutableStateOf(false) }
     var chromeVisible by remember { mutableStateOf(true) }
 
     LaunchedEffect(currentRoute) {
@@ -143,6 +144,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
 
     LaunchedEffect(session.activeProviderType, session.activeLibrary) {
         browseFolder = ""
+        browseRecursiveVideos = false
     }
 
     fun navigateTopDestination(route: String) {
@@ -184,10 +186,14 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
             route.startsWith("detail/") -> navController.navigate(route) { launchSingleTop = true }
             route == "browse" -> {
                 browseFolder = ""
+                browseRecursiveVideos = false
                 navigateTopDestination("browse")
             }
             route.startsWith("browse?folder=") -> {
-                browseFolder = Uri.decode(route.removePrefix("browse?folder="))
+                val query = route.substringAfter("browse?", missingDelimiterValue = "")
+                val params = Uri.parse("mediatree://local/browse?$query")
+                browseFolder = params.getQueryParameter("folder").orEmpty()
+                browseRecursiveVideos = params.getQueryParameter("recursiveVideos") == "true"
                 navigateTopDestination("browse")
             }
             topDestinations.any { it.route == route } -> navigateTopDestination(route)
@@ -197,6 +203,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
 
     BackHandler(enabled = pagerState.currentPage == topDestinations.indexOfFirst { it.route == "browse" } && browseFolder.isNotBlank()) {
         browseFolder = browseParentFolder()
+        browseRecursiveVideos = false
         navigateTopDestination("browse")
     }
 
@@ -250,6 +257,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 onNavigate = ::handleAppNavigate,
                                 onError = onError,
                                 initialFolder = browseFolder,
+                                recursiveVideosOnly = browseRecursiveVideos,
                                 viewMode = browseViewMode,
                                 onViewModeChange = { browseViewMode = it },
                                 chromeVisible = chromeVisible,

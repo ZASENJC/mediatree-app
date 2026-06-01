@@ -231,10 +231,8 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(openingPath = item.path, error = null) }
             try {
-                if (item.mediaRoot?.smbLibrarySourceId() != null) {
-                    onNavigate("smb/${item.mediaRoot.smbLibrarySourceId()}?path=${android.net.Uri.encode(item.path)}")
-                } else if (item.mediaRoot?.webDavLibrarySourceId() != null) {
-                    onNavigate("webdav/${item.mediaRoot.webDavLibrarySourceId()}?path=${android.net.Uri.encode(item.path)}")
+                if (item.mediaRoot?.smbLibrarySourceId() != null || item.mediaRoot?.webDavLibrarySourceId() != null) {
+                    onNavigate("browse?folder=${Uri.encode(item.path)}&recursiveVideos=true")
                 } else if (item.isLeaf) {
                     onNavigate(item.detailRoute())
                 } else {
