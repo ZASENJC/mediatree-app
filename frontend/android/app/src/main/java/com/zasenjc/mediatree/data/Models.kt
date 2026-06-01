@@ -35,7 +35,10 @@ data class ServerProfile(
     val userId: String = "",
     val token: String = "",
     val activeLibrary: String = "",
-)
+) {
+    val displayName: String
+        get() = name.ifBlank { type.name }
+}
 
 const val DEFAULT_MEDIATREE_PROFILE_ID = "mediatree-default"
 

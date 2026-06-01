@@ -66,11 +66,16 @@ class SessionStore(context: Context) {
         )
     }
 
-    suspend fun saveServer(serverUrl: String, type: ProviderType = ProviderType.MediaTree) {
+    suspend fun saveServer(
+        serverUrl: String,
+        type: ProviderType = ProviderType.MediaTree,
+        name: String = "",
+    ) {
         val current = sessionFlow.first()
         val normalized = UrlUtils.normalizeServerUrl(serverUrl)
-        val profile = (current.activeProfile?.takeIf { it.type == type } ?: providerProfile(type, normalized))
-            .copy(type = type, name = type.name, serverUrl = normalized)
+        val existing = current.activeProfile?.takeIf { it.type == type }
+        val profile = (existing ?: providerProfile(type, normalized))
+            .copy(type = type, name = name.ifBlank { existing?.name.orEmpty() }.ifBlank { type.name }, serverUrl = normalized)
         val profiles = current.resolvedProfiles.upsertProfile(profile)
         appContext.sessionDataStore.edit { prefs ->
             prefs[SERVER_URL] = normalized
@@ -79,7 +84,12 @@ class SessionStore(context: Context) {
         }
     }
 
-    suspend fun saveProfile(profileId: String?, serverUrl: String, type: ProviderType) {
+    suspend fun saveProfile(
+        profileId: String?,
+        serverUrl: String,
+        type: ProviderType,
+        name: String = "",
+    ) {
         val current = sessionFlow.first()
         val normalized = UrlUtils.normalizeServerUrl(serverUrl)
         val existing = profileId
@@ -87,7 +97,7 @@ class SessionStore(context: Context) {
             ?.takeIf { it.type == type }
         val profile = (existing ?: providerProfile(type, normalized)).copy(
             type = type,
-            name = type.name,
+            name = name.ifBlank { existing?.name.orEmpty() }.ifBlank { type.name },
             serverUrl = normalized,
         )
         val profiles = current.resolvedProfiles.upsertProfile(profile)
@@ -103,16 +113,18 @@ class SessionStore(context: Context) {
         token: String,
         type: ProviderType = ProviderType.MediaTree,
         userId: String = "",
+        name: String = "",
     ) {
         val current = sessionFlow.first()
         val normalized = UrlUtils.normalizeServerUrl(serverUrl)
-        val profile = (current.activeProfile?.takeIf { it.type == type } ?: providerProfile(type, normalized)).copy(
+        val existing = current.activeProfile?.takeIf { it.type == type }
+        val profile = (existing ?: providerProfile(type, normalized)).copy(
             type = type,
-            name = type.name,
+            name = name.ifBlank { existing?.name.orEmpty() }.ifBlank { type.name },
             serverUrl = normalized,
             userId = userId,
             token = "",
-            activeLibrary = current.activeProfile?.takeIf { it.type == type }?.activeLibrary.orEmpty(),
+            activeLibrary = existing?.activeLibrary.orEmpty(),
         )
         val profiles = current.resolvedProfiles.upsertProfile(profile)
         writeToken(token, profile.id)

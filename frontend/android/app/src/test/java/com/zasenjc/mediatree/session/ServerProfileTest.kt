@@ -32,6 +32,12 @@ class ServerProfileTest {
     }
 
     @Test
+    fun backendProfileDisplayNameFallsBackToProviderType() {
+        assertEquals("家庭片库", ServerProfile(name = "家庭片库").displayName)
+        assertEquals("Jellyfin", ServerProfile(type = ProviderType.Jellyfin, name = "").displayName)
+    }
+
+    @Test
     fun legacySessionFieldsExposeActiveMediaTreeProfile() {
         val session = Session(
             profiles = listOf(

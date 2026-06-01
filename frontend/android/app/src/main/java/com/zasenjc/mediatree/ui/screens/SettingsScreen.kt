@@ -116,6 +116,7 @@ private fun ClientStorageType.connectionIcon(): ImageVector = when (this) {
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     data class BackendLibraryItem(
         val profileId: String,
+        val profileName: String,
         val providerType: ProviderType,
         val root: MediaRootDto,
     )
@@ -202,32 +203,39 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.uiPreferencesStore.setThemeModePreference(value) }
     }
 
-    fun saveServerProfile(profileId: String?, providerType: ProviderType, serverUrl: String) {
+    fun saveServerProfile(profileId: String?, providerType: ProviderType, serverUrl: String, profileName: String) {
         viewModelScope.launch {
             kotlin.runCatching {
-                container.sessionStore.saveProfile(profileId, serverUrl, providerType)
+                container.sessionStore.saveProfile(profileId, serverUrl, providerType, profileName)
             }
                 .onSuccess { _state.update { it.copy(message = "${providerType.labelText()} 已保存", error = null) } }
                 .onFailure { throwable -> _state.update { it.copy(error = throwable.message) } }
         }
     }
 
-    fun loginServerProfile(profileId: String?, providerType: ProviderType, serverUrl: String, username: String, password: String) {
+    fun loginServerProfile(
+        profileId: String?,
+        providerType: ProviderType,
+        serverUrl: String,
+        profileName: String,
+        username: String,
+        password: String,
+    ) {
         viewModelScope.launch {
             val normalized = UrlUtils.normalizeServerUrl(serverUrl)
             _state.update { it.copy(message = "", error = null) }
             try {
-                container.sessionStore.saveProfile(profileId, normalized, providerType)
+                container.sessionStore.saveProfile(profileId, normalized, providerType, profileName)
                 val provider = container.mediaProviderFor(providerType)
                 val status = provider.authStatus(normalized)
                 if (!status.needAuth) {
-                    container.sessionStore.saveSession(normalized, "", type = providerType)
+                    container.sessionStore.saveSession(normalized, "", type = providerType, name = profileName)
                     _state.update { it.copy(message = "${providerType.labelText()} 无需登录，已连接") }
                     return@launch
                 }
                 val result = provider.login(normalized, username, password)
                 if (result.ok) {
-                    container.sessionStore.saveSession(normalized, result.token, type = providerType, userId = result.userId)
+                    container.sessionStore.saveSession(normalized, result.token, type = providerType, userId = result.userId, name = profileName)
                     _state.update { it.copy(message = "${providerType.labelText()} 登录成功") }
                 } else {
                     _state.update { it.copy(error = "${providerType.labelText()} 登录失败") }
@@ -254,6 +262,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                             libraries += roots.map { root ->
                                 BackendLibraryItem(
                                     profileId = profile.id,
+                                    profileName = profile.displayName,
                                     providerType = profile.type,
                                     root = root,
                                 )
@@ -516,7 +525,7 @@ fun SettingsScreen(
                     state.backendLibraries.forEach { library ->
                         DesignSettingsRow(
                             title = library.root.label.ifBlank { library.root.path.substringAfterLast("/") },
-                            subtitle = "${library.providerType.labelText()} 媒体库 · ${library.root.movieCount} 项",
+                            subtitle = "${library.profileName} · ${library.providerType.labelText()} 媒体库 · ${library.root.movieCount} 项",
                             icon = library.providerType.connectionIcon(),
                             trailing = {
                                 if (session.activeProfileId == library.profileId && session.activeLibrary == library.root.path) {
@@ -600,12 +609,12 @@ fun SettingsScreen(
         ConnectionEditorDialog(
             target = target,
             onDismiss = { editingConnection = null },
-            onSaveServer = { profileId, providerType, serverUrl ->
-                vm.saveServerProfile(profileId, providerType, serverUrl)
+            onSaveServer = { profileId, providerType, serverUrl, profileName ->
+                vm.saveServerProfile(profileId, providerType, serverUrl, profileName)
                 editingConnection = null
             },
-            onLoginServer = { profileId, providerType, serverUrl, username, password ->
-                vm.loginServerProfile(profileId, providerType, serverUrl, username, password)
+            onLoginServer = { profileId, providerType, serverUrl, profileName, username, password ->
+                vm.loginServerProfile(profileId, providerType, serverUrl, profileName, username, password)
                 editingConnection = null
             },
             onSaveWebDav = { id, name, url, username, password, authType, enabled ->
@@ -679,7 +688,7 @@ private fun ConnectionsSection(
         }
         profiles.forEach { profile ->
             DesignSettingsRow(
-                title = profile.serverUrl.ifBlank { profile.type.labelText() },
+                title = profile.displayName(),
                 subtitle = "${profile.type.labelText()} 后端 · ${profile.connectionStatus(session)}",
                 icon = profile.type.connectionIcon(),
                 trailing = {
@@ -728,8 +737,8 @@ private fun ConnectionsSection(
 private fun ConnectionEditorDialog(
     target: ConnectionEditorTarget,
     onDismiss: () -> Unit,
-    onSaveServer: (String?, ProviderType, String) -> Unit,
-    onLoginServer: (String?, ProviderType, String, String, String) -> Unit,
+    onSaveServer: (String?, ProviderType, String, String) -> Unit,
+    onLoginServer: (String?, ProviderType, String, String, String, String) -> Unit,
     onSaveWebDav: (String?, String, String, String, String, ClientStorageAuthType, Boolean) -> Unit,
     onSaveSmb: (String?, String, String, String, String, String, Boolean) -> Unit,
 ) {
@@ -757,9 +766,10 @@ private fun ConnectionEditorDialog(
 private fun ServerConnectionDialog(
     target: ConnectionEditorTarget.Server,
     onDismiss: () -> Unit,
-    onSave: (String?, ProviderType, String) -> Unit,
-    onLogin: (String?, ProviderType, String, String, String) -> Unit,
+    onSave: (String?, ProviderType, String, String) -> Unit,
+    onLogin: (String?, ProviderType, String, String, String, String) -> Unit,
 ) {
+    var profileName by remember(target) { mutableStateOf(target.profile?.displayName ?: target.type.labelText()) }
     var serverUrl by remember(target) { mutableStateOf(target.profile?.serverUrl.orEmpty()) }
     var username by remember(target) { mutableStateOf("") }
     var password by remember(target) { mutableStateOf("") }
@@ -771,6 +781,13 @@ private fun ServerConnectionDialog(
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = profileName,
+                    onValueChange = { profileName = it },
+                    label = { Text("媒体库名称") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
                 OutlinedTextField(
                     value = serverUrl,
                     onValueChange = { serverUrl = it },
@@ -795,14 +812,14 @@ private fun ServerConnectionDialog(
             }
         },
         confirmButton = {
-            FilledTonalButton(onClick = { onLogin(target.profile?.id, target.type, serverUrl, username, password) }) {
+            FilledTonalButton(onClick = { onLogin(target.profile?.id, target.type, serverUrl, profileName, username, password) }) {
                 Text("登录")
             }
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onDismiss) { Text("取消") }
-                Button(onClick = { onSave(target.profile?.id, target.type, serverUrl) }) { Text("保存") }
+                Button(onClick = { onSave(target.profile?.id, target.type, serverUrl, profileName) }) { Text("保存") }
             }
         },
     )
@@ -986,6 +1003,9 @@ private fun ServerProfile.connectionStatus(session: Session): String = when {
     serverUrl.isNotBlank() -> "已连接"
     else -> "未配置"
 }
+
+private fun ServerProfile.displayName(): String =
+    displayName.ifBlank { serverUrl.ifBlank { type.labelText() } }
 
 private fun ServerProfile.canLoadMediaRoots(): Boolean = when (type) {
     ProviderType.MediaTree -> serverUrl.isNotBlank()

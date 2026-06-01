@@ -38,4 +38,18 @@ class SettingsConnectionsSourceTest {
         assertTrue(source.contains("saveServerProfile"))
         assertTrue(source.contains("loginServerProfile"))
     }
+
+    @Test
+    fun serverConnectionEditorCanNameBackendProfiles() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
+            .readText()
+
+        assertTrue(source.contains("profileName"))
+        assertTrue(source.contains("label = { Text(\"媒体库名称\") }"))
+        assertTrue(source.contains("saveServerProfile(profileId, providerType, serverUrl, profileName)"))
+        assertTrue(source.contains("loginServerProfile(profileId, providerType, serverUrl, profileName, username, password)"))
+        assertTrue(source.contains("title = profile.displayName()"))
+        assertTrue(source.contains("library.profileName"))
+    }
 }
