@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.ViewAgenda
-import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -94,7 +93,6 @@ private val browseSortOptions = listOf(
 
 private val browseViewModes = listOf(
     BrowseViewMode("icon", "图标", Icons.Default.GridView),
-    BrowseViewMode("list", "列表", Icons.Default.ViewList),
     BrowseViewMode("compact", "紧凑", Icons.Default.ViewAgenda),
     BrowseViewMode("poster", "封面图", Icons.Default.ViewModule),
 )
@@ -304,7 +302,7 @@ fun BrowseScreen(
     val vm: BrowseViewModel = viewModel(factory = viewModelFactory { BrowseViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
-    var viewMode by remember { mutableStateOf("list") }
+    var viewMode by remember { mutableStateOf("compact") }
     val listState = rememberLazyListState()
 
     SyncChromeWithListScroll(listState, onChromeVisibleChange)
@@ -382,7 +380,7 @@ fun BrowseScreen(
                                 value = query,
                                 onValueChange = { query = it },
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                placeholder = { Text(if (state.currentFolder.isBlank()) "搜索文件夹" else "搜索影片") },
+                                placeholder = { Text("搜索项目") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -414,9 +412,6 @@ fun BrowseScreen(
                         }
                     }
                     if (filteredFolders.isNotEmpty()) {
-                        item {
-                            Text("媒体库组目录", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground)
-                        }
                         when (viewMode) {
                             "poster" -> {
                                 items(posterFolderRows, key = { row -> row.joinToString("|") { it.path } }) { row ->
@@ -442,15 +437,12 @@ fun BrowseScreen(
                             }
                             else -> {
                                 items(filteredFolders, key = { it.path }) { folder ->
-                                    DesignFolderRow(folder = folder, onClick = { openFolderNode(folder) })
+                                    CompactFolderRow(folder = folder, onClick = { openFolderNode(folder) })
                                 }
                             }
                         }
                     }
                     if (filteredMovies.isNotEmpty() || state.currentFolder.isNotBlank()) {
-                        item {
-                            Text("影片 · 共 ${state.total} 部", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onBackground)
-                        }
                         when (viewMode) {
                             "poster" -> {
                                 items(posterMovieRows, key = { row -> row.joinToString("|") { it.id.toString() } }) { row ->
@@ -482,11 +474,7 @@ fun BrowseScreen(
                             }
                             else -> {
                                 items(filteredMovies, key = { it.id }) { movie ->
-                                    MovieListRow(
-                                        movie = movie,
-                                        imageUrl = movie.mediaRoot?.mountedLibrarySourceId()?.let { null } ?: provider.coverUrl(session.serverUrl, movie.id),
-                                        onClick = { onNavigate(movie.openRoute()) },
-                                    )
+                                    CompactMovieRow(movie = movie, onClick = { onNavigate(movie.openRoute()) })
                                 }
                             }
                         }
@@ -829,6 +817,7 @@ private fun CompactBrowserRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().height(46.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
@@ -928,12 +917,7 @@ private fun List<MovieDto>.sortedMoviesForBrowse(sort: String): List<MovieDto> =
     else -> sortedWith(compareBy<MovieDto> { it.browseTitle() }.thenBy { it.code })
 }
 
-private fun FolderNodeDto.browseTitle(): String =
-    name.ifBlank {
-        path.trimEnd('/', '\\').substringAfterLast('/').substringAfterLast('\\').ifBlank {
-            displayTitle ?: path
-        }
-    }
+private fun FolderNodeDto.browseTitle(): String = name
 
 private fun FolderNodeDto.detailRoute(): String =
     "detail/${path.toMovieRouteId()}?providerItemId=${Uri.encode(path)}"

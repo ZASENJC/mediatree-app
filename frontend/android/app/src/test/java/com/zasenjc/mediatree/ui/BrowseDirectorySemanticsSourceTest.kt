@@ -14,23 +14,43 @@ class BrowseDirectorySemanticsSourceTest {
             .readText()
 
     @Test
-    fun browseFolderTitleUsesOriginalFolderNameBeforeDisplayTitle() {
+    fun browseFolderTitleUsesOriginalFolderNameOnly() {
         val source = browseSource
         val titleBlock = source
             .substringAfter("private fun FolderNodeDto.browseTitle(): String =")
             .substringBefore("private fun FolderNodeDto.detailRoute")
 
-        assertTrue(titleBlock.contains("name.ifBlank"))
-        assertTrue(titleBlock.indexOf("name.ifBlank") < titleBlock.indexOf("displayTitle"))
+        assertTrue(titleBlock.trim().startsWith("name"))
+        assertFalse(titleBlock.contains("displayTitle"))
+        assertFalse(titleBlock.contains("substringAfterLast"))
     }
 
     @Test
-    fun browseScreenDoesNotRenderMountedRootBreadcrumb() {
+    fun browseScreenDoesNotRenderMountedRootBreadcrumbOrMediaGroupHeaders() {
         val screenBlock = browseSource
             .substringAfter("fun BrowseScreen(")
             .substringBefore("@Composable\nprivate fun DesignFolderRow")
 
         assertFalse(screenBlock.contains("BreadcrumbLine("))
+        assertFalse(screenBlock.contains("媒体库组目录"))
+        assertFalse(screenBlock.contains("影片 · 共"))
+        assertFalse(screenBlock.contains("搜索影片"))
+    }
+
+    @Test
+    fun browseScreenRemovesListModeAndDefaultsToCompact() {
+        assertFalse(browseSource.contains("ViewList"))
+        assertFalse(browseSource.contains("\"list\", \"列表\""))
+        assertTrue(browseSource.contains("mutableStateOf(\"compact\")"))
+    }
+
+    @Test
+    fun compactRowsKeepRoundedShape() {
+        val compactBrowserRow = browseSource
+            .substringAfter("private fun CompactBrowserRow")
+            .substringBefore("@Composable\nprivate fun BreadcrumbLine")
+
+        assertTrue(compactBrowserRow.contains("shape = RoundedCornerShape(12.dp)"))
     }
 
     @Test
