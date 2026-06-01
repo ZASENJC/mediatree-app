@@ -223,6 +223,63 @@ class BrowseDirectorySemanticsSourceTest {
     }
 
     @Test
+    fun browseSearchReloadsCurrentDirectoryRecursivelyInsteadOfFilteringVisibleRows() {
+        val uiBlock = browseSource
+            .substringAfter("fun BrowseScreen(")
+            .substringBefore("@Composable\nprivate fun DesignFolderRow")
+        val loadSignature = browseSource
+            .substringAfter("fun load(")
+            .substringBefore(") {")
+        val loadSmbBlock = browseSource
+            .substringAfter("private suspend fun loadSmb")
+            .substringBefore("private suspend fun collectSmbVideoEntries")
+        val loadWebDavBlock = browseSource
+            .substringAfter("private suspend fun loadWebDav")
+            .substringBefore("fun loadMore")
+
+        assertTrue(loadSignature.contains("searchQuery: String = \"\""))
+        assertTrue(uiBlock.contains("vm.load("))
+        assertTrue(uiBlock.contains("searchQuery = request"))
+        assertTrue(loadSmbBlock.contains("val searching = searchQuery.trim().isNotBlank()"))
+        assertTrue(loadSmbBlock.contains("recursiveVideosOnly || searching"))
+        assertTrue(loadSmbBlock.contains(".filterMoviesByQuery(searchQuery)"))
+        assertTrue(loadWebDavBlock.contains("val searching = searchQuery.trim().isNotBlank()"))
+        assertTrue(loadWebDavBlock.contains("recursiveVideosOnly || searching"))
+        assertTrue(loadWebDavBlock.contains(".filterMoviesByQuery(searchQuery)"))
+        assertTrue(uiBlock.contains("val filteredFolders = state.folders"))
+        assertTrue(uiBlock.contains("val filteredMovies = state.movies"))
+        assertFalse(uiBlock.contains("state.folders.filterFoldersByQuery(query)"))
+        assertFalse(uiBlock.contains("state.movies.filterMoviesByQuery(query)"))
+    }
+
+    @Test
+    fun browseSortUsesProviderSpecificKeysAndMountedMetadata() {
+        val loadRemoteBlock = browseSource
+            .substringAfter("val provider = container.mediaProviderFor(providerType)")
+            .substringBefore("_state.update {")
+        val loadMoreBlock = browseSource
+            .substringAfter("fun loadMore")
+            .substringBefore("private suspend fun collectWebDavVideoEntries")
+        val loadSmbBlock = browseSource
+            .substringAfter("private suspend fun loadSmb")
+            .substringBefore("private suspend fun collectSmbVideoEntries")
+        val loadWebDavBlock = browseSource
+            .substringAfter("private suspend fun loadWebDav")
+            .substringBefore("fun loadMore")
+
+        assertTrue(loadRemoteBlock.contains("sort = sort.toProviderBrowseMovieSort(providerType)"))
+        assertTrue(loadMoreBlock.contains("s.sortMode.toProviderBrowseMovieSort(providerType)"))
+        assertTrue(browseSource.contains("private fun String.toProviderBrowseMovieSort(providerType: ProviderType): String"))
+        assertTrue(browseSource.contains("ProviderType.MediaTree -> toMediaTreeBrowseMovieSort()"))
+        assertTrue(browseSource.contains("ProviderType.Jellyfin, ProviderType.Emby -> toJellyfinBrowseMovieSort()"))
+        assertFalse(browseSource.contains("private fun String.toApiMovieSort()"))
+        assertTrue(loadSmbBlock.contains("updatedAt = entry.modified.takeIf { it > 0L }?.toString()"))
+        assertTrue(loadSmbBlock.contains("createdAt = entry.modified.takeIf { it > 0L }?.toString()"))
+        assertTrue(loadWebDavBlock.contains("updatedAt = entry.modified.ifBlank { null }"))
+        assertTrue(loadWebDavBlock.contains("createdAt = entry.modified.ifBlank { null }"))
+    }
+
+    @Test
     fun browserRowsExposeThemeContentColorForDarkMode() {
         val source = browseSource
         val designFolderRow = source.substringAfter("private fun DesignFolderRow").substringBefore("@Composable\nprivate fun PosterFolderRow")

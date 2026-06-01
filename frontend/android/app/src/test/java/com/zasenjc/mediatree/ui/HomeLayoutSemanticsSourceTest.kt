@@ -54,6 +54,9 @@ class HomeLayoutSemanticsSourceTest {
         val searchBlock = source
             .substringAfter("private fun HomeSearchOverlay")
             .substringBefore("@Composable\nprivate fun HomeSearchResultRow")
+        val mountedSearchBlock = source
+            .substringAfter("private suspend fun searchMountedLibrary")
+            .substringBefore("private fun SmbEntry.toFolderNode")
 
         assertTrue(source.contains("private fun Session.canLoadHomeContent()"))
         assertTrue(actionsBlock.contains("session.canLoadHomeContent()"))
@@ -64,8 +67,12 @@ class HomeLayoutSemanticsSourceTest {
         assertTrue(searchBlock.contains("session.activeLibrary.smbLibrarySourceId()"))
         assertTrue(searchBlock.contains("session.activeLibrary.webDavLibrarySourceId()"))
         assertTrue(searchBlock.contains("searchMountedLibrary"))
-        assertTrue(source.contains("container.smbClient.list(source)"))
-        assertTrue(source.contains("container.webDavClient.list(source)"))
+        assertTrue(mountedSearchBlock.contains("collectSmbMountedLibraryVideos(source, container)"))
+        assertTrue(mountedSearchBlock.contains("collectWebDavMountedLibraryVideos(source, container)"))
+        assertTrue(source.contains("container.smbClient.list(source, currentFolder)"))
+        assertTrue(source.contains("container.webDavClient.list(source, currentFolder)"))
+        assertFalse(mountedSearchBlock.contains("container.smbClient.list(source)\n"))
+        assertFalse(mountedSearchBlock.contains("container.webDavClient.list(source)\n"))
         assertTrue(searchBlock.contains("mountedSearchResults"))
         assertTrue(searchBlock.contains("movie.openRoute()"))
     }
