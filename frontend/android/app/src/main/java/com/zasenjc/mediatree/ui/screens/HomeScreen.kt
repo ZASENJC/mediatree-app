@@ -82,6 +82,7 @@ import com.zasenjc.mediatree.data.HomeLayoutPreference
 import com.zasenjc.mediatree.data.FolderNodeDto
 import com.zasenjc.mediatree.data.MediaRootDto
 import com.zasenjc.mediatree.data.MovieDto
+import com.zasenjc.mediatree.data.MoviesResponseDto
 import com.zasenjc.mediatree.data.SmbEntry
 import com.zasenjc.mediatree.data.WebDavEntry
 import com.zasenjc.mediatree.data.smbLibraryPath
@@ -183,7 +184,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             .sortedForHome(sort)
         val recent = entries.filter { it.isPlayableVideo }
             .map { entry -> entry.toMovieDto(source) }
-            .sortedBy { it.title.orEmpty() }
+            .sortedMoviesForHome(sort)
             .take(20)
         _state.update {
             it.copy(
@@ -207,7 +208,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             .sortedForHome(sort)
         val recent = entries.filter { it.isPlayableVideo }
             .map { entry -> entry.toMovieDto(source) }
-            .sortedBy { it.title.orEmpty() }
+            .sortedMoviesForHome(sort)
             .take(20)
         _state.update {
             it.copy(
@@ -301,11 +302,7 @@ fun HomeScreen(
     }
 
     LaunchedEffect(session.serverUrl, session.activeProviderType, session.activeLibrary) {
-        if (
-            shouldLoadRemoteContent(session) ||
-            session.activeLibrary.smbLibrarySourceId() != null ||
-            session.activeLibrary.webDavLibrarySourceId() != null
-        ) {
+        if (session.canLoadHomeContent()) {
             vm.load(session.activeProviderType, session.activeLibrary)
         }
     }
@@ -321,9 +318,7 @@ fun HomeScreen(
     Scaffold(containerColor = Color.Transparent) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (
-                !shouldLoadRemoteContent(session) &&
-                session.activeLibrary.smbLibrarySourceId() == null &&
-                session.activeLibrary.webDavLibrarySourceId() == null
+                !session.canLoadHomeContent()
             ) {
                 EmptyMediaState("请先在设置页连接 MediaTree 服务器")
             } else if (state.loading) {
@@ -401,7 +396,7 @@ fun HomeScreen(
                                         text = { Text(label) },
                                         onClick = {
                                             showSort = false
-                                            if (shouldLoadRemoteContent(session)) {
+                                            if (session.canLoadHomeContent()) {
                                                 vm.load(session.activeProviderType, session.activeLibrary, key)
                                             }
                                         },
@@ -419,7 +414,7 @@ fun HomeScreen(
                                     leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
                                     onClick = {
                                         showMore = false
-                                        if (shouldLoadRemoteContent(session)) {
+                                        if (session.canLoadHomeContent()) {
                                             vm.load(session.activeProviderType, session.activeLibrary)
                                         }
                                     },
@@ -681,13 +676,28 @@ private fun HomeSearchOverlay(
         searching = true
         searchJob = scope.launch {
             delay(280)
-            if (!shouldLoadRemoteContent(session)) {
+            if (!session.canLoadHomeContent()) {
                 results = emptyList()
                 searching = false
                 return@launch
             }
             try {
-                val resp = provider.movies(
+                val mountedSearchResults = session.activeLibrary.smbLibrarySourceId()?.let { sourceId ->
+                    searchMountedLibrary(
+                        sourceId = sourceId,
+                        sourceType = ClientStorageType.SMB,
+                        request = request,
+                        container = container,
+                    )
+                } ?: session.activeLibrary.webDavLibrarySourceId()?.let { sourceId ->
+                    searchMountedLibrary(
+                        sourceId = sourceId,
+                        sourceType = ClientStorageType.WebDAV,
+                        request = request,
+                        container = container,
+                    )
+                }
+                val resp = mountedSearchResults ?: provider.movies(
                     code = request,
                     limit = 20,
                     mediaRoot = session.activeLibrary,
@@ -815,10 +825,10 @@ private fun HomeSearchOverlay(
                                     items(results, key = { it.id }) { movie ->
                                         HomeSearchResultRow(
                                             movie = movie,
-                                            imageUrl = provider.coverUrl(session.serverUrl, movie.id),
+                                            imageUrl = if (movie.isMountedLibraryItem()) null else provider.coverUrl(session.serverUrl, movie.id),
                                             onClick = {
                                                 focusManager.clearFocus()
-                                                onNavigate(movie.detailRoute())
+                                                onNavigate(movie.openRoute())
                                             },
                                         )
                                     }
@@ -892,6 +902,27 @@ private fun List<FolderNodeDto>.sortedForHome(sort: String): List<FolderNodeDto>
     )
 }
 
+private suspend fun searchMountedLibrary(
+    sourceId: String,
+    sourceType: ClientStorageType,
+    request: String,
+    container: AppContainer,
+): MoviesResponseDto {
+    val query = request.trim().lowercase()
+    val source = container.clientStorageRepository.load()
+        .firstOrNull { it.id == sourceId && it.type == sourceType && it.enabled }
+        ?: return MoviesResponseDto()
+    val movies = when (sourceType) {
+        ClientStorageType.SMB -> container.smbClient.list(source)
+            .filter { it.isPlayableVideo && it.name.lowercase().contains(query) }
+            .map { it.toMovieDto(source) }
+        ClientStorageType.WebDAV -> container.webDavClient.list(source)
+            .filter { it.isPlayableVideo && it.name.lowercase().contains(query) }
+            .map { it.toMovieDto(source) }
+    }.sortedForHomeSearch().take(20)
+    return MoviesResponseDto(movies = movies, total = movies.size)
+}
+
 private fun SmbEntry.toFolderNode(sourceId: String): FolderNodeDto = FolderNodeDto(
     name = name,
     path = path,
@@ -899,6 +930,7 @@ private fun SmbEntry.toFolderNode(sourceId: String): FolderNodeDto = FolderNodeD
     movieCount = 1,
     displayTitle = name,
     mediaRoot = smbLibraryPath(sourceId),
+    createdMax = modified.takeIf { it > 0L }?.toString(),
 )
 
 private fun SmbEntry.toMovieDto(source: ClientStorageSource): MovieDto = MovieDto(
@@ -910,6 +942,8 @@ private fun SmbEntry.toMovieDto(source: ClientStorageSource): MovieDto = MovieDt
     mediaRoot = smbLibraryPath(source.id),
     fileSize = sizeBytes,
     size = sizeBytes,
+    updatedAt = modified.takeIf { it > 0L }?.toString(),
+    createdAt = modified.takeIf { it > 0L }?.toString(),
 )
 
 private fun WebDavEntry.toFolderNode(sourceId: String): FolderNodeDto = FolderNodeDto(
@@ -919,6 +953,7 @@ private fun WebDavEntry.toFolderNode(sourceId: String): FolderNodeDto = FolderNo
     movieCount = 1,
     displayTitle = name,
     mediaRoot = webDavLibraryPath(sourceId),
+    createdMax = modified.ifBlank { null },
 )
 
 private fun WebDavEntry.toMovieDto(source: ClientStorageSource): MovieDto = MovieDto(
@@ -930,6 +965,8 @@ private fun WebDavEntry.toMovieDto(source: ClientStorageSource): MovieDto = Movi
     mediaRoot = webDavLibraryPath(source.id),
     fileSize = sizeBytes,
     size = sizeBytes,
+    updatedAt = modified.ifBlank { null },
+    createdAt = modified.ifBlank { null },
 )
 
 private fun FolderNodeDto.homeTitle(): String = displayTitle ?: name.ifBlank { path }
@@ -946,6 +983,30 @@ private fun MovieDto.openRoute(): String =
     mediaRoot?.smbLibrarySourceId()?.let { sourceId -> "smbPlayer/$sourceId?path=${Uri.encode(path)}" }
         ?: mediaRoot?.webDavLibrarySourceId()?.let { sourceId -> "webdavPlayer/$sourceId?path=${Uri.encode(path)}" }
         ?: detailRoute()
+
+private fun MovieDto.isMountedLibraryItem(): Boolean =
+    mediaRoot?.smbLibrarySourceId() != null || mediaRoot?.webDavLibrarySourceId() != null
+
+private fun List<MovieDto>.sortedMoviesForHome(sort: String): List<MovieDto> = when (sort) {
+    "created_desc" -> sortedWith(compareByDescending<MovieDto> { it.updatedAt ?: it.createdAt.orEmpty() }.thenBy { it.homeTitle() })
+    "created_asc" -> sortedWith(compareBy<MovieDto> { it.updatedAt ?: it.createdAt.orEmpty() }.thenBy { it.homeTitle() })
+    "title_asc" -> sortedBy { it.homeTitle() }
+    else -> sortedWith(
+        compareByDescending<MovieDto> { it.releaseDate.orEmpty() }
+            .thenByDescending { it.updatedAt ?: it.createdAt.orEmpty() }
+            .thenBy { it.homeTitle() },
+    )
+}
+
+private fun List<MovieDto>.sortedForHomeSearch(): List<MovieDto> =
+    sortedWith(compareBy<MovieDto> { it.homeTitle() }.thenBy { it.path })
+
+private fun MovieDto.homeTitle(): String = displayTitle ?: title ?: code
+
+private fun Session.canLoadHomeContent(): Boolean =
+    shouldLoadRemoteContent(this) ||
+        activeLibrary.smbLibrarySourceId() != null ||
+        activeLibrary.webDavLibrarySourceId() != null
 
 private fun String.toMovieRouteId(): Int =
     takeLast(8).toUIntOrNull(16)?.toInt() ?: hashCode()

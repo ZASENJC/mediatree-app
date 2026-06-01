@@ -42,4 +42,31 @@ class HomeLayoutSemanticsSourceTest {
         assertFalse(source.contains("媒体流按剧集/电影显示单海报"))
         assertFalse(source.contains("目录优先直接显示媒体库或 SMB 的源文件夹结构"))
     }
+
+    @Test
+    fun homeMountedLibrariesSupportSortRefreshAndSearch() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
+            .readText()
+        val actionsBlock = source
+            .substringAfter("actions = {")
+            .substringBefore("HomeSearchOverlay(")
+        val searchBlock = source
+            .substringAfter("private fun HomeSearchOverlay")
+            .substringBefore("@Composable\nprivate fun HomeSearchResultRow")
+
+        assertTrue(source.contains("private fun Session.canLoadHomeContent()"))
+        assertTrue(actionsBlock.contains("session.canLoadHomeContent()"))
+        assertTrue(actionsBlock.contains("vm.load(session.activeProviderType, session.activeLibrary, key)"))
+        assertTrue(actionsBlock.contains("vm.load(session.activeProviderType, session.activeLibrary)"))
+        assertFalse(actionsBlock.contains("if (shouldLoadRemoteContent(session))"))
+
+        assertTrue(searchBlock.contains("session.activeLibrary.smbLibrarySourceId()"))
+        assertTrue(searchBlock.contains("session.activeLibrary.webDavLibrarySourceId()"))
+        assertTrue(searchBlock.contains("searchMountedLibrary"))
+        assertTrue(source.contains("container.smbClient.list(source)"))
+        assertTrue(source.contains("container.webDavClient.list(source)"))
+        assertTrue(searchBlock.contains("mountedSearchResults"))
+        assertTrue(searchBlock.contains("movie.openRoute()"))
+    }
 }
