@@ -151,7 +151,7 @@ class PlayerUiCompletenessSourceTest {
         assertFalse(overlayBlock.contains("Color.Black.copy(alpha = 0.36f)"))
         assertTrue(player.contains("private fun ThinPlayerSliderTrack("))
         assertTrue(player.contains("modifier = modifier.height(20.dp)"))
-        assertTrue(player.contains("Modifier.offset(y = 4.dp).size(12.dp).background(Color.White, CircleShape)"))
+        assertTrue(player.contains("Modifier.offset(y = 4.dp).offset { IntOffset(0, -2) }.size(12.dp).background(Color.White, CircleShape)"))
         assertTrue(trackBlock.contains(".height(2.dp)"))
         assertTrue(trackBlock.contains(".background(trackColor, RoundedCornerShape(50))"))
     }
@@ -170,6 +170,23 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
+    fun playerPausesPlaybackWhenAppLeavesForeground() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+
+        assertTrue(player.contains("LocalLifecycleOwner.current"))
+        assertTrue(player.contains("LifecycleEventObserver"))
+        assertTrue(player.contains("Lifecycle.Event.ON_PAUSE"))
+        assertTrue(player.contains("Lifecycle.Event.ON_STOP"))
+        assertTrue(player.contains("Lifecycle.Event.ON_RESUME"))
+        assertTrue(player.contains("controller.pause()"))
+        assertTrue(player.contains("isPlaying = false"))
+        assertTrue(player.contains("lifecycle.addObserver(observer)"))
+        assertTrue(player.contains("lifecycle.removeObserver(observer)"))
+    }
+
+    @Test
     fun playerSeekThumbIsAdjustedWithoutMovingThinTrack() {
         val player = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
@@ -182,7 +199,7 @@ class PlayerUiCompletenessSourceTest {
             .substringBefore("@Composable\nprivate fun PlayPauseControl")
 
         assertTrue(seekBarBlock.contains("thumb = {"))
-        assertTrue(seekBarBlock.contains("Modifier.offset(y = 4.dp).size(12.dp).background(Color.White, CircleShape)"))
+        assertTrue(seekBarBlock.contains("Modifier.offset(y = 4.dp).offset { IntOffset(0, -2) }.size(12.dp).background(Color.White, CircleShape)"))
         assertTrue(trackBlock.contains("modifier = modifier.height(12.dp).fillMaxWidth()"))
         assertTrue(trackBlock.contains("contentAlignment = Alignment.CenterStart"))
         assertTrue(trackBlock.contains(".background(trackColor, RoundedCornerShape(50))"))

@@ -61,9 +61,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.zasenjc.mediatree.playback.PlaybackSource
 import com.zasenjc.mediatree.playback.PlaybackSubtitleTrack
 import kotlinx.coroutines.delay
@@ -125,6 +129,7 @@ fun MediaTreePlayer(
     val context = LocalContext.current
     val activity = context.findActivity()
     val appContext = context.applicationContext
+    val lifecycleOwner = LocalLifecycleOwner.current
     val controller = remember(appContext) { MpvPlayerController(appContext) }
 
     var isPlaying by remember { mutableStateOf(false) }
@@ -192,6 +197,28 @@ fun MediaTreePlayer(
             if (window != null) {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, controller) {
+        val lifecycle = lifecycleOwner.lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE,
+                Lifecycle.Event.ON_STOP,
+                -> {
+                    controller.pause()
+                    isPlaying = false
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    showOverlay = true
+                }
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
         }
     }
 
@@ -654,7 +681,7 @@ private fun PlayerSeekBar(
             disabledInactiveTrackColor = Color.White.copy(alpha = 0.22f),
         ),
         thumb = {
-            Box(Modifier.offset(y = 4.dp).size(12.dp).background(Color.White, CircleShape))
+            Box(Modifier.offset(y = 4.dp).offset { IntOffset(0, -2) }.size(12.dp).background(Color.White, CircleShape))
         },
         track = { sliderState ->
             ThinPlayerSliderTrack(progress = sliderState.value, enabled = durationSeconds > 0.0)
