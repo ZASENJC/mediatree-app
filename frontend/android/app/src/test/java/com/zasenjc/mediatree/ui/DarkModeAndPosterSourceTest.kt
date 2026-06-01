@@ -54,14 +54,30 @@ class DarkModeAndPosterSourceTest {
     }
 
     @Test
-    fun sharedSettingSurfacesProvideThemeContentColor() {
+    fun sharedSettingRowsUseThemeContentColor() {
         val source = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/components/SharedComponents.kt")
             .readText()
         val settingsRow = source.substringAfter("fun DesignSettingsRow").substringBefore("@Composable\nfun DesignSectionCard")
         val sectionCard = source.substringAfter("fun DesignSectionCard").substringBefore("@Composable\nfun DesignIconButton")
 
-        assertTrue(settingsRow.contains("contentColor = MaterialTheme.colorScheme.onSurface"))
+        assertTrue(settingsRow.contains("color = MaterialTheme.colorScheme.onSurface"))
+        assertTrue(settingsRow.contains("tint = MaterialTheme.colorScheme.primary"))
         assertTrue(sectionCard.contains("contentColor = MaterialTheme.colorScheme.onSurface"))
+    }
+
+    @Test
+    fun settingsRowsDoNotRenderTextBackingCards() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/components/SharedComponents.kt")
+            .readText()
+        val settingsRow = source.substringAfter("fun DesignSettingsRow").substringBefore("@Composable\nfun DesignSectionCard")
+
+        assertFalse(settingsRow.contains("Surface("))
+        assertFalse(settingsRow.contains("surfaceContainerLow"))
+        assertFalse(settingsRow.contains("tonalElevation"))
+        assertFalse(settingsRow.contains("shadowElevation"))
+        assertFalse(settingsRow.contains("CircleShape"))
+        assertFalse(settingsRow.contains("primaryContainer"))
     }
 }
