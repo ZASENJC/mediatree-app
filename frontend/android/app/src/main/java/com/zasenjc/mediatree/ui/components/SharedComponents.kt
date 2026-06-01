@@ -291,7 +291,7 @@ fun DesignSectionCard(
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
     ) {
         Surface(color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface) {

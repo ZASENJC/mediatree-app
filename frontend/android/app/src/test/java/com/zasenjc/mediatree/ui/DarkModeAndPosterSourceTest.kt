@@ -77,4 +77,15 @@ class DarkModeAndPosterSourceTest {
         assertFalse(settingsRow.contains("tonalElevation = 1.dp"))
         assertFalse(settingsRow.contains("shadowElevation = 2.dp"))
     }
+
+    @Test
+    fun settingsSectionCardsDoNotUseTranslucentSurfaceBacking() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/components/SharedComponents.kt")
+            .readText()
+        val sectionCard = source.substringAfter("fun DesignSectionCard").substringBefore("@Composable\nfun DesignIconButton")
+
+        assertTrue(sectionCard.contains("containerColor = MaterialTheme.colorScheme.surface"))
+        assertFalse(sectionCard.contains("MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)"))
+    }
 }
