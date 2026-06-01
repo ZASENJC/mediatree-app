@@ -152,12 +152,13 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     roots.firstOrNull { !it.locked }?.let { container.sessionStore.setActiveLibrary(it.path) }
                 }
                 val lib = activeLibrary.ifBlank { roots.firstOrNull { !it.locked }?.path.orEmpty() }
+                val providerSort = sort.toProviderHomeMovieSort(providerType)
                 val items = provider.folders(mediaRoot = lib)
                     .tree
                     .filter { it.movieCount > 0 }
                     .sortedForHome(sort)
                 val recent = provider.recentWatched(limit = 20, mediaRoot = lib).movies
-                val feedMovies = provider.movies(sort = sort, limit = 60, mediaRoot = lib).movies
+                val feedMovies = provider.movies(sort = providerSort, limit = 60, mediaRoot = lib).movies
                 _state.update {
                     it.copy(
                         loading = false,
@@ -697,8 +698,9 @@ private fun HomeSearchOverlay(
                         container = container,
                     )
                 }
-                val resp = mountedSearchResults ?: provider.movies(
-                    code = request,
+                val resp = mountedSearchResults ?: provider.search(
+                    query = request,
+                    sort = session.activeProviderType.defaultHomeSearchSort(),
                     limit = 20,
                     mediaRoot = session.activeLibrary,
                 )
@@ -913,15 +915,63 @@ private suspend fun searchMountedLibrary(
         .firstOrNull { it.id == sourceId && it.type == sourceType && it.enabled }
         ?: return MoviesResponseDto()
     val movies = when (sourceType) {
-        ClientStorageType.SMB -> container.smbClient.list(source)
-            .filter { it.isPlayableVideo && it.name.lowercase().contains(query) }
+        ClientStorageType.SMB -> collectSmbMountedLibraryVideos(source, container)
+            .filter { it.isPlayableVideo && it.matchesMountedQuery(query) }
             .map { it.toMovieDto(source) }
-        ClientStorageType.WebDAV -> container.webDavClient.list(source)
-            .filter { it.isPlayableVideo && it.name.lowercase().contains(query) }
+        ClientStorageType.WebDAV -> collectWebDavMountedLibraryVideos(source, container)
+            .filter { it.isPlayableVideo && it.matchesMountedQuery(query) }
             .map { it.toMovieDto(source) }
     }.sortedForHomeSearch().take(20)
     return MoviesResponseDto(movies = movies, total = movies.size)
 }
+
+private suspend fun collectSmbMountedLibraryVideos(
+    source: ClientStorageSource,
+    container: AppContainer,
+): List<SmbEntry> {
+    val pending = ArrayDeque<String>()
+    val visited = mutableSetOf<String>()
+    val videos = mutableListOf<SmbEntry>()
+    pending.add("")
+    while (pending.isNotEmpty()) {
+        val currentFolder = pending.removeFirst()
+        if (!visited.add(currentFolder)) continue
+        container.smbClient.list(source, currentFolder).forEach { entry ->
+            when {
+                entry.isDirectory -> pending.add(entry.path)
+                entry.isPlayableVideo -> videos.add(entry)
+            }
+        }
+    }
+    return videos
+}
+
+private suspend fun collectWebDavMountedLibraryVideos(
+    source: ClientStorageSource,
+    container: AppContainer,
+): List<WebDavEntry> {
+    val pending = ArrayDeque<String>()
+    val visited = mutableSetOf<String>()
+    val videos = mutableListOf<WebDavEntry>()
+    pending.add("")
+    while (pending.isNotEmpty()) {
+        val currentFolder = pending.removeFirst()
+        if (!visited.add(currentFolder)) continue
+        container.webDavClient.list(source, currentFolder).forEach { entry ->
+            when {
+                entry.isDirectory -> pending.add(entry.path)
+                entry.isPlayableVideo -> videos.add(entry)
+            }
+        }
+    }
+    return videos
+}
+
+private fun SmbEntry.matchesMountedQuery(query: String): Boolean =
+    name.lowercase().contains(query) || path.lowercase().contains(query)
+
+private fun WebDavEntry.matchesMountedQuery(query: String): Boolean =
+    name.lowercase().contains(query) || path.lowercase().contains(query)
 
 private fun SmbEntry.toFolderNode(sourceId: String): FolderNodeDto = FolderNodeDto(
     name = name,
@@ -1002,6 +1052,29 @@ private fun List<MovieDto>.sortedForHomeSearch(): List<MovieDto> =
     sortedWith(compareBy<MovieDto> { it.homeTitle() }.thenBy { it.path })
 
 private fun MovieDto.homeTitle(): String = displayTitle ?: title ?: code
+
+private fun String.toProviderHomeMovieSort(providerType: ProviderType): String = when (providerType) {
+    ProviderType.MediaTree -> toMediaTreeHomeMovieSort()
+    ProviderType.Jellyfin, ProviderType.Emby -> toJellyfinHomeMovieSort()
+    ProviderType.SMB, ProviderType.WebDAV -> this
+}
+
+private fun String.toMediaTreeHomeMovieSort(): String = when (this) {
+    "title_asc" -> "name"
+    else -> this
+}
+
+private fun String.toJellyfinHomeMovieSort(): String = when (this) {
+    "title_asc" -> "title_asc"
+    "created_asc" -> "created_asc"
+    else -> this
+}
+
+private fun ProviderType.defaultHomeSearchSort(): String = when (this) {
+    ProviderType.MediaTree -> "created_desc"
+    ProviderType.Jellyfin, ProviderType.Emby -> "created_desc"
+    ProviderType.SMB, ProviderType.WebDAV -> "created_desc"
+}
 
 private fun Session.canLoadHomeContent(): Boolean =
     shouldLoadRemoteContent(this) ||

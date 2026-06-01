@@ -15,6 +15,15 @@ interface MediaProvider {
 
     suspend fun recentWatched(limit: Int = 30, offset: Int = 0, mediaRoot: String = ""): MoviesResponseDto
 
+    suspend fun search(
+        query: String,
+        sort: String = "created_desc",
+        limit: Int = 48,
+        offset: Int = 0,
+        mediaRoot: String = "",
+    ): MoviesResponseDto =
+        movies(code = query, sort = sort, limit = limit, offset = offset, mediaRoot = mediaRoot)
+
     suspend fun movies(
         folder: String = "",
         code: String = "",

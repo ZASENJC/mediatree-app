@@ -154,10 +154,10 @@ class BrowseDirectorySemanticsSourceTest {
         assertTrue(appBrowseCall.contains("recursiveVideosOnly = browseRecursiveVideos"))
         assertTrue(loadSmbBlock.contains("recursiveVideosOnly"))
         assertTrue(loadSmbBlock.contains("collectSmbVideoEntries(source, folder)"))
-        assertTrue(loadSmbBlock.contains("folders = if (recursiveVideosOnly) emptyList()"))
+        assertTrue(loadSmbBlock.contains("folders = if (recursiveVideosOnly || searching) emptyList()"))
         assertTrue(loadWebDavBlock.contains("recursiveVideosOnly"))
         assertTrue(loadWebDavBlock.contains("collectWebDavVideoEntries(source, folder)"))
-        assertTrue(loadWebDavBlock.contains("folders = if (recursiveVideosOnly) emptyList()"))
+        assertTrue(loadWebDavBlock.contains("folders = if (recursiveVideosOnly || searching) emptyList()"))
         assertTrue(browseSource.contains("container.smbClient.list(source, currentFolder)"))
         assertTrue(browseSource.contains("container.webDavClient.list(source, currentFolder)"))
         assertTrue(browseSource.contains("MountedVideoPosterCard("))
@@ -256,7 +256,7 @@ class BrowseDirectorySemanticsSourceTest {
     fun browseSortUsesProviderSpecificKeysAndMountedMetadata() {
         val loadRemoteBlock = browseSource
             .substringAfter("val provider = container.mediaProviderFor(providerType)")
-            .substringBefore("_state.update {")
+            .substringBefore("} catch (e: Throwable)")
         val loadMoreBlock = browseSource
             .substringAfter("fun loadMore")
             .substringBefore("private suspend fun collectWebDavVideoEntries")
@@ -268,7 +268,10 @@ class BrowseDirectorySemanticsSourceTest {
             .substringBefore("fun loadMore")
 
         assertTrue(loadRemoteBlock.contains("sort = sort.toProviderBrowseMovieSort(providerType)"))
+        assertTrue(loadRemoteBlock.contains("movies = response?.movies.orEmpty().sortedMoviesForBrowse(sort)"))
         assertTrue(loadMoreBlock.contains("s.sortMode.toProviderBrowseMovieSort(providerType)"))
+        assertTrue(loadMoreBlock.contains("val mergedMovies = (it.movies + response.movies).sortedMoviesForBrowse(s.sortMode)"))
+        assertTrue(loadMoreBlock.contains("movies = mergedMovies"))
         assertTrue(browseSource.contains("private fun String.toProviderBrowseMovieSort(providerType: ProviderType): String"))
         assertTrue(browseSource.contains("ProviderType.MediaTree -> toMediaTreeBrowseMovieSort()"))
         assertTrue(browseSource.contains("ProviderType.Jellyfin, ProviderType.Emby -> toJellyfinBrowseMovieSort()"))

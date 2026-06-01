@@ -62,6 +62,21 @@ class MediaTreeApi(private val sessionStore: SessionStore) {
             params = params("limit" to limit.toString(), "offset" to offset.toString(), "media_root" to mediaRoot),
         )
 
+    suspend fun search(
+        query: String,
+        limit: Int = 48,
+        offset: Int = 0,
+        mediaRoot: String = "",
+    ): MoviesResponseDto = request(
+        "/search",
+        params = params(
+            "q" to query,
+            "limit" to limit.toString(),
+            "offset" to offset.toString(),
+            "media_root" to mediaRoot,
+        ),
+    )
+
     suspend fun movies(
         folder: String = "",
         code: String = "",

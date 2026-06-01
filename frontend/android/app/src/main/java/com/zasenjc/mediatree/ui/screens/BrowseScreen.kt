@@ -55,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,12 +90,14 @@ import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.topChromeExitTransition
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -129,6 +132,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
         val page: Int = 0,
         val currentFolder: String = "",
         val sortMode: String = "name",
+        val searchQuery: String = "",
         val mountedSource: ClientStorageSource? = null,
         val error: Throwable? = null,
     )
@@ -144,18 +148,19 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
         mediaRoot: String,
         sort: String = _state.value.sortMode,
         recursiveVideosOnly: Boolean = false,
+        searchQuery: String = "",
     ) {
         viewModelScope.launch {
-            _state.update { it.copy(loading = true, error = null, sortMode = sort) }
+            _state.update { it.copy(loading = true, error = null, sortMode = sort, searchQuery = searchQuery.trim()) }
             try {
                 val smbSourceId = mediaRoot.smbLibrarySourceId()
                 if (smbSourceId != null) {
-                    loadSmb(smbSourceId, folder, sort, recursiveVideosOnly)
+                    loadSmb(smbSourceId, folder, sort, recursiveVideosOnly, searchQuery)
                     return@launch
                 }
                 val webDavSourceId = mediaRoot.webDavLibrarySourceId()
                 if (webDavSourceId != null) {
-                    loadWebDav(webDavSourceId, folder, sort, recursiveVideosOnly)
+                    loadWebDav(webDavSourceId, folder, sort, recursiveVideosOnly, searchQuery)
                     return@launch
                 }
                 val provider = container.mediaProviderFor(providerType)
@@ -163,10 +168,11 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                     provider.folders(mediaRoot).tree.childrenForBrowse(folder)
                 } else {
                     provider.folders(folder.ifBlank { mediaRoot }).tree
-                }.sortedFoldersForBrowse(sort)
+                }.filterFoldersForRemoteSearch(searchQuery).sortedFoldersForBrowse(sort)
                 val response = provider.movies(
                     folder = folder,
-                    sort = sort.toApiMovieSort(),
+                    code = searchQuery.trim(),
+                    sort = sort.toProviderBrowseMovieSort(providerType),
                     limit = 48,
                     offset = 0,
                     mediaRoot = mediaRoot,
@@ -175,11 +181,12 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                     it.copy(
                         loading = false,
                         folders = folders,
-                        movies = response?.movies.orEmpty(),
+                        movies = response?.movies.orEmpty().sortedMoviesForBrowse(sort),
                         total = response?.total ?: 0,
                         currentFolder = folder,
                         page = 0,
                         sortMode = sort,
+                        searchQuery = searchQuery.trim(),
                         mountedSource = null,
                     )
                 }
@@ -189,16 +196,23 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    private suspend fun loadSmb(sourceId: String, folder: String, sort: String, recursiveVideosOnly: Boolean) {
+    private suspend fun loadSmb(
+        sourceId: String,
+        folder: String,
+        sort: String,
+        recursiveVideosOnly: Boolean,
+        searchQuery: String,
+    ) {
         val source = container.clientStorageRepository.load()
             .firstOrNull { it.id == sourceId && it.type == com.zasenjc.mediatree.data.ClientStorageType.SMB && it.enabled }
             ?: throw IllegalArgumentException("SMB 存储源不可用")
-        val entries = if (recursiveVideosOnly) {
+        val searching = searchQuery.trim().isNotBlank()
+        val entries = if (recursiveVideosOnly || searching) {
             collectSmbVideoEntries(source, folder)
         } else {
             container.smbClient.list(source, folder)
         }
-        val folders = if (recursiveVideosOnly) emptyList() else entries.filter { it.isDirectory }
+        val folders = if (recursiveVideosOnly || searching) emptyList() else entries.filter { it.isDirectory }
             .map { entry ->
                 FolderNodeDto(
                     name = entry.name,
@@ -206,6 +220,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                     isLeaf = false,
                     displayTitle = entry.name,
                     mediaRoot = mediaRootPath(sourceId),
+                    createdMax = entry.modified.takeIf { it > 0L }?.toString(),
                 )
             }
             .sortedFoldersForBrowse(sort)
@@ -220,8 +235,11 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                     mediaRoot = mediaRootPath(sourceId),
                     fileSize = entry.sizeBytes,
                     size = entry.sizeBytes,
+                    updatedAt = entry.modified.takeIf { it > 0L }?.toString(),
+                    createdAt = entry.modified.takeIf { it > 0L }?.toString(),
                 )
             }
+            .filterMoviesByQuery(searchQuery)
             .sortedMoviesForBrowse(sort)
         _state.update {
             it.copy(
@@ -232,6 +250,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                 currentFolder = folder,
                 page = 0,
                 sortMode = sort,
+                searchQuery = searchQuery.trim(),
                 mountedSource = source,
             )
         }
@@ -255,16 +274,23 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
         return videos
     }
 
-    private suspend fun loadWebDav(sourceId: String, folder: String, sort: String, recursiveVideosOnly: Boolean) {
+    private suspend fun loadWebDav(
+        sourceId: String,
+        folder: String,
+        sort: String,
+        recursiveVideosOnly: Boolean,
+        searchQuery: String,
+    ) {
         val source = container.clientStorageRepository.load()
             .firstOrNull { it.id == sourceId && it.type == com.zasenjc.mediatree.data.ClientStorageType.WebDAV && it.enabled }
             ?: throw IllegalArgumentException("WebDAV 存储源不可用")
-        val entries = if (recursiveVideosOnly) {
+        val searching = searchQuery.trim().isNotBlank()
+        val entries = if (recursiveVideosOnly || searching) {
             collectWebDavVideoEntries(source, folder)
         } else {
             container.webDavClient.list(source, folder)
         }
-        val folders = if (recursiveVideosOnly) emptyList() else entries.filter { it.isDirectory }
+        val folders = if (recursiveVideosOnly || searching) emptyList() else entries.filter { it.isDirectory }
             .map { entry ->
                 FolderNodeDto(
                     name = entry.name,
@@ -272,6 +298,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                     isLeaf = false,
                     displayTitle = entry.name,
                     mediaRoot = webDavLibraryPath(sourceId),
+                    createdMax = entry.modified.ifBlank { null },
                 )
             }
             .sortedFoldersForBrowse(sort)
@@ -286,8 +313,11 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                     mediaRoot = webDavLibraryPath(sourceId),
                     fileSize = entry.sizeBytes,
                     size = entry.sizeBytes,
+                    updatedAt = entry.modified.ifBlank { null },
+                    createdAt = entry.modified.ifBlank { null },
                 )
             }
+            .filterMoviesByQuery(searchQuery)
             .sortedMoviesForBrowse(sort)
         _state.update {
             it.copy(
@@ -298,6 +328,7 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                 currentFolder = folder,
                 page = 0,
                 sortMode = sort,
+                searchQuery = searchQuery.trim(),
                 mountedSource = source,
             )
         }
@@ -312,12 +343,16 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
             try {
                 val response = container.mediaProviderFor(providerType).movies(
                     folder = folder,
-                    sort = s.sortMode.toApiMovieSort(),
+                    code = s.searchQuery,
+                    sort = s.sortMode.toProviderBrowseMovieSort(providerType),
                     limit = 48,
                     offset = next * 48,
                     mediaRoot = mediaRoot,
                 )
-                _state.update { it.copy(movies = it.movies + response.movies, total = response.total) }
+                _state.update {
+                    val mergedMovies = (it.movies + response.movies).sortedMoviesForBrowse(s.sortMode)
+                    it.copy(movies = mergedMovies, total = response.total)
+                }
             } catch (e: Throwable) {
                 _state.update { it.copy(error = e) }
             }
@@ -380,6 +415,8 @@ fun BrowseScreen(
     val vm: BrowseViewModel = viewModel(factory = viewModelFactory { BrowseViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    var searchJob by remember { mutableStateOf<Job?>(null) }
     val mountedVideoThumbnailLoader: MountedVideoThumbnailLoader = remember(vm) { vm::loadMountedVideoFrame }
     val listState = rememberLazyListState()
 
@@ -389,7 +426,10 @@ fun BrowseScreen(
         onChromeVisibleChange(true)
     }
 
-    LaunchedEffect(session.serverUrl, session.activeProviderType, session.activeLibrary, initialFolder, recursiveVideosOnly) {
+    fun reloadBrowse(
+        sort: String = state.sortMode,
+        request: String = query,
+    ) {
         val smbSourceId = session.activeLibrary.smbLibrarySourceId()
         val webDavSourceId = session.activeLibrary.webDavLibrarySourceId()
         if (shouldLoadRemoteContent(session) || smbSourceId != null || webDavSourceId != null) {
@@ -397,9 +437,17 @@ fun BrowseScreen(
                 providerType = session.activeProviderType,
                 folder = initialFolder,
                 mediaRoot = session.activeLibrary,
+                sort = sort,
                 recursiveVideosOnly = recursiveVideosOnly,
+                searchQuery = request,
             )
         }
+    }
+
+    LaunchedEffect(session.serverUrl, session.activeProviderType, session.activeLibrary, initialFolder, recursiveVideosOnly) {
+        searchJob?.cancel()
+        query = ""
+        reloadBrowse(request = "")
     }
 
     LaunchedEffect(state.error) {
@@ -414,12 +462,8 @@ fun BrowseScreen(
             onNavigate("browse?folder=${Uri.encode(folder.path)}")
         }
     }
-    val filteredFolders = remember(state.folders, query, state.sortMode) {
-        state.folders.filterFoldersByQuery(query).sortedFoldersForBrowse(state.sortMode)
-    }
-    val filteredMovies = remember(state.movies, query, state.sortMode) {
-        state.movies.filterMoviesByQuery(query).sortedMoviesForBrowse(state.sortMode)
-    }
+    val filteredFolders = state.folders
+    val filteredMovies = state.movies
     val provider = remember(session.activeProviderType, container) {
         container.mediaProviderFor(session.activeProviderType)
     }
@@ -433,17 +477,7 @@ fun BrowseScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    val smbSourceId = session.activeLibrary.smbLibrarySourceId()
-                    val webDavSourceId = session.activeLibrary.webDavLibrarySourceId()
-                    if (shouldLoadRemoteContent(session) || smbSourceId != null || webDavSourceId != null) {
-                        vm.load(
-                            providerType = session.activeProviderType,
-                            folder = initialFolder,
-                            mediaRoot = session.activeLibrary,
-                            sort = state.sortMode,
-                            recursiveVideosOnly = recursiveVideosOnly,
-                        )
-                    }
+                    reloadBrowse()
                 },
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = "刷新")
@@ -467,7 +501,15 @@ fun BrowseScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedTextField(
                                 value = query,
-                                onValueChange = { query = it },
+                                onValueChange = { value ->
+                                    query = value
+                                    searchJob?.cancel()
+                                    val request = value.trim()
+                                    searchJob = scope.launch {
+                                        delay(260)
+                                        reloadBrowse(request = request)
+                                    }
+                                },
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                                 placeholder = { Text("搜索项目") },
                                 singleLine = true,
@@ -488,17 +530,7 @@ fun BrowseScreen(
                                     DesignFilterChip(
                                         selected = state.sortMode == key,
                                         onClick = {
-                                            val smbSourceId = session.activeLibrary.smbLibrarySourceId()
-                                            val webDavSourceId = session.activeLibrary.webDavLibrarySourceId()
-                                            if (shouldLoadRemoteContent(session) || smbSourceId != null || webDavSourceId != null) {
-                                                vm.load(
-                                                    providerType = session.activeProviderType,
-                                                    folder = initialFolder,
-                                                    mediaRoot = session.activeLibrary,
-                                                    sort = key,
-                                                    recursiveVideosOnly = recursiveVideosOnly,
-                                                )
-                                            }
+                                            reloadBrowse(sort = key)
                                         },
                                         label = label,
                                     )
@@ -1171,19 +1203,38 @@ private fun List<FolderNodeDto>.filterFoldersByQuery(query: String): List<Folder
     }
 }
 
+private fun List<FolderNodeDto>.filterFoldersForRemoteSearch(query: String): List<FolderNodeDto> =
+    if (query.trim().isBlank()) this else emptyList()
+
 private fun List<MovieDto>.filterMoviesByQuery(query: String): List<MovieDto> {
     val q = query.trim().lowercase()
     if (q.isBlank()) return this
     return filter {
         it.code.lowercase().contains(q) ||
             (it.title ?: "").lowercase().contains(q) ||
-            (it.displayTitle ?: "").lowercase().contains(q)
+            (it.displayTitle ?: "").lowercase().contains(q) ||
+            it.path.lowercase().contains(q)
     }
 }
 
-private fun String.toApiMovieSort(): String = when (this) {
+private fun String.toProviderBrowseMovieSort(providerType: ProviderType): String = when (providerType) {
+    ProviderType.MediaTree -> toMediaTreeBrowseMovieSort()
+    ProviderType.Jellyfin, ProviderType.Emby -> toJellyfinBrowseMovieSort()
+    ProviderType.SMB, ProviderType.WebDAV -> this
+}
+
+private fun String.toMediaTreeBrowseMovieSort(): String = when (this) {
     "name" -> "name"
-    else -> "created_desc"
+    "modified" -> "created_desc"
+    "size" -> "created_desc"
+    else -> this
+}
+
+private fun String.toJellyfinBrowseMovieSort(): String = when (this) {
+    "name" -> "title_asc"
+    "modified" -> "created_desc"
+    "size" -> "size_desc"
+    else -> this
 }
 
 private fun List<FolderNodeDto>.sortedFoldersForBrowse(sort: String): List<FolderNodeDto> = when (sort) {

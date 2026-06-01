@@ -28,6 +28,7 @@ class MediaProviderSourceTest {
             "mediaRoots(",
             "folders(",
             "recentWatched(",
+            "search(",
             "movies(",
             "favorites(",
             "detail(",

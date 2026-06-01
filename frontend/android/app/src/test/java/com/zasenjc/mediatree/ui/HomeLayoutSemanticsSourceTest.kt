@@ -76,4 +76,30 @@ class HomeLayoutSemanticsSourceTest {
         assertTrue(searchBlock.contains("mountedSearchResults"))
         assertTrue(searchBlock.contains("movie.openRoute()"))
     }
+
+    @Test
+    fun homeRemoteSortUsesProviderSpecificKeys() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
+            .readText()
+        val loadBlock = source
+            .substringAfter("fun load(providerType: ProviderType")
+            .substringBefore("private suspend fun loadSmbLibrary")
+        val searchBlock = source
+            .substringAfter("private fun HomeSearchOverlay")
+            .substringBefore("@Composable\nprivate fun HomeSearchResultRow")
+
+        assertTrue(loadBlock.contains("val providerSort = sort.toProviderHomeMovieSort(providerType)"))
+        assertTrue(loadBlock.contains("provider.movies(sort = providerSort"))
+        assertTrue(searchBlock.contains("provider.search("))
+        assertTrue(searchBlock.contains("query = request"))
+        assertTrue(searchBlock.contains("sort = session.activeProviderType.defaultHomeSearchSort()"))
+        assertTrue(source.contains("private fun String.toProviderHomeMovieSort(providerType: ProviderType): String"))
+        assertTrue(source.contains("ProviderType.MediaTree -> toMediaTreeHomeMovieSort()"))
+        assertTrue(source.contains("ProviderType.Jellyfin, ProviderType.Emby -> toJellyfinHomeMovieSort()"))
+        assertTrue(source.contains("private fun String.toMediaTreeHomeMovieSort(): String"))
+        assertTrue(source.contains("\"title_asc\" -> \"name\""))
+        assertTrue(source.contains("private fun String.toJellyfinHomeMovieSort(): String"))
+        assertTrue(source.contains("\"created_asc\" -> \"created_asc\""))
+    }
 }

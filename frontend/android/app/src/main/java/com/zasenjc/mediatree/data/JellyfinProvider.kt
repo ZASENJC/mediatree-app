@@ -609,6 +609,10 @@ private fun String.toJellyfinSort(): Pair<String, String> = when (this) {
     "release_date_asc" -> "PremiereDate" to "Ascending"
     "title_asc" -> "SortName" to "Ascending"
     "title_desc" -> "SortName" to "Descending"
+    "created_asc" -> "DateCreated" to "Ascending"
+    "created_desc" -> "DateCreated" to "Descending"
+    "size_desc" -> "Size" to "Descending"
+    "size_asc" -> "Size" to "Ascending"
     else -> "DateCreated" to "Descending"
 }
 

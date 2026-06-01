@@ -24,6 +24,15 @@ class MediaTreeProvider(
     override suspend fun recentWatched(limit: Int, offset: Int, mediaRoot: String): MoviesResponseDto =
         api.recentWatched(limit, offset, mediaRoot)
 
+    override suspend fun search(
+        query: String,
+        sort: String,
+        limit: Int,
+        offset: Int,
+        mediaRoot: String,
+    ): MoviesResponseDto =
+        api.search(query, limit, offset, mediaRoot)
+
     override suspend fun movies(
         folder: String,
         code: String,
