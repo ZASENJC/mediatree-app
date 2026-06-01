@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewModule
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ChevronRight
@@ -430,12 +431,20 @@ fun BrowseScreen(
                                 items(posterMovieRows, key = { row -> row.joinToString("|") { it.id.toString() } }) { row ->
                                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                                         row.forEach { movie ->
-                                            MoviePosterCard(
-                                                movie = movie,
-                                                imageUrl = movie.mediaRoot?.mountedLibrarySourceId()?.let { null } ?: provider.coverUrl(session.serverUrl, movie.id),
-                                                onClick = { onNavigate(movie.openRoute()) },
-                                                modifier = Modifier.weight(1f),
-                                            )
+                                            if (movie.isMountedLibraryItem()) {
+                                                MountedVideoPosterCard(
+                                                    movie = movie,
+                                                    onClick = { onNavigate(movie.openRoute()) },
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                            } else {
+                                                MoviePosterCard(
+                                                    movie = movie,
+                                                    imageUrl = provider.coverUrl(session.serverUrl, movie.id),
+                                                    onClick = { onNavigate(movie.openRoute()) },
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                            }
                                         }
                                         if (row.size == 1) Spacer(Modifier.weight(1f))
                                     }
@@ -648,8 +657,18 @@ private fun IconMovieRow(row: List<MovieDto>, onOpen: (MovieDto) -> Unit) {
         row.forEach { movie ->
             IconTile(
                 title = movie.browseTitle(),
-                subtitle = movie.releaseDate?.take(4).orEmpty(),
-                icon = { Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(34.dp)) },
+                subtitle = movie.iconMovieMeta(),
+                icon = {
+                    if (movie.isMountedLibraryItem()) {
+                        MountedVideoThumbnail(
+                            movie = movie,
+                            modifier = Modifier.size(width = 72.dp, height = 46.dp),
+                        )
+                    } else {
+                        Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(34.dp))
+                    }
+                },
+                framedIcon = !movie.isMountedLibraryItem(),
                 onClick = { onOpen(movie) },
                 modifier = Modifier.weight(1f),
             )
@@ -665,6 +684,7 @@ private fun IconTile(
     icon: @Composable () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    framedIcon: Boolean = true,
 ) {
     ElevatedCard(
         modifier = modifier.defaultMinSize(minHeight = 112.dp).clickable(onClick = onClick),
@@ -679,12 +699,18 @@ private fun IconTile(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.primary,
-            ) {
-                Box(Modifier.padding(12.dp), contentAlignment = Alignment.Center) { icon() }
+            if (framedIcon) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                ) {
+                    Box(Modifier.padding(12.dp), contentAlignment = Alignment.Center) { icon() }
+                }
+            } else {
+                Box(contentAlignment = Alignment.Center) {
+                    icon()
+                }
             }
             Text(
                 title,
@@ -694,6 +720,85 @@ private fun IconTile(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun MountedVideoPosterCard(
+    movie: MovieDto,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.clickable(onClick = onClick), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        MountedVideoThumbnail(
+            movie = movie,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f),
+            cornerRadius = 16.dp,
+        )
+        Text(
+            text = movie.browseTitle(),
+            color = MaterialTheme.colorScheme.onBackground,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = movie.iconMovieMeta(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun MountedVideoThumbnail(
+    movie: MovieDto,
+    modifier: Modifier = Modifier,
+    cornerRadius: androidx.compose.ui.unit.Dp = 12.dp,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Default.InsertDriveFile,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f),
+            modifier = Modifier.fillMaxSize(0.34f),
+        )
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        ) {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.padding(7.dp).size(20.dp),
+            )
+        }
+        val extension = movie.fileExtensionLabel()
+        if (extension.isNotBlank()) {
+            Surface(
+                modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ) {
+                Text(
+                    text = extension,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -914,6 +1019,9 @@ private fun MovieDto.openRoute(): String =
         ?: mediaRoot?.webDavLibrarySourceId()?.let { sourceId -> "webdavPlayer/$sourceId?path=${Uri.encode(path)}" }
         ?: detailRoute()
 
+private fun MovieDto.isMountedLibraryItem(): Boolean =
+    mediaRoot?.mountedLibrarySourceId() != null
+
 private fun mediaRootPath(sourceId: String): String = "smb/$sourceId"
 
 private fun String.mountedLibrarySourceId(): String? =
@@ -933,6 +1041,26 @@ private fun FolderNodeDto.folderMeta(): String =
     }
 
 private fun MovieDto.browseTitle(): String = displayTitle ?: title ?: code
+
+private fun MovieDto.iconMovieMeta(): String =
+    if (isMountedLibraryItem()) {
+        listOf(
+            fileExtensionLabel().ifBlank { "视频" },
+            readableSize(),
+        ).filter { !it.isNullOrBlank() }.joinToString(" · ")
+    } else {
+        releaseDate?.take(4).orEmpty()
+    }
+
+private fun MovieDto.fileExtensionLabel(): String {
+    val name = path.ifBlank { code }
+        .substringAfterLast('/')
+        .substringAfterLast('\\')
+    return name.substringAfterLast('.', "")
+        .takeIf { it.isNotBlank() && it.length <= 8 }
+        ?.uppercase()
+        .orEmpty()
+}
 
 private fun MovieDto.movieMeta(): String =
     listOf(

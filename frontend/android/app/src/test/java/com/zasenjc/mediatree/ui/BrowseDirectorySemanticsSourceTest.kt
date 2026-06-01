@@ -93,6 +93,22 @@ class BrowseDirectorySemanticsSourceTest {
     }
 
     @Test
+    fun mountedVideosUseThumbnailStyleInPosterAndIconModes() {
+        val screenBlock = browseSource
+            .substringAfter("fun BrowseScreen(")
+            .substringBefore("@Composable\nprivate fun DesignFolderRow")
+        val iconMovieRowBlock = browseSource
+            .substringAfter("private fun IconMovieRow")
+            .substringBefore("@Composable\nprivate fun IconTile")
+
+        assertTrue(screenBlock.contains("movie.isMountedLibraryItem()"))
+        assertTrue(screenBlock.contains("MountedVideoPosterCard("))
+        assertTrue(iconMovieRowBlock.contains("MountedVideoThumbnail("))
+        assertTrue(browseSource.contains("private fun MountedVideoThumbnail"))
+        assertTrue(browseSource.contains("private fun MovieDto.fileExtensionLabel()"))
+    }
+
+    @Test
     fun browserRowsExposeThemeContentColorForDarkMode() {
         val source = browseSource
         val designFolderRow = source.substringAfter("private fun DesignFolderRow").substringBefore("@Composable\nprivate fun PosterFolderRow")
