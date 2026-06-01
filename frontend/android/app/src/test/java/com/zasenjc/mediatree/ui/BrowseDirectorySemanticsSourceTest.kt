@@ -54,25 +54,42 @@ class BrowseDirectorySemanticsSourceTest {
     }
 
     @Test
-    fun smbFolderCountsVisibleChildrenInsteadOfHardcodedOne() {
+    fun smbMountedBrowseDoesNotPrefetchChildFolderCounts() {
         val loadSmbBlock = browseSource
             .substringAfter("private suspend fun loadSmb")
-            .substringBefore("fun loadMore")
+            .substringBefore("private suspend fun loadWebDav")
 
-        assertTrue(loadSmbBlock.contains("smbDirectoryChildCount(source, entry.path)"))
+        assertTrue(loadSmbBlock.contains("container.smbClient.list(source, folder)"))
+        assertFalse(loadSmbBlock.contains("smbDirectoryChildCount"))
+        assertFalse(loadSmbBlock.contains("container.smbClient.list(source, entry.path)"))
         assertFalse(loadSmbBlock.contains("movieCount = 1"))
-        assertTrue(browseSource.contains("private suspend fun smbDirectoryChildCount"))
-        assertTrue(browseSource.contains("count { it.isDirectory || it.isPlayableVideo }"))
+        assertFalse(browseSource.contains("private suspend fun smbDirectoryChildCount"))
     }
 
     @Test
     fun browseSupportsWebDavMountedLibrarySource() {
+        val loadWebDavBlock = browseSource
+            .substringAfter("private suspend fun loadWebDav")
+            .substringBefore("fun loadMore")
+
         assertTrue(browseSource.contains("webDavLibrarySourceId"))
         assertTrue(browseSource.contains("private suspend fun loadWebDav"))
         assertTrue(browseSource.contains("container.webDavClient.list(source, folder)"))
-        assertTrue(browseSource.contains("webDavDirectoryChildCount(source, entry.path)"))
+        assertFalse(loadWebDavBlock.contains("webDavDirectoryChildCount"))
+        assertFalse(loadWebDavBlock.contains("container.webDavClient.list(source, entry.path)"))
+        assertFalse(browseSource.contains("private suspend fun webDavDirectoryChildCount"))
         assertTrue(browseSource.contains("webDavLibraryPath(sourceId)"))
         assertTrue(browseSource.contains("webdavPlayer/${'$'}sourceId?path="))
+    }
+
+    @Test
+    fun mountedFolderMetaAvoidsUnloadedChildCounts() {
+        val folderMetaBlock = browseSource
+            .substringAfter("private fun FolderNodeDto.folderMeta(): String =")
+            .substringBefore("private fun MovieDto.browseTitle")
+
+        assertTrue(folderMetaBlock.contains("mediaRoot?.mountedLibrarySourceId() != null"))
+        assertTrue(folderMetaBlock.contains("\"文件夹\""))
     }
 
     @Test

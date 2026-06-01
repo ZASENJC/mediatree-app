@@ -173,7 +173,6 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                     name = entry.name,
                     path = entry.path,
                     isLeaf = false,
-                    movieCount = smbDirectoryChildCount(source, entry.path),
                     displayTitle = entry.name,
                     mediaRoot = mediaRootPath(sourceId),
                 )
@@ -205,14 +204,6 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
     }
-
-    private suspend fun smbDirectoryChildCount(
-        source: com.zasenjc.mediatree.data.ClientStorageSource,
-        folderPath: String,
-    ): Int = runCatching {
-        container.smbClient.list(source, folderPath)
-            .count { it.isDirectory || it.isPlayableVideo }
-    }.getOrDefault(0)
 
     private suspend fun loadWebDav(sourceId: String, folder: String, sort: String) {
         val source = container.clientStorageRepository.load()
@@ -225,7 +216,6 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
                     name = entry.name,
                     path = entry.path,
                     isLeaf = false,
-                    movieCount = webDavDirectoryChildCount(source, entry.path),
                     displayTitle = entry.name,
                     mediaRoot = webDavLibraryPath(sourceId),
                 )
@@ -257,14 +247,6 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
     }
-
-    private suspend fun webDavDirectoryChildCount(
-        source: com.zasenjc.mediatree.data.ClientStorageSource,
-        folderPath: String,
-    ): Int = runCatching {
-        container.webDavClient.list(source, folderPath)
-            .count { it.isDirectory || it.isPlayableVideo }
-    }.getOrDefault(0)
 
     fun loadMore(providerType: ProviderType, folder: String, mediaRoot: String) {
         if (mediaRoot.smbLibrarySourceId() != null || mediaRoot.webDavLibrarySourceId() != null) return
@@ -650,7 +632,7 @@ private fun IconFolderRow(row: List<FolderNodeDto>, onOpen: (FolderNodeDto) -> U
         row.forEach { folder ->
             IconTile(
                 title = folder.browseTitle(),
-                subtitle = "${folder.movieCount} 项",
+                subtitle = folder.folderMeta(),
                 icon = { Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(34.dp)) },
                 onClick = { onOpen(folder) },
                 modifier = Modifier.weight(1f),
@@ -792,7 +774,7 @@ private fun BrowserListRow(
 private fun CompactFolderRow(folder: FolderNodeDto, onClick: () -> Unit) {
     CompactBrowserRow(
         title = folder.browseTitle(),
-        meta = "${folder.movieCount} 项",
+        meta = folder.folderMeta(),
         onClick = onClick,
         icon = { Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(20.dp)) },
     )
@@ -941,10 +923,14 @@ private fun String.toMovieRouteId(): Int =
     takeLast(8).toUIntOrNull(16)?.toInt() ?: hashCode()
 
 private fun FolderNodeDto.folderMeta(): String =
-    listOf(
-        "${movieCount} 项",
-        createdMax?.take(10),
-    ).filter { !it.isNullOrBlank() }.joinToString(" · ")
+    if (mediaRoot?.mountedLibrarySourceId() != null) {
+        "文件夹"
+    } else {
+        listOf(
+            "${movieCount} 项",
+            createdMax?.take(10),
+        ).filter { !it.isNullOrBlank() }.joinToString(" · ")
+    }
 
 private fun MovieDto.browseTitle(): String = displayTitle ?: title ?: code
 
