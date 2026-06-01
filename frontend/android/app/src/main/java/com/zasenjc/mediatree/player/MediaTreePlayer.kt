@@ -210,9 +210,6 @@ fun MediaTreePlayer(
                     controller.pause()
                     isPlaying = false
                 }
-                Lifecycle.Event.ON_RESUME -> {
-                    showOverlay = true
-                }
                 else -> Unit
             }
         }
@@ -681,7 +678,7 @@ private fun PlayerSeekBar(
             disabledInactiveTrackColor = Color.White.copy(alpha = 0.22f),
         ),
         thumb = {
-            Box(Modifier.offset(y = 4.dp).offset { IntOffset(0, -2) }.size(12.dp).background(Color.White, CircleShape))
+            Box(Modifier.offset(y = 4.dp).offset { IntOffset(0, -3) }.size(12.dp).background(Color.White, CircleShape))
         },
         track = { sliderState ->
             ThinPlayerSliderTrack(progress = sliderState.value, enabled = durationSeconds > 0.0)

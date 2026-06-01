@@ -118,7 +118,7 @@ class MpvPlayerControllerTest {
     }
 
     @Test
-    fun detachSurfaceKeepsLoadedFileAndVideoOutputForReattachedSurface() {
+    fun detachSurfaceStopsVideoOutputBeforeDroppingSurface() {
         val backend = RecordingMpvBackend()
         val controller = MpvPlayerController(appContext, backend)
 
@@ -129,12 +129,18 @@ class MpvPlayerControllerTest {
         controller.detachSurface()
 
         assertEquals(emptyList<List<String>>(), backend.commands)
-        assertEquals(emptyList<Pair<String, String>>(), backend.stringProperties)
+        assertEquals(
+            listOf(
+                "force-window" to "no",
+                "vo" to "null",
+            ),
+            backend.stringProperties,
+        )
         assertTrue(backend.detached)
     }
 
     @Test
-    fun reattachingSurfaceDoesNotRecreateVideoOutputAfterManualPause() {
+    fun reattachingSurfaceRestoresVideoOutputAfterManualPause() {
         val backend = RecordingMpvBackend()
         val controller = MpvPlayerController(appContext, backend)
 
@@ -150,7 +156,15 @@ class MpvPlayerControllerTest {
         controller.play()
 
         assertEquals(emptyList<List<String>>(), backend.commands)
-        assertEquals(listOf("android-surface-size" to "1280x720"), backend.stringProperties)
+        assertEquals(
+            listOf(
+                "force-window" to "no",
+                "vo" to "null",
+                "vo" to "gpu",
+                "android-surface-size" to "1280x720",
+            ),
+            backend.stringProperties,
+        )
         assertEquals(listOf("pause" to false), backend.booleanProperties)
         assertEquals(1, backend.detachCount)
     }
@@ -186,7 +200,13 @@ class MpvPlayerControllerTest {
         controller.release()
 
         assertEquals(listOf(listOf("stop")), backend.commands)
-        assertEquals(emptyList<Pair<String, String>>(), backend.stringProperties)
+        assertEquals(
+            listOf(
+                "force-window" to "no",
+                "vo" to "null",
+            ),
+            backend.stringProperties,
+        )
         assertTrue(backend.detached)
         assertTrue(backend.destroyed)
     }
@@ -204,7 +224,13 @@ class MpvPlayerControllerTest {
         controller.detachSurface()
 
         assertEquals(emptyList<List<String>>(), backend.commands)
-        assertEquals(emptyList<Pair<String, String>>(), backend.stringProperties)
+        assertEquals(
+            listOf(
+                "force-window" to "no",
+                "vo" to "null",
+            ),
+            backend.stringProperties,
+        )
         assertEquals(1, backend.detachCount)
     }
 

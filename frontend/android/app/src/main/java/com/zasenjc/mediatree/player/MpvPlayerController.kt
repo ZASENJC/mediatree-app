@@ -85,6 +85,7 @@ class MpvPlayerController(
     private var fileLoaded = false
     private var pendingLoad: PendingLoad? = null
     private var loadedSource: PendingLoad? = null
+    private var videoOutputStopped = false
 
     fun initialize() {
         if (initialized) return
@@ -112,12 +113,14 @@ class MpvPlayerController(
         initialize()
         backend.attachSurface(surface)
         surfaceAttached = true
+        if (videoOutputStopped) restoreVideoOutput()
         setSurfaceSize(width, height)
         flushPendingLoad()
     }
 
     fun detachSurface() {
         if (!initialized || !surfaceAttached) return
+        stopVideoOutput()
         backend.detachSurface()
         surfaceAttached = false
     }
@@ -226,6 +229,17 @@ class MpvPlayerController(
         }
     }
 
+    private fun restoreVideoOutput() {
+        backend.setPropertyString("vo", "gpu")
+        videoOutputStopped = false
+    }
+
+    private fun stopVideoOutput() {
+        backend.setPropertyString("force-window", "no")
+        backend.setPropertyString("vo", "null")
+        videoOutputStopped = true
+    }
+
     fun positionSeconds(): Double {
         if (!initialized) return 0.0
         val positivePosition = listOf("time-pos", "playback-time")
@@ -300,6 +314,7 @@ class MpvPlayerController(
         if (!initialized) return
         stopLoadedFile()
         if (surfaceAttached) {
+            stopVideoOutput()
             backend.detachSurface()
         }
         backend.destroy()
@@ -308,6 +323,7 @@ class MpvPlayerController(
         fileLoaded = false
         pendingLoad = null
         loadedSource = null
+        videoOutputStopped = false
     }
 }
 
