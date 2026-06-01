@@ -37,8 +37,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
@@ -54,6 +52,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -120,6 +119,7 @@ private val sortOptions = listOf(
 class HomeViewModel(private val container: AppContainer) : ViewModel() {
     data class UiState(
         val loading: Boolean = true,
+        val refreshing: Boolean = false,
         val roots: List<MediaRootDto> = emptyList(),
         val recent: List<MovieDto> = emptyList(),
         val feedMovies: List<MovieDto> = emptyList(),
@@ -134,7 +134,15 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun load(providerType: ProviderType, activeLibrary: String, sort: String = _state.value.sortMode) {
         viewModelScope.launch {
-            _state.update { it.copy(loading = true, error = null, sortMode = sort) }
+            val hasContent = _state.value.hasHomeContent()
+            _state.update {
+                it.copy(
+                    loading = !hasContent,
+                    refreshing = hasContent,
+                    error = null,
+                    sortMode = sort,
+                )
+            }
             try {
                 val provider = container.mediaProviderFor(providerType)
                 val smbSourceId = activeLibrary.smbLibrarySourceId()
@@ -162,6 +170,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 _state.update {
                     it.copy(
                         loading = false,
+                        refreshing = false,
                         roots = roots,
                         recent = recent,
                         feedMovies = feedMovies,
@@ -170,7 +179,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     )
                 }
             } catch (e: Throwable) {
-                _state.update { it.copy(loading = false, error = e) }
+                _state.update { it.copy(loading = false, refreshing = false, error = e) }
             }
         }
     }
@@ -190,6 +199,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         _state.update {
             it.copy(
                 loading = false,
+                refreshing = false,
                 roots = emptyList(),
                 recent = recent,
                 feedMovies = recent,
@@ -214,6 +224,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         _state.update {
             it.copy(
                 loading = false,
+                refreshing = false,
                 roots = emptyList(),
                 recent = recent,
                 feedMovies = recent,
@@ -222,6 +233,9 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
     }
+
+    private fun UiState.hasHomeContent(): Boolean =
+        roots.isNotEmpty() || recent.isNotEmpty() || feedMovies.isNotEmpty() || libraryItems.isNotEmpty()
 
     fun openLibraryItem(
         providerType: ProviderType,
@@ -293,7 +307,6 @@ fun HomeScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     var showSearch by remember { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
-    var showMore by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
 
     SyncChromeWithGridScroll(gridState, onChromeVisibleChange)
@@ -318,58 +331,68 @@ fun HomeScreen(
 
     Scaffold(containerColor = Color.Transparent) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            if (
-                !session.canLoadHomeContent()
+            PullToRefreshBox(
+                isRefreshing = state.refreshing,
+                onRefresh = {
+                    if (session.canLoadHomeContent()) {
+                        vm.load(session.activeProviderType, session.activeLibrary)
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
             ) {
-                EmptyMediaState("请先在设置页连接 MediaTree 服务器")
-            } else if (state.loading) {
-                LoadingPane(Modifier.fillMaxSize())
-            } else {
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Adaptive(104.dp),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 20.dp, top = 86.dp, end = 20.dp, bottom = 116.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                if (
+                    !session.canLoadHomeContent()
                 ) {
-                    if (state.recent.isNotEmpty()) {
+                    EmptyMediaState("请先在设置页连接 MediaTree 服务器")
+                } else if (state.loading) {
+                    LoadingPane(Modifier.fillMaxSize())
+                } else {
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Adaptive(104.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 20.dp, top = 86.dp, end = 20.dp, bottom = 116.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        if (state.recent.isNotEmpty()) {
+                            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "section") {
+                                HomeSectionHeader("继续观看 >")
+                            }
+                            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "recent") {
+                                HomeHeroRail(
+                                    movies = state.recent,
+                                    imageUrl = { movie -> provider.episodeStillUrl(session.serverUrl, movie.id) },
+                                    onOpen = { movie -> onNavigate(movie.openRoute()) },
+                                )
+                            }
+                        }
                         item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "section") {
-                            HomeSectionHeader("继续观看 >")
+                            HomeSectionHeader("媒体库")
                         }
-                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "recent") {
-                            HomeHeroRail(
-                                movies = state.recent,
-                                imageUrl = { movie -> provider.episodeStillUrl(session.serverUrl, movie.id) },
-                                onOpen = { movie -> onNavigate(movie.openRoute()) },
-                            )
-                        }
-                    }
-                    item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "section") {
-                        HomeSectionHeader("媒体库")
-                    }
-                    if (state.libraryItems.isEmpty()) {
-                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "empty") {
-                            EmptyMediaState("暂无媒体")
-                        }
-                    } else {
-                        items(state.libraryItems, key = { it.path }, contentType = { "media-poster" }) { item ->
-                            HomeMediaPosterCard(
-                                item = item,
-                                imageUrl = UrlUtils.resolveApiUrl(
-                                    session.serverUrl,
-                                    item.randomCover ?: item.cover,
-                                ),
-                                opening = state.openingPath == item.path,
-                                onClick = {
-                                    vm.openLibraryItem(
-                                        providerType = session.activeProviderType,
-                                        item = item,
-                                        fallbackMediaRoot = session.activeLibrary,
-                                        onNavigate = onNavigate,
-                                    )
-                                },
-                            )
+                        if (state.libraryItems.isEmpty()) {
+                            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "empty") {
+                                EmptyMediaState("暂无媒体")
+                            }
+                        } else {
+                            items(state.libraryItems, key = { it.path }, contentType = { "media-poster" }) { item ->
+                                HomeMediaPosterCard(
+                                    item = item,
+                                    imageUrl = UrlUtils.resolveApiUrl(
+                                        session.serverUrl,
+                                        item.randomCover ?: item.cover,
+                                    ),
+                                    opening = state.openingPath == item.path,
+                                    onClick = {
+                                        vm.openLibraryItem(
+                                            providerType = session.activeProviderType,
+                                            item = item,
+                                            fallbackMediaRoot = session.activeLibrary,
+                                            onNavigate = onNavigate,
+                                        )
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -403,23 +426,6 @@ fun HomeScreen(
                                         },
                                     )
                                 }
-                            }
-                        }
-                        Box {
-                            IconButton(onClick = { showMore = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "更多")
-                            }
-                            DropdownMenu(expanded = showMore, onDismissRequest = { showMore = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("刷新") },
-                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                    onClick = {
-                                        showMore = false
-                                        if (session.canLoadHomeContent()) {
-                                            vm.load(session.activeProviderType, session.activeLibrary)
-                                        }
-                                    },
-                                )
                             }
                         }
                     },

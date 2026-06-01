@@ -61,7 +61,6 @@ class HomeLayoutSemanticsSourceTest {
         assertTrue(source.contains("private fun Session.canLoadHomeContent()"))
         assertTrue(actionsBlock.contains("session.canLoadHomeContent()"))
         assertTrue(actionsBlock.contains("vm.load(session.activeProviderType, session.activeLibrary, key)"))
-        assertTrue(actionsBlock.contains("vm.load(session.activeProviderType, session.activeLibrary)"))
         assertFalse(actionsBlock.contains("if (shouldLoadRemoteContent(session))"))
 
         assertTrue(searchBlock.contains("session.activeLibrary.smbLibrarySourceId()"))
@@ -75,6 +74,29 @@ class HomeLayoutSemanticsSourceTest {
         assertFalse(mountedSearchBlock.contains("container.webDavClient.list(source)\n"))
         assertTrue(searchBlock.contains("mountedSearchResults"))
         assertTrue(searchBlock.contains("movie.openRoute()"))
+    }
+
+    @Test
+    fun homeRefreshUsesPullToRefreshInsteadOfTopMenuRefresh() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
+            .readText()
+        val screenBlock = source
+            .substringAfter("fun HomeScreen(")
+            .substringBefore("@Composable\nprivate fun HomeSectionHeader")
+        val actionsBlock = source
+            .substringAfter("actions = {")
+            .substringBefore("HomeSearchOverlay(")
+
+        assertTrue(source.contains("import androidx.compose.material3.pulltorefresh.PullToRefreshBox"))
+        assertTrue(screenBlock.contains("PullToRefreshBox("))
+        assertTrue(screenBlock.contains("isRefreshing = state.refreshing"))
+        assertTrue(screenBlock.contains("onRefresh = {"))
+        assertTrue(screenBlock.contains("vm.load(session.activeProviderType, session.activeLibrary)"))
+        assertFalse(screenBlock.contains("var showMore"))
+        assertFalse(actionsBlock.contains("MoreVert"))
+        assertFalse(actionsBlock.contains("Text(\"刷新\")"))
+        assertFalse(actionsBlock.contains("Icons.Default.Refresh"))
     }
 
     @Test
