@@ -3,8 +3,6 @@ package com.zasenjc.mediatree.ui
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -65,8 +63,10 @@ import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MediaTreePageBackground
 import com.zasenjc.mediatree.ui.components.bottomChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.bottomChromeExitTransition
-import com.zasenjc.mediatree.ui.motion.folderBackContentTransform
-import com.zasenjc.mediatree.ui.motion.folderForwardContentTransform
+import com.zasenjc.mediatree.ui.motion.md3DefaultEnterTransition
+import com.zasenjc.mediatree.ui.motion.md3DefaultExitTransition
+import com.zasenjc.mediatree.ui.motion.md3DefaultPopEnterTransition
+import com.zasenjc.mediatree.ui.motion.md3DefaultPopExitTransition
 import com.zasenjc.mediatree.ui.navigation.TopDestination
 import com.zasenjc.mediatree.ui.navigation.topDestinations
 import com.zasenjc.mediatree.ui.screens.BrowseScreen
@@ -235,10 +235,10 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                     .fillMaxSize()
                     .padding(padding)
                     .consumeWindowInsets(padding),
-                enterTransition = { EnterTransition.None },
-                exitTransition = { ExitTransition.None },
-                popEnterTransition = { EnterTransition.None },
-                popExitTransition = { ExitTransition.None },
+                enterTransition = { md3DefaultEnterTransition() },
+                exitTransition = { md3DefaultExitTransition() },
+                popEnterTransition = { md3DefaultPopEnterTransition() },
+                popExitTransition = { md3DefaultPopExitTransition() },
             ) {
                 composable("main") {
                     HorizontalPager(
@@ -295,10 +295,10 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                             defaultValue = ""
                         },
                     ),
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None },
-                    popEnterTransition = { EnterTransition.None },
-                    popExitTransition = { ExitTransition.None },
+                    enterTransition = { md3DefaultEnterTransition() },
+                    exitTransition = { md3DefaultExitTransition() },
+                    popEnterTransition = { md3DefaultPopEnterTransition() },
+                    popExitTransition = { md3DefaultPopExitTransition() },
                 ) { entry ->
                     DetailScreen(
                         container = container,
@@ -320,10 +320,10 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                             defaultValue = ""
                         },
                     ),
-                    enterTransition = { folderForwardContentTransform().targetContentEnter },
-                    exitTransition = { folderForwardContentTransform().initialContentExit },
-                    popEnterTransition = { folderBackContentTransform().targetContentEnter },
-                    popExitTransition = { folderBackContentTransform().initialContentExit },
+                    enterTransition = { md3DefaultEnterTransition() },
+                    exitTransition = { md3DefaultExitTransition() },
+                    popEnterTransition = { md3DefaultPopEnterTransition() },
+                    popExitTransition = { md3DefaultPopExitTransition() },
                 ) { entry ->
                     WebDavBrowseScreen(
                         container = container,
@@ -343,10 +343,10 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                             defaultValue = ""
                         },
                     ),
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None },
-                    popEnterTransition = { folderBackContentTransform().targetContentEnter },
-                    popExitTransition = { ExitTransition.None },
+                    enterTransition = { md3DefaultEnterTransition() },
+                    exitTransition = { md3DefaultExitTransition() },
+                    popEnterTransition = { md3DefaultPopEnterTransition() },
+                    popExitTransition = { md3DefaultPopExitTransition() },
                 ) { entry ->
                     WebDavPlayerScreen(
                         container = container,
@@ -365,10 +365,10 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                             defaultValue = ""
                         },
                     ),
-                    enterTransition = { folderForwardContentTransform().targetContentEnter },
-                    exitTransition = { folderForwardContentTransform().initialContentExit },
-                    popEnterTransition = { folderBackContentTransform().targetContentEnter },
-                    popExitTransition = { folderBackContentTransform().initialContentExit },
+                    enterTransition = { md3DefaultEnterTransition() },
+                    exitTransition = { md3DefaultExitTransition() },
+                    popEnterTransition = { md3DefaultPopEnterTransition() },
+                    popExitTransition = { md3DefaultPopExitTransition() },
                 ) { entry ->
                     SmbBrowseScreen(
                         container = container,
@@ -388,10 +388,10 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                             defaultValue = ""
                         },
                     ),
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None },
-                    popEnterTransition = { folderBackContentTransform().targetContentEnter },
-                    popExitTransition = { ExitTransition.None },
+                    enterTransition = { md3DefaultEnterTransition() },
+                    exitTransition = { md3DefaultExitTransition() },
+                    popEnterTransition = { md3DefaultPopEnterTransition() },
+                    popExitTransition = { md3DefaultPopExitTransition() },
                 ) { entry ->
                     SmbPlayerScreen(
                         container = container,

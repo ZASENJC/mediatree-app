@@ -90,7 +90,7 @@ import com.zasenjc.mediatree.ui.components.DesignFilterChip
 import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.topChromeExitTransition
-import com.zasenjc.mediatree.ui.motion.folderContentTransform
+import com.zasenjc.mediatree.ui.motion.md3DefaultContentTransform
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
 import kotlinx.coroutines.Job
@@ -528,7 +528,7 @@ fun BrowseScreen(
                 else -> {
                     AnimatedContent(
                         targetState = contentSnapshot,
-                        transitionSpec = { folderContentTransform(initialState.currentFolder, targetState.currentFolder) },
+                        transitionSpec = { md3DefaultContentTransform() },
                         label = "browseFolderContent",
                     ) { snapshot ->
                         val filteredFolders = snapshot.folders

@@ -7,7 +7,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -105,8 +104,6 @@ import com.zasenjc.mediatree.ui.components.DesignFilterChip
 import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.ui.components.SectionHeader
 import com.zasenjc.mediatree.ui.motion.PlayerExitNavigationDelayMillis
-import com.zasenjc.mediatree.ui.motion.PlayerRouteScrimFadeInMillis
-import com.zasenjc.mediatree.ui.motion.PlayerRouteScrimFadeOutMillis
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
 import kotlinx.coroutines.delay
@@ -255,7 +252,6 @@ fun DetailScreen(
     )
     var activeMovieId by remember(movieId) { mutableStateOf(movieId) }
     var leavingDetail by remember { mutableStateOf(false) }
-    var routeScrimVisible by remember { mutableStateOf(true) }
     var fullscreenRequested by remember { mutableStateOf(false) }
     val playbackPositions = remember { mutableMapOf<Int, Double>() }
     var playbackPositionSnapshot by remember { mutableStateOf<(() -> PlaybackPositionSnapshot?)?>(null) }
@@ -283,20 +279,6 @@ fun DetailScreen(
     LaunchedEffect(playerFullscreen) {
         onChromeVisibleChange(!playerFullscreen)
     }
-    LaunchedEffect(Unit) {
-        routeScrimVisible = false
-    }
-    val routeScrimAlpha by animateFloatAsState(
-        targetValue = if (routeScrimVisible || leavingDetail) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = if (routeScrimVisible || leavingDetail) {
-                PlayerRouteScrimFadeInMillis
-            } else {
-                PlayerRouteScrimFadeOutMillis
-            },
-        ),
-        label = "detailRouteScrimAlpha",
-    )
     DisposableEffect(Unit) {
         onDispose { onChromeVisibleChange(true) }
     }
@@ -457,13 +439,6 @@ fun DetailScreen(
                         }
                     },
                     modifier = playerModifier,
-                )
-            }
-            if (routeScrimAlpha > 0.01f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = routeScrimAlpha)),
                 )
             }
         }
