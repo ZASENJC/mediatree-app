@@ -13,7 +13,7 @@ class MotionSpecsTest {
     fun md3DefaultMotionUsesFadeThroughTiming() {
         assertEquals(210, Md3FadeThroughEnterDurationMillis)
         assertEquals(90, Md3FadeThroughExitDurationMillis)
-        assertEquals(90, Md3FadeThroughEnterDelayMillis)
+        assertEquals(0, Md3FadeThroughEnterDelayMillis)
         assertTrue(PlayerExitNavigationDelayMillis <= Md3FadeThroughEnterDurationMillis)
     }
 }

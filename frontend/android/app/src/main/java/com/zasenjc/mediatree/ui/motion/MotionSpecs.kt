@@ -14,7 +14,7 @@ val Md3DefaultEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
 const val Md3FadeThroughEnterDurationMillis = 210
 const val Md3FadeThroughExitDurationMillis = 90
-const val Md3FadeThroughEnterDelayMillis = 90
+const val Md3FadeThroughEnterDelayMillis = 0
 const val PlayerExitNavigationDelayMillis = 120L
 
 fun md3DefaultEnterTransition(): EnterTransition =

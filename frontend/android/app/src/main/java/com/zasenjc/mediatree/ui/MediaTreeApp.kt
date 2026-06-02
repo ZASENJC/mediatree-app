@@ -48,7 +48,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -84,9 +83,7 @@ import kotlin.math.abs
 private val Md3StandardEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
 @Composable
-fun MediaTreeApp(deepLinkData: Uri? = null) {
-    val context = LocalContext.current
-    val container = remember { AppContainer(context) }
+fun MediaTreeApp(container: AppContainer, deepLinkData: Uri? = null) {
     var session by remember { mutableStateOf<Session?>(null) }
     var startupError by remember { mutableStateOf<Throwable?>(null) }
 
@@ -244,7 +241,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
-                        beyondViewportPageCount = 1,
+                        beyondViewportPageCount = 0,
                         key = { page -> topDestinations[page].route },
                     ) { page ->
                         when (topDestinations[page].route) {

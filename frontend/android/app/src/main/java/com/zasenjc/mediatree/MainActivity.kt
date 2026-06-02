@@ -10,8 +10,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,16 +36,16 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         setContent {
-            val container = androidx.compose.runtime.remember { AppContainer(this) }
+            val container = remember { AppContainer(this) }
             val themeMode by container.uiPreferencesStore.themeModeFlow.collectAsStateWithLifecycle(
                 initialValue = ThemeModePreference.System,
             )
             val darkTheme = resolveDarkTheme(themeMode)
-            SideEffect {
+            LaunchedEffect(darkTheme) {
                 applySystemBars(darkTheme)
             }
             MediaTreeTheme(darkTheme = darkTheme) {
-                MediaTreeApp(deepLinkData)
+                MediaTreeApp(container = container, deepLinkData = deepLinkData)
             }
         }
     }
