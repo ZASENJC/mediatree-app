@@ -100,7 +100,7 @@ class HomeLayoutSemanticsSourceTest {
     }
 
     @Test
-    fun homeRemoteSortUsesProviderSpecificKeys() {
+    fun homeLoadAvoidsUnusedMovieFeedAndSearchKeepsProviderSpecificSort() {
         val source = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
             .readText()
@@ -111,17 +111,17 @@ class HomeLayoutSemanticsSourceTest {
             .substringAfter("private fun HomeSearchOverlay")
             .substringBefore("@Composable\nprivate fun HomeSearchResultRow")
 
-        assertTrue(loadBlock.contains("val providerSort = sort.toProviderHomeMovieSort(providerType)"))
-        assertTrue(loadBlock.contains("provider.movies(sort = providerSort"))
+        assertTrue(loadBlock.contains("val roots = if (activeLibrary.isBlank())"))
+        assertTrue(loadBlock.contains("provider.mediaRoots().items"))
+        assertFalse(loadBlock.contains("val roots = provider.mediaRoots().items"))
+        assertTrue(loadBlock.contains("provider.folders(mediaRoot = lib)"))
+        assertTrue(loadBlock.indexOf("libraryItems = items") < loadBlock.indexOf("provider.recentWatched(limit = 20, mediaRoot = lib)"))
+        assertTrue(loadBlock.contains("provider.recentWatched(limit = 20, mediaRoot = lib)"))
+        assertTrue(loadBlock.contains("recent = recent"))
+        assertFalse(loadBlock.contains("provider.movies("))
+        assertFalse(source.contains("feedMovies"))
         assertTrue(searchBlock.contains("provider.search("))
         assertTrue(searchBlock.contains("query = request"))
         assertTrue(searchBlock.contains("sort = session.activeProviderType.defaultHomeSearchSort()"))
-        assertTrue(source.contains("private fun String.toProviderHomeMovieSort(providerType: ProviderType): String"))
-        assertTrue(source.contains("ProviderType.MediaTree -> toMediaTreeHomeMovieSort()"))
-        assertTrue(source.contains("ProviderType.Jellyfin, ProviderType.Emby -> toJellyfinHomeMovieSort()"))
-        assertTrue(source.contains("private fun String.toMediaTreeHomeMovieSort(): String"))
-        assertTrue(source.contains("\"title_asc\" -> \"name\""))
-        assertTrue(source.contains("private fun String.toJellyfinHomeMovieSort(): String"))
-        assertTrue(source.contains("\"created_asc\" -> \"created_asc\""))
     }
 }

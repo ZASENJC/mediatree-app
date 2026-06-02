@@ -122,7 +122,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         val refreshing: Boolean = false,
         val roots: List<MediaRootDto> = emptyList(),
         val recent: List<MovieDto> = emptyList(),
-        val feedMovies: List<MovieDto> = emptyList(),
         val libraryItems: List<FolderNodeDto> = emptyList(),
         val sortMode: String = "release_date_desc",
         val openingPath: String? = null,
@@ -155,26 +154,32 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     loadWebDavLibrary(webDavSourceId, sort)
                     return@launch
                 }
-                val roots = provider.mediaRoots().items
+                val roots = if (activeLibrary.isBlank()) {
+                    provider.mediaRoots().items
+                } else {
+                    emptyList()
+                }
                 if (activeLibrary.isBlank()) {
                     roots.firstOrNull { !it.locked }?.let { container.sessionStore.setActiveLibrary(it.path) }
                 }
                 val lib = activeLibrary.ifBlank { roots.firstOrNull { !it.locked }?.path.orEmpty() }
-                val providerSort = sort.toProviderHomeMovieSort(providerType)
                 val items = provider.folders(mediaRoot = lib)
                     .tree
                     .filter { it.movieCount > 0 }
                     .sortedForHome(sort)
-                val recent = provider.recentWatched(limit = 20, mediaRoot = lib).movies
-                val feedMovies = provider.movies(sort = providerSort, limit = 60, mediaRoot = lib).movies
                 _state.update {
                     it.copy(
                         loading = false,
                         refreshing = false,
                         roots = roots,
-                        recent = recent,
-                        feedMovies = feedMovies,
                         libraryItems = items,
+                        sortMode = sort,
+                    )
+                }
+                val recent = provider.recentWatched(limit = 20, mediaRoot = lib).movies
+                _state.update {
+                    it.copy(
+                        recent = recent,
                         sortMode = sort,
                     )
                 }
@@ -202,7 +207,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 refreshing = false,
                 roots = emptyList(),
                 recent = recent,
-                feedMovies = recent,
                 libraryItems = folders,
                 sortMode = sort,
             )
@@ -227,7 +231,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 refreshing = false,
                 roots = emptyList(),
                 recent = recent,
-                feedMovies = recent,
                 libraryItems = folders,
                 sortMode = sort,
             )
@@ -235,7 +238,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun UiState.hasHomeContent(): Boolean =
-        roots.isNotEmpty() || recent.isNotEmpty() || feedMovies.isNotEmpty() || libraryItems.isNotEmpty()
+        roots.isNotEmpty() || recent.isNotEmpty() || libraryItems.isNotEmpty()
 
     fun openLibraryItem(
         providerType: ProviderType,
@@ -1065,23 +1068,6 @@ private fun List<MovieDto>.sortedForHomeSearch(): List<MovieDto> =
     sortedWith(compareBy<MovieDto> { it.homeTitle() }.thenBy { it.path })
 
 private fun MovieDto.homeTitle(): String = displayTitle ?: title ?: code
-
-private fun String.toProviderHomeMovieSort(providerType: ProviderType): String = when (providerType) {
-    ProviderType.MediaTree -> toMediaTreeHomeMovieSort()
-    ProviderType.Jellyfin, ProviderType.Emby -> toJellyfinHomeMovieSort()
-    ProviderType.SMB, ProviderType.WebDAV -> this
-}
-
-private fun String.toMediaTreeHomeMovieSort(): String = when (this) {
-    "title_asc" -> "name"
-    else -> this
-}
-
-private fun String.toJellyfinHomeMovieSort(): String = when (this) {
-    "title_asc" -> "title_asc"
-    "created_asc" -> "created_asc"
-    else -> this
-}
 
 private fun ProviderType.defaultHomeSearchSort(): String = when (this) {
     ProviderType.MediaTree -> "created_desc"
