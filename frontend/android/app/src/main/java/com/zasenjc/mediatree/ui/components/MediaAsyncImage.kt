@@ -9,17 +9,18 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun MediaAsyncImage(
@@ -29,17 +30,10 @@ fun MediaAsyncImage(
     contentScale: ContentScale = ContentScale.Crop,
     cornerRadius: Dp = 18.dp,
 ) {
-    val background = Brush.linearGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.surfaceContainerHighest,
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
-        ),
-    )
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
-            .background(background),
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -50,13 +44,16 @@ fun MediaAsyncImage(
         )
         if (!imageUrl.isNullOrBlank()) {
             val context = LocalContext.current
-            AsyncImage(
-                model = ImageRequest.Builder(context)
+            val imageRequest = remember(context, imageUrl) {
+                ImageRequest.Builder(context)
                     .data(imageUrl)
                     .crossfade(false)
                     .memoryCacheKey(imageUrl)
                     .diskCacheKey(imageUrl)
-                    .build(),
+                    .build()
+            }
+            AsyncImage(
+                model = imageRequest,
                 contentDescription = contentDescription,
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),

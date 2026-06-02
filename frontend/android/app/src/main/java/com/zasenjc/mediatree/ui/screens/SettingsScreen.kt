@@ -469,12 +469,14 @@ fun SettingsScreen(
     container: AppContainer,
     session: Session,
     onError: (Throwable) -> Unit,
+    active: Boolean = true,
 ) {
     val vm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
     var editingConnection by remember { mutableStateOf<ConnectionEditorTarget?>(null) }
 
-    LaunchedEffect(session.serverUrl, session.activeProviderType, session.resolvedProfiles) {
+    LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.resolvedProfiles) {
+        if (!active) return@LaunchedEffect
         vm.initServerInput(session.serverUrl)
         vm.initProviderType(session.activeProviderType)
         if (session.resolvedProfiles.any { it.canLoadMediaRoots() }) {
@@ -484,7 +486,8 @@ fun SettingsScreen(
         }
     }
 
-    LaunchedEffect(state.error) {
+    LaunchedEffect(active, state.error) {
+        if (!active) return@LaunchedEffect
         state.error?.let { onError(ApiException(0, it)) }
     }
 

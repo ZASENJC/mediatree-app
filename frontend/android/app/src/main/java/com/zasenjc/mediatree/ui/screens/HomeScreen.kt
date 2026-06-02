@@ -282,6 +282,7 @@ fun HomeScreen(
     session: Session,
     onNavigate: (String) -> Unit,
     onError: (Throwable) -> Unit,
+    active: Boolean = true,
     browseViewMode: String,
     onBrowseViewModeChange: (String) -> Unit,
     chromeVisible: Boolean = true,
@@ -294,6 +295,7 @@ fun HomeScreen(
             session = session,
             onNavigate = onNavigate,
             onError = onError,
+            active = active,
             initialFolder = "",
             viewMode = browseViewMode,
             onViewModeChange = onBrowseViewModeChange,
@@ -309,19 +311,24 @@ fun HomeScreen(
     var showSort by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
 
-    SyncChromeWithGridScroll(gridState, onChromeVisibleChange)
+    if (active) {
+        SyncChromeWithGridScroll(gridState, onChromeVisibleChange)
+    }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
         onChromeVisibleChange(true)
     }
 
-    LaunchedEffect(session.serverUrl, session.activeProviderType, session.activeLibrary) {
+    LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeLibrary) {
+        if (!active) return@LaunchedEffect
         if (session.canLoadHomeContent()) {
             vm.load(session.activeProviderType, session.activeLibrary)
         }
     }
 
-    LaunchedEffect(state.error) {
+    LaunchedEffect(active, state.error) {
+        if (!active) return@LaunchedEffect
         state.error?.let(onError)
     }
 

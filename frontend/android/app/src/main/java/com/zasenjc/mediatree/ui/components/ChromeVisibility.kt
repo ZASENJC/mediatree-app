@@ -42,6 +42,7 @@ fun SyncChromeWithListScroll(
     LaunchedEffect(state) {
         var previousIndex = state.firstVisibleItemIndex
         var previousOffset = state.firstVisibleItemScrollOffset
+        var previousVisible: Boolean? = null
         snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
             .distinctUntilChanged()
             .collect { (index, offset) ->
@@ -54,7 +55,10 @@ fun SyncChromeWithListScroll(
                     scrollingTowardTop -> true
                     else -> null
                 }
-                visible?.let(onChange)
+                if (visible != null && visible != previousVisible) {
+                    onChange(visible)
+                    previousVisible = visible
+                }
                 previousIndex = index
                 previousOffset = offset
             }
@@ -70,6 +74,7 @@ fun SyncChromeWithGridScroll(
     LaunchedEffect(state) {
         var previousIndex = state.firstVisibleItemIndex
         var previousOffset = state.firstVisibleItemScrollOffset
+        var previousVisible: Boolean? = null
         snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }
             .distinctUntilChanged()
             .collect { (index, offset) ->
@@ -82,7 +87,10 @@ fun SyncChromeWithGridScroll(
                     scrollingTowardTop -> true
                     else -> null
                 }
-                visible?.let(onChange)
+                if (visible != null && visible != previousVisible) {
+                    onChange(visible)
+                    previousVisible = visible
+                }
                 previousIndex = index
                 previousOffset = offset
             }

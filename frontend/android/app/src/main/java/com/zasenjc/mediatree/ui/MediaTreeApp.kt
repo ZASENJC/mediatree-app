@@ -241,15 +241,18 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
-                        beyondViewportPageCount = 0,
+                        beyondViewportPageCount = 1,
                         key = { page -> topDestinations[page].route },
                     ) { page ->
-                        when (topDestinations[page].route) {
+                        val route = topDestinations[page].route
+                        val pageActive = page == pagerState.currentPage
+                        when (route) {
                             "home" -> HomeScreen(
                                 container = container,
                                 session = session,
                                 onNavigate = ::handleAppNavigate,
                                 onError = onError,
+                                active = pageActive,
                                 browseViewMode = browseViewMode,
                                 onBrowseViewModeChange = { browseViewMode = it },
                                 chromeVisible = chromeVisible,
@@ -260,6 +263,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 session = session,
                                 onNavigate = ::handleAppNavigate,
                                 onError = onError,
+                                active = pageActive,
                                 initialFolder = browseFolder,
                                 recursiveVideosOnly = browseRecursiveVideos,
                                 viewMode = browseViewMode,
@@ -272,6 +276,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 session = session,
                                 onNavigate = ::handleAppNavigate,
                                 onError = onError,
+                                active = pageActive,
                                 chromeVisible = chromeVisible,
                                 onChromeVisibleChange = { chromeVisible = it },
                             )
@@ -279,6 +284,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 container = container,
                                 session = session,
                                 onError = onError,
+                                active = pageActive,
                             )
                         }
                     }

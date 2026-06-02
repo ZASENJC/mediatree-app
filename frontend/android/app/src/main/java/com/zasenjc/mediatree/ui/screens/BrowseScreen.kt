@@ -429,6 +429,7 @@ fun BrowseScreen(
     session: Session,
     onNavigate: (String) -> Unit,
     onError: (Throwable) -> Unit,
+    active: Boolean = true,
     initialFolder: String,
     recursiveVideosOnly: Boolean = false,
     viewMode: String,
@@ -445,7 +446,8 @@ fun BrowseScreen(
     var contentSnapshot by remember { mutableStateOf(BrowseContentSnapshot()) }
     var hasContentSnapshot by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
         onChromeVisibleChange(true)
     }
 
@@ -467,13 +469,15 @@ fun BrowseScreen(
         }
     }
 
-    LaunchedEffect(session.serverUrl, session.activeProviderType, session.activeLibrary, initialFolder, recursiveVideosOnly) {
+    LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeLibrary, initialFolder, recursiveVideosOnly) {
+        if (!active) return@LaunchedEffect
         searchJob?.cancel()
         query = ""
         reloadBrowse(request = "")
     }
 
-    LaunchedEffect(state.error) {
+    LaunchedEffect(active, state.error) {
+        if (!active) return@LaunchedEffect
         state.error?.let(onError)
     }
 
@@ -538,7 +542,9 @@ fun BrowseScreen(
                         val posterMovieRows = remember(filteredMovies) { filteredMovies.chunked(2) }
                         val iconMovieRows = remember(filteredMovies) { filteredMovies.chunked(3) }
                         val snapshotListState = rememberLazyListState()
-                        SyncChromeWithListScroll(snapshotListState, onChromeVisibleChange)
+                        if (active) {
+                            SyncChromeWithListScroll(snapshotListState, onChromeVisibleChange)
+                        }
                         LazyColumn(
                             state = snapshotListState,
                             modifier = Modifier.fillMaxSize(),
@@ -589,7 +595,11 @@ fun BrowseScreen(
                             if (filteredFolders.isNotEmpty()) {
                                 when (viewMode) {
                                     "poster" -> {
-                                        items(posterFolderRows, key = { row -> row.joinToString("|") { it.path } }) { row ->
+                                        items(
+                                            posterFolderRows,
+                                            key = { row -> row.joinToString("|") { it.path } },
+                                            contentType = { "folder-poster-row" },
+                                        ) { row ->
                                             PosterFolderRow(
                                                 row = row,
                                                 serverUrl = session.serverUrl,
@@ -598,7 +608,11 @@ fun BrowseScreen(
                                         }
                                     }
                                     "icon" -> {
-                                        items(iconFolderRows, key = { row -> row.joinToString("|") { it.path } }) { row ->
+                                        items(
+                                            iconFolderRows,
+                                            key = { row -> row.joinToString("|") { it.path } },
+                                            contentType = { "folder-icon-row" },
+                                        ) { row ->
                                             IconFolderRow(
                                                 row = row,
                                                 onOpen = ::openFolderNode,
@@ -606,12 +620,12 @@ fun BrowseScreen(
                                         }
                                     }
                                     "compact" -> {
-                                        items(filteredFolders, key = { it.path }) { folder ->
+                                        items(filteredFolders, key = { it.path }, contentType = { "folder-compact" }) { folder ->
                                             CompactFolderRow(folder = folder, onClick = { openFolderNode(folder) })
                                         }
                                     }
                                     else -> {
-                                        items(filteredFolders, key = { it.path }) { folder ->
+                                        items(filteredFolders, key = { it.path }, contentType = { "folder-compact" }) { folder ->
                                             CompactFolderRow(folder = folder, onClick = { openFolderNode(folder) })
                                         }
                                     }
@@ -620,7 +634,11 @@ fun BrowseScreen(
                             if (filteredMovies.isNotEmpty() || snapshot.currentFolder.isNotBlank()) {
                                 when (viewMode) {
                                     "poster" -> {
-                                        items(posterMovieRows, key = { row -> row.joinToString("|") { it.id.toString() } }) { row ->
+                                        items(
+                                            posterMovieRows,
+                                            key = { row -> row.joinToString("|") { it.id.toString() } },
+                                            contentType = { "movie-poster-row" },
+                                        ) { row ->
                                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                                                 row.forEach { movie ->
                                                     if (movie.isMountedLibraryItem()) {
@@ -645,7 +663,11 @@ fun BrowseScreen(
                                         }
                                     }
                                     "icon" -> {
-                                        items(iconMovieRows, key = { row -> row.joinToString("|") { it.id.toString() } }) { row ->
+                                        items(
+                                            iconMovieRows,
+                                            key = { row -> row.joinToString("|") { it.id.toString() } },
+                                            contentType = { "movie-icon-row" },
+                                        ) { row ->
                                             IconMovieRow(
                                                 thumbnailLoader = mountedVideoThumbnailLoader,
                                                 source = snapshot.mountedSource,
@@ -655,7 +677,7 @@ fun BrowseScreen(
                                         }
                                     }
                                     "compact" -> {
-                                        items(filteredMovies, key = { it.id }) { movie ->
+                                        items(filteredMovies, key = { it.id }, contentType = { "movie-compact" }) { movie ->
                                             CompactMovieRow(
                                                 thumbnailLoader = mountedVideoThumbnailLoader,
                                                 source = snapshot.mountedSource,
@@ -665,7 +687,7 @@ fun BrowseScreen(
                                         }
                                     }
                                     else -> {
-                                        items(filteredMovies, key = { it.id }) { movie ->
+                                        items(filteredMovies, key = { it.id }, contentType = { "movie-compact" }) { movie ->
                                             CompactMovieRow(
                                                 thumbnailLoader = mountedVideoThumbnailLoader,
                                                 source = snapshot.mountedSource,
@@ -1322,7 +1344,7 @@ private data class MountedVideoThumbnailSource(
     val onClose: (() -> Unit)? = null,
 )
 
-private val mountedVideoFrameDispatcher = Dispatchers.IO.limitedParallelism(4)
+private val mountedVideoFrameDispatcher = Dispatchers.IO.limitedParallelism(1)
 private const val MountedVideoFrameWidth = 240
 private const val MountedVideoFrameHeight = 360
 private const val MountedVideoFrameCacheTtlMillis = 2 * 60 * 1000L

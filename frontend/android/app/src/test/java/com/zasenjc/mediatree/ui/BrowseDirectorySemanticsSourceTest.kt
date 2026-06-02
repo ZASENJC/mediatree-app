@@ -203,7 +203,7 @@ class BrowseDirectorySemanticsSourceTest {
         assertTrue(browseSource.contains("MediaMetadataRetriever"))
         assertTrue(browseSource.contains("setDataSource(source.uri, source.headers)"))
         assertTrue(browseSource.contains("getScaledFrameAtTime"))
-        assertTrue(browseSource.contains("limitedParallelism(4)"))
+        assertTrue(browseSource.contains("limitedParallelism(1)"))
         assertTrue(browseSource.contains("MountedVideoFrameWidth = 240"))
         assertTrue(browseSource.contains("MountedVideoFrameHeight = 360"))
         assertTrue(browseSource.contains("mountedVideoFrameCache"))
