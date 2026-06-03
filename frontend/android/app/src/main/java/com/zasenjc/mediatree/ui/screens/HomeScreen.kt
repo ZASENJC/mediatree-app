@@ -167,19 +167,14 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     .tree
                     .filter { it.movieCount > 0 }
                     .sortedForHome(sort)
+                val recent = provider.recentWatched(limit = 20, mediaRoot = lib).movies
                 _state.update {
                     it.copy(
                         loading = false,
                         refreshing = false,
                         roots = roots,
-                        libraryItems = items,
-                        sortMode = sort,
-                    )
-                }
-                val recent = provider.recentWatched(limit = 20, mediaRoot = lib).movies
-                _state.update {
-                    it.copy(
                         recent = recent,
+                        libraryItems = items,
                         sortMode = sort,
                     )
                 }
@@ -258,10 +253,10 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     val response = container.mediaProviderFor(providerType).movies(
                         folder = item.path,
                         sort = "created_desc",
-                        limit = 1,
+                        limit = 500,
                         mediaRoot = item.mediaRoot?.takeIf { it.isNotBlank() } ?: fallbackMediaRoot,
                     )
-                    val movie = response.movies.firstOrNull()
+                    val movie = response.movies.latestHomePlaybackCandidate()
                     if (movie == null) {
                         _state.update { it.copy(error = IllegalStateException("未找到可播放影片")) }
                     } else {
@@ -1054,6 +1049,40 @@ private fun MovieDto.openRoute(): String =
 
 private fun MovieDto.isMountedLibraryItem(): Boolean =
     mediaRoot?.smbLibrarySourceId() != null || mediaRoot?.webDavLibrarySourceId() != null
+
+fun List<MovieDto>.latestHomePlaybackCandidate(): MovieDto? {
+    val latestEpisodes = sortedWith(
+        compareByDescending<MovieDto> { it.homePlaybackSeason() }
+            .thenByDescending { it.tmdbEpisode ?: it.episodeNumber ?: Int.MIN_VALUE }
+            .thenByDescending { it.releaseDate.orEmpty() }
+            .thenByDescending { it.updatedAt ?: it.createdAt.orEmpty() }
+            .thenByDescending { it.id },
+    )
+    return latestEpisodes.firstOrNull { it.isUnfinishedForHomePlayback() } ?: latestEpisodes.firstOrNull()
+}
+
+private fun MovieDto.homePlaybackSeason(): Int = tmdbSeason ?: homePlaybackSeasonFromFolder(folderLevels) ?: 0
+
+private fun homePlaybackSeasonFromFolder(folderLevels: String?): Int? {
+    val leaf = folderLevels
+        ?.split("/")
+        ?.lastOrNull { it.isNotBlank() }
+        ?.trim()
+        .orEmpty()
+    if (leaf.isBlank()) return null
+    val patterns = listOf(
+        Regex("""^S\s*(\d{1,2})$""", RegexOption.IGNORE_CASE),
+        Regex("""^Season\s*(\d{1,2})$""", RegexOption.IGNORE_CASE),
+        Regex("""^第\s*(\d{1,2})\s*[季期部]?$"""),
+    )
+    return patterns.firstNotNullOfOrNull { pattern ->
+        pattern.matchEntire(leaf)?.groupValues?.getOrNull(1)?.toIntOrNull()
+    }
+}
+
+private fun MovieDto.isUnfinishedForHomePlayback(): Boolean =
+    tags.none { it.equals("watched", ignoreCase = true) } &&
+        (progressPercent == null || progressPercent < 95.0)
 
 private fun List<MovieDto>.sortedMoviesForHome(sort: String): List<MovieDto> = when (sort) {
     "created_desc" -> sortedWith(compareByDescending<MovieDto> { it.updatedAt ?: it.createdAt.orEmpty() }.thenBy { it.homeTitle() })

@@ -115,13 +115,30 @@ class HomeLayoutSemanticsSourceTest {
         assertTrue(loadBlock.contains("provider.mediaRoots().items"))
         assertFalse(loadBlock.contains("val roots = provider.mediaRoots().items"))
         assertTrue(loadBlock.contains("provider.folders(mediaRoot = lib)"))
-        assertTrue(loadBlock.indexOf("libraryItems = items") < loadBlock.indexOf("provider.recentWatched(limit = 20, mediaRoot = lib)"))
         assertTrue(loadBlock.contains("provider.recentWatched(limit = 20, mediaRoot = lib)"))
+        assertTrue(loadBlock.indexOf("val recent = provider.recentWatched(limit = 20, mediaRoot = lib).movies") < loadBlock.indexOf("libraryItems = items"))
         assertTrue(loadBlock.contains("recent = recent"))
         assertFalse(loadBlock.contains("provider.movies("))
         assertFalse(source.contains("feedMovies"))
         assertTrue(searchBlock.contains("provider.search("))
         assertTrue(searchBlock.contains("query = request"))
         assertTrue(searchBlock.contains("sort = session.activeProviderType.defaultHomeSearchSort()"))
+    }
+
+    @Test
+    fun homeSeriesPosterOpensLatestUnfinishedEpisode() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
+            .readText()
+        val openBlock = source
+            .substringAfter("fun openLibraryItem(")
+            .substringBefore("private suspend fun loadSmbLibrary")
+
+        assertTrue(openBlock.contains("limit = 500"))
+        assertTrue(openBlock.contains("response.movies.latestHomePlaybackCandidate()"))
+        assertFalse(openBlock.contains("response.movies.firstOrNull()"))
+        assertTrue(source.contains("fun List<MovieDto>.latestHomePlaybackCandidate()"))
+        assertTrue(source.contains("private fun MovieDto.isUnfinishedForHomePlayback()"))
+        assertTrue(source.contains("progressPercent == null || progressPercent < 95.0"))
     }
 }

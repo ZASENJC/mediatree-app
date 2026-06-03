@@ -24,7 +24,7 @@ class StartupPerformanceSourceTest {
     }
 
     @Test
-    fun homePagerPrecomposesAdjacentTabsButDefersInactiveWork() {
+    fun homePagerComposesOnlyCurrentTabAndDefersInactiveWork() {
         val appShell = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/MediaTreeApp.kt")
             .readText()
@@ -41,7 +41,7 @@ class StartupPerformanceSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
             .readText()
 
-        assertTrue(appShell.contains("beyondViewportPageCount = 1"))
+        assertTrue(appShell.contains("beyondViewportPageCount = 0"))
         assertTrue(appShell.contains("val pageActive = page == pagerState.currentPage"))
         assertTrue(appShell.contains("HomeScreen(") && appShell.contains("active = pageActive"))
         assertTrue(appShell.contains("BrowseScreen(") && appShell.contains("active = pageActive"))

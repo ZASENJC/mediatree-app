@@ -241,7 +241,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
-                        beyondViewportPageCount = 1,
+                        beyondViewportPageCount = 0,
                         key = { page -> topDestinations[page].route },
                     ) { page ->
                         val route = topDestinations[page].route
