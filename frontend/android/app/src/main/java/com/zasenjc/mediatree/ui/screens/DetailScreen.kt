@@ -91,6 +91,7 @@ import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.ProgressDto
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.SubtitleTrackDto
+import com.zasenjc.mediatree.data.mediaBrowserSeriesFolder
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.player.MediaTreePlayer
 import com.zasenjc.mediatree.player.PlaybackPositionSnapshot
@@ -147,12 +148,16 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
                 val subs = runCatching { provider.subtitleTracks(movieId) }.getOrDefault(emptyList())
                 val mediaInfo = runCatching { provider.mediaInfo(movieId) }.getOrNull()
                 val seriesFolder = seriesFolderFor(movie)
-                val seriesItems = if (seriesFolder.isBlank()) {
+                val providerSeriesFolder = movie.providerSeriesId
+                    ?.takeIf { providerType == ProviderType.Jellyfin || providerType == ProviderType.Emby }
+                    ?.let(::mediaBrowserSeriesFolder)
+                val seriesQueryFolder = providerSeriesFolder ?: seriesFolder
+                val seriesItems = if (seriesQueryFolder.isBlank()) {
                     emptyList()
                 } else {
                     runCatching {
                         provider.movies(
-                            folder = seriesFolder,
+                            folder = seriesQueryFolder,
                             sort = "created_desc",
                             limit = 500,
                             mediaRoot = movie.mediaRoot?.takeIf { it.isNotBlank() } ?: mediaRoot,

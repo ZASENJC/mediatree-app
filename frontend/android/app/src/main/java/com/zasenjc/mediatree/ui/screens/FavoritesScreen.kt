@@ -353,7 +353,9 @@ private fun List<MovieDto>.filterFavoritesQuery(query: String): List<MovieDto> {
 private fun MovieDto.routeId(): Int = id
 
 private fun MovieDto.detailRoute(): String =
-    "detail/${routeId()}" + path.takeIf { it.isNotBlank() }?.let { "?providerItemId=${android.net.Uri.encode(it)}" }.orEmpty()
+    "detail/${routeId()}" + providerRouteItemId().takeIf { it.isNotBlank() }?.let { "?providerItemId=${android.net.Uri.encode(it)}" }.orEmpty()
+
+private fun MovieDto.providerRouteItemId(): String = providerItemId?.takeIf { it.isNotBlank() } ?: path
 
 private fun MovieDto.openRoute(): String =
     mediaRoot?.smbLibrarySourceId()?.let { sourceId -> "smbPlayer/$sourceId?path=${android.net.Uri.encode(path)}" } ?: detailRoute()

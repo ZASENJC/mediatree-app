@@ -162,6 +162,9 @@ data class MoviesResponseDto(
 data class MovieDto(
     val id: Int,
     val path: String = "",
+    @SerialName("provider_item_id") val providerItemId: String? = null,
+    @SerialName("provider_series_id") val providerSeriesId: String? = null,
+    @SerialName("provider_season_id") val providerSeasonId: String? = null,
     val code: String = "",
     val title: String? = null,
     @SerialName("original_title") val originalTitle: String? = null,

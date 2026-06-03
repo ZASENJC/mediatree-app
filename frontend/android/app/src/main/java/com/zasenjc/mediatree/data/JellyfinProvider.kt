@@ -81,7 +81,7 @@ open class JellyfinProvider(
         token: String,
         userId: String,
     ): MediaRootsResponseDto {
-        val result = request<JellyfinItemsResponse>(
+        val result = request<MediaBrowserItemsResponse>(
             path = "/Users/$userId/Views",
             params = listOf("IncludeExternalContent" to "false"),
             serverOverride = serverUrl,
@@ -108,7 +108,7 @@ open class JellyfinProvider(
             params = listOf(
                 "ParentId" to mediaRoot,
                 "Recursive" to "false",
-                "IncludeItemTypes" to "Folder,Movie,Series,Season,Episode",
+                "IncludeItemTypes" to MediaBrowserFolderItemTypes,
                 "Fields" to ItemFields,
                 "SortBy" to "SortName",
                 "SortOrder" to "Ascending",
@@ -116,14 +116,10 @@ open class JellyfinProvider(
         )
         return FolderTreeResponseDto(
             tree = result.items.map { item ->
-                FolderNodeDto(
-                    name = item.name,
-                    path = item.id,
-                    isLeaf = item.type != "Folder" && item.type != "Series" && item.type != "Season",
-                    movieCount = item.childCount ?: if (item.isPlayable) 1 else 0,
-                    cover = coverUrl(session.serverUrl, item.id.toMovieId()),
-                    displayTitle = item.name,
-                    mediaRoot = mediaRoot,
+                item.toMediaTreeFolderNodeDto(
+                    serverUrl = session.serverUrl,
+                    parentMediaRoot = mediaRoot,
+                    rememberId = ::rememberProviderItemId,
                 )
             },
         )
@@ -160,6 +156,25 @@ open class JellyfinProvider(
         mediaRoot: String,
     ): MoviesResponseDto {
         val session = currentSession()
+        mediaBrowserSeriesId(folder)?.let { seriesId ->
+            val (sortBy, sortOrder) = sort.toJellyfinSort()
+            return moviesFromItems(
+                request(
+                    path = "/Shows/${seriesId.encodePathSegment()}/Episodes",
+                    params = buildList {
+                        add("UserId" to session.requireUserId())
+                        add("Fields" to ItemFields)
+                        add("StartIndex" to offset.toString())
+                        add("Limit" to limit.toString())
+                        add("SortBy" to sortBy)
+                        add("SortOrder" to sortOrder)
+                        code.takeIf { it.isNotBlank() }?.let { add("SearchTerm" to it) }
+                        tag.takeIf { it.isNotBlank() }?.let { add("Filters" to if (it == "favorite") "IsFavorite" else it) }
+                    },
+                ),
+                session = session,
+            )
+        }
         val parentId = folder.ifBlank { mediaRoot }
         val params = buildList {
             if (parentId.isNotBlank()) add("ParentId" to parentId)
@@ -200,10 +215,10 @@ open class JellyfinProvider(
 
     override suspend fun detail(movieId: Int): MovieDto {
         val session = currentSession()
-        return request<JellyfinItemDto>(
+        return request<MediaBrowserItemDto>(
             path = "/Users/${session.requireUserId()}/Items/${providerItemId(movieId)}",
             params = listOf("Fields" to ItemFields),
-        ).toMovieDto(session.serverUrl)
+        ).toRegisteredMovieDto(session)
     }
 
     override suspend fun progress(movieId: Int): ProgressDto {
@@ -238,7 +253,7 @@ open class JellyfinProvider(
 
     override suspend fun subtitleTracks(movieId: Int): List<SubtitleTrackDto> {
         val session = currentSession()
-        val playbackInfo = request<JellyfinPlaybackInfoDto>(
+        val playbackInfo = request<MediaBrowserPlaybackInfoDto>(
             path = "/Items/${providerItemId(movieId)}/PlaybackInfo",
             params = listOf("UserId" to session.requireUserId()),
         )
@@ -273,8 +288,10 @@ open class JellyfinProvider(
     }
 
     override suspend fun mediaInfo(movieId: Int): MediaInfoDto {
-        val item = detail(movieId)
-        return MediaInfoDto(duration = (item.duration ?: 0) * 60.0)
+        return request<MediaBrowserPlaybackInfoDto>(
+            path = "/Items/${providerItemId(movieId)}/PlaybackInfo",
+            params = listOf("UserId" to currentSession().requireUserId()),
+        ).toMediaInfoDto()
     }
 
     override suspend fun addTag(movieId: Int, tag: String): OkResponseDto {
@@ -351,12 +368,12 @@ open class JellyfinProvider(
 
     private suspend fun currentSession(): Session = sessionStore.sessionFlow.first()
 
-    private suspend fun items(userId: String, params: List<Pair<String, String>>): JellyfinItemsResponse =
+    private suspend fun items(userId: String, params: List<Pair<String, String>>): MediaBrowserItemsResponse =
         request(path = "/Users/$userId/Items", params = params)
 
-    private fun moviesFromItems(response: JellyfinItemsResponse, session: Session): MoviesResponseDto =
+    private fun moviesFromItems(response: MediaBrowserItemsResponse, session: Session): MoviesResponseDto =
         MoviesResponseDto(
-            movies = response.items.map { it.toMovieDto(session.serverUrl) },
+            movies = response.items.map { it.toRegisteredMovieDto(session) },
             total = response.totalRecordCount,
         )
 
@@ -408,59 +425,19 @@ open class JellyfinProvider(
         }
     }
 
-    private fun JellyfinItemDto.toMovieDto(serverUrl: String): MovieDto {
-        val itemId = id.toMovieId()
-        val userData = userData
-        return MovieDto(
-            id = itemId,
-            path = id,
-            code = name,
-            title = name,
-            originalTitle = originalTitle,
-            overview = overview,
-            series = seriesName,
-            studio = studios.firstOrNull()?.name,
-            genre = genres.joinToString(", "),
-            releaseDate = premiereDate,
-            duration = runTimeTicks?.let { (it / TicksPerSecond / 60).toInt() },
-            tags = buildList {
-                if (userData?.isFavorite == true) add("favorite")
-                if (userData?.played == true) add("watched")
-            },
-            mediaRoot = parentId,
-            episodeTitle = if (type == "Episode") name else null,
-            episodeNumber = indexNumber,
-            episodeLabel = indexNumber?.toString(),
-            episodeOverview = overview,
-            displayTitle = name,
-            fileSize = size,
-            size = size,
-            playbackPosition = userData?.playbackPositionTicks?.toDouble()?.div(TicksPerSecond),
-            progressPercent = userData?.playedPercentage,
-            cast = people.filter { it.type == "Actor" }.map { person ->
-                PersonCreditDto(
-                    name = person.name,
-                    character = person.role,
-                    profilePath = person.primaryImageTag?.let { "$serverUrl/Items/${person.id}/Images/Primary?tag=$it" },
-                    personId = person.id,
-                    source = providerType.name,
-                )
-            },
-            crew = people.filter { it.type != "Actor" }.map { person ->
-                CrewCreditDto(
-                    name = person.name,
-                    job = person.role ?: person.type,
-                    profilePath = person.primaryImageTag?.let { "$serverUrl/Items/${person.id}/Images/Primary?tag=$it" },
-                    personId = person.id,
-                    source = providerType.name,
-                )
-            },
-        )
-    }
-
     fun registerProviderItemId(movieId: Int, itemId: String) {
         if (itemId.isNotBlank()) providerIdsByMovieId[movieId] = itemId
     }
+
+    private fun MediaBrowserItemDto.toRegisteredMovieDto(session: Session): MovieDto =
+        toMediaTreeMovieDto(session.serverUrl, providerType).also { movie ->
+            registerProviderItemId(movie.id, id)
+        }
+
+    private fun rememberProviderItemId(itemId: String): Int =
+        mediaBrowserRouteId(itemId).also { movieId ->
+            registerProviderItemId(movieId, itemId)
+        }
 
     protected fun providerItemId(movieId: Int): String =
         providerIdsByMovieId[movieId] ?: movieId.toUInt().toString(16).padStart(8, '0')
@@ -481,11 +458,6 @@ open class JellyfinProvider(
         return "$base/Videos/$itemId/$sourceId/Subtitles/$trackIndex/Stream.$extension?$tokenPart"
     }
 
-    private fun String.toMovieId(): Int {
-        val movieId = takeLast(8).toUIntOrNull(16)?.toInt() ?: hashCode()
-        providerIdsByMovieId[movieId] = this
-        return movieId
-    }
 }
 
 @Serializable
@@ -506,81 +478,8 @@ private data class JellyfinUserDto(
     @SerialName("Name") val name: String = "",
 )
 
-@Serializable
-private data class JellyfinItemsResponse(
-    @SerialName("Items") val items: List<JellyfinItemDto> = emptyList(),
-    @SerialName("TotalRecordCount") val totalRecordCount: Int = items.size,
-)
-
-@Serializable
-private data class JellyfinItemDto(
-    @SerialName("Id") val id: String = "",
-    @SerialName("Name") val name: String = "",
-    @SerialName("OriginalTitle") val originalTitle: String? = null,
-    @SerialName("Overview") val overview: String? = null,
-    @SerialName("Type") val type: String = "",
-    @SerialName("ParentId") val parentId: String? = null,
-    @SerialName("SeriesName") val seriesName: String? = null,
-    @SerialName("Studios") val studios: List<JellyfinNameDto> = emptyList(),
-    @SerialName("Genres") val genres: List<String> = emptyList(),
-    @SerialName("PremiereDate") val premiereDate: String? = null,
-    @SerialName("RunTimeTicks") val runTimeTicks: Long? = null,
-    @SerialName("ChildCount") val childCount: Int? = null,
-    @SerialName("IndexNumber") val indexNumber: Int? = null,
-    @SerialName("Size") val size: Long? = null,
-    @SerialName("IsFolder") val isFolder: Boolean = false,
-    @SerialName("UserData") val userData: JellyfinUserDataDto? = null,
-    @SerialName("People") val people: List<JellyfinPersonDto> = emptyList(),
-) {
-    val isPlayable: Boolean
-        get() = type == "Movie" || type == "Episode" || !isFolder
-}
-
-@Serializable
-private data class JellyfinNameDto(
-    @SerialName("Name") val name: String = "",
-)
-
-@Serializable
-private data class JellyfinUserDataDto(
-    @SerialName("IsFavorite") val isFavorite: Boolean = false,
-    @SerialName("Played") val played: Boolean = false,
-    @SerialName("PlaybackPositionTicks") val playbackPositionTicks: Long = 0,
-    @SerialName("PlayedPercentage") val playedPercentage: Double = 0.0,
-)
-
-@Serializable
-private data class JellyfinPersonDto(
-    @SerialName("Id") val id: String = "",
-    @SerialName("Name") val name: String = "",
-    @SerialName("Type") val type: String = "",
-    @SerialName("Role") val role: String? = null,
-    @SerialName("PrimaryImageTag") val primaryImageTag: String? = null,
-)
-
-@Serializable
-private data class JellyfinPlaybackInfoDto(
-    @SerialName("MediaSources") val mediaSources: List<JellyfinMediaSourceDto> = emptyList(),
-)
-
-@Serializable
-private data class JellyfinMediaSourceDto(
-    @SerialName("Id") val id: String = "",
-    @SerialName("MediaStreams") val mediaStreams: List<JellyfinMediaStreamDto> = emptyList(),
-)
-
-@Serializable
-private data class JellyfinMediaStreamDto(
-    @SerialName("Index") val index: Int,
-    @SerialName("Type") val type: String = "",
-    @SerialName("Codec") val codec: String = "",
-    @SerialName("Language") val language: String? = null,
-    @SerialName("Title") val title: String? = null,
-    @SerialName("DisplayTitle") val displayTitle: String = "",
-    @SerialName("IsExternal") val isExternal: Boolean = false,
-)
-
-private const val ItemFields = "Overview,Genres,Studios,People,MediaSources,UserData,PrimaryImageAspectRatio,BasicSyncInfo,Path,DateCreated,PremiereDate"
+private const val ItemFields = "Overview,Genres,Tags,Studios,People,MediaSources,UserData,PrimaryImageAspectRatio,BasicSyncInfo,Path,DateCreated,PremiereDate,ProductionYear,OfficialRating,CommunityRating,ProviderIds,ImageTags,BackdropImageTags,SeriesId,SeriesName,SeasonId,SeasonName,ParentIndexNumber,IndexNumber,RecursiveItemCount,CollectionType"
+private const val MediaBrowserFolderItemTypes = "Folder,Movie,Series,Season,Episode,BoxSet,Video,MusicVideo"
 private const val TicksPerSecond = 10_000_000L
 @PublishedApi
 internal val JsonMediaType = "application/json; charset=utf-8".toMediaType()

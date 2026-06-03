@@ -74,7 +74,43 @@ class JellyfinEmbyProviderSourceTest {
         assertTrue(settings.contains("saveSession(normalized, result.token, type = state.providerType, userId = result.userId)"))
 
         assertTrue(detail.contains("container.mediaProviderFor(session.activeProviderType)"))
+        assertTrue(detail.contains("movie.providerSeriesId"))
+        assertTrue(detail.contains("mediaBrowserSeriesFolder"))
         assertTrue(detail.contains(".playbackSource("))
         assertFalse(detail.contains("PlaybackSource.mediaTree"))
+    }
+
+    @Test
+    fun mediaBrowserCompatMapsJellyfinFieldsIntoExistingFrontendModel() {
+        val compat = dataRoot.resolve("MediaBrowserCompat.kt").readText()
+        val models = dataRoot.resolve("Models.kt").readText()
+
+        assertTrue(models.contains("providerItemId"))
+        assertTrue(models.contains("providerSeriesId"))
+        assertTrue(compat.contains("fun MediaBrowserItemDto.toMediaTreeMovieDto"))
+        assertTrue(compat.contains("folderLevels = mediaBrowserFolderLevels"))
+        assertTrue(compat.contains("tmdbSeason = seasonNumber"))
+        assertTrue(compat.contains("tmdbEpisode = episodeNumber"))
+        assertTrue(compat.contains("cast = cast"))
+        assertTrue(compat.contains("crew = crew"))
+        assertTrue(compat.contains("fun MediaBrowserPlaybackInfoDto.toMediaInfoDto"))
+        assertTrue(compat.contains("fun MediaBrowserItemDto.toMediaTreeFolderNodeDto"))
+        assertTrue(compat.contains("recursiveItemCount"))
+        assertTrue(compat.contains("isBrowsableMediaBrowserItem() -> 1"))
+        assertTrue(compat.contains("\"BoxSet\""))
+        assertTrue(compat.contains("\"Video\""))
+    }
+
+    @Test
+    fun jellyfinFoldersUseMediaBrowserFolderCompatMapping() {
+        val source = dataRoot.resolve("JellyfinProvider.kt").readText()
+
+        assertTrue(source.contains("\"IncludeItemTypes\" to MediaBrowserFolderItemTypes"))
+        assertTrue(source.contains("toMediaTreeFolderNodeDto"))
+        assertTrue(source.contains("MediaBrowserFolderItemTypes"))
+        assertTrue(source.contains("BoxSet"))
+        assertTrue(source.contains("Video"))
+        assertTrue(source.contains("RecursiveItemCount"))
+        assertTrue(source.contains("CollectionType"))
     }
 }

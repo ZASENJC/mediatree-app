@@ -1043,7 +1043,9 @@ private fun FolderNodeDto.detailRoute(): String =
 private fun MovieDto.routeId(): Int = id
 
 private fun MovieDto.detailRoute(): String =
-    "detail/${routeId()}" + path.takeIf { it.isNotBlank() }?.let { "?providerItemId=${Uri.encode(it)}" }.orEmpty()
+    "detail/${routeId()}" + providerRouteItemId().takeIf { it.isNotBlank() }?.let { "?providerItemId=${Uri.encode(it)}" }.orEmpty()
+
+private fun MovieDto.providerRouteItemId(): String = providerItemId?.takeIf { it.isNotBlank() } ?: path
 
 private fun MovieDto.openRoute(): String =
     mediaRoot?.smbLibrarySourceId()?.let { sourceId -> "smbPlayer/$sourceId?path=${Uri.encode(path)}" }
