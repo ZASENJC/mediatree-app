@@ -36,8 +36,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -564,13 +564,14 @@ fun HomeScreen(
                 DesignTopAppBar(
                     title = "mediatree",
                     brand = true,
+                    containerColor = Color.Transparent,
                     actions = {
                         IconButton(onClick = { showSearch = true }) {
                             Icon(Icons.Default.Search, contentDescription = "搜索")
                         }
                         Box {
                             IconButton(onClick = { showSort = true }) {
-                                Icon(Icons.Default.Tune, contentDescription = "排序")
+                                Icon(Icons.Default.Menu, contentDescription = "排序")
                             }
                             DropdownMenu(expanded = showSort, onDismissRequest = { showSort = false }) {
                                 sortOptions.forEach { (key, label) ->

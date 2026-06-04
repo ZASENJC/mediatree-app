@@ -176,6 +176,7 @@ fun DesignTopAppBar(
     title: String,
     modifier: Modifier = Modifier,
     brand: Boolean = false,
+    containerColor: Color = MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
     navigationIcon: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
@@ -194,7 +195,7 @@ fun DesignTopAppBar(
         navigationIcon = { navigationIcon?.invoke() },
         actions = actions,
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
+            containerColor = containerColor,
             navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
             actionIconContentColor = MaterialTheme.colorScheme.onBackground,
             titleContentColor = MaterialTheme.colorScheme.onBackground,
