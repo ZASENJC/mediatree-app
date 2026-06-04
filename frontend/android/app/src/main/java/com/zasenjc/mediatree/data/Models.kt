@@ -35,6 +35,7 @@ data class ServerProfile(
     val userId: String = "",
     val token: String = "",
     val activeLibrary: String = "",
+    val authenticated: Boolean = false,
 ) {
     val displayName: String
         get() = name.ifBlank { type.name }
@@ -54,6 +55,7 @@ fun mediaTreeProfile(
     userId = "",
     token = token,
     activeLibrary = activeLibrary,
+    authenticated = token.isNotBlank(),
 )
 
 @Serializable

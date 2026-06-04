@@ -20,21 +20,25 @@ class AppConnectionStateTest {
     }
 
     @Test
-    fun startsOnHomeWhenServerUrlExists() {
-        assertEquals(0, initialTopDestinationPage(Session(serverUrl = "http://server")))
+    fun startsOnSettingsWhenMediaTreeHasOnlyServerUrl() {
+        assertEquals(
+            topDestinations.indexOfFirst { it.route == "settings" },
+            initialTopDestinationPage(Session(serverUrl = "http://server")),
+        )
     }
 
     @Test
-    fun contentTabsDoNotLoadWithoutServerUrl() {
+    fun contentTabsDoNotLoadWithoutLoggedInBackend() {
         assertFalse(shouldLoadRemoteContent(Session()))
-        assertTrue(shouldLoadRemoteContent(Session(serverUrl = "http://server")))
+        assertFalse(shouldLoadRemoteContent(Session(serverUrl = "http://server")))
+        assertTrue(shouldLoadRemoteContent(mediaBrowserSession(ProviderType.MediaTree, token = "", userId = "", authenticated = true)))
     }
 
     @Test
     fun jellyfinAndEmbyRequireTokenAndUserIdBeforeLoadingContent() {
-        val jellyfinSavedOnly = mediaBrowserSession(ProviderType.Jellyfin, token = "", userId = "")
-        val embyTokenOnly = mediaBrowserSession(ProviderType.Emby, token = "token", userId = "")
-        val jellyfinLoggedIn = mediaBrowserSession(ProviderType.Jellyfin, token = "token", userId = "user")
+        val jellyfinSavedOnly = mediaBrowserSession(ProviderType.Jellyfin, token = "", userId = "", authenticated = false)
+        val embyTokenOnly = mediaBrowserSession(ProviderType.Emby, token = "token", userId = "", authenticated = false)
+        val jellyfinLoggedIn = mediaBrowserSession(ProviderType.Jellyfin, token = "token", userId = "user", authenticated = true)
 
         assertFalse(shouldLoadRemoteContent(jellyfinSavedOnly))
         assertFalse(shouldLoadRemoteContent(embyTokenOnly))
@@ -68,13 +72,14 @@ class AppConnectionStateTest {
         assertEquals("token", result.session.token)
     }
 
-    private fun mediaBrowserSession(type: ProviderType, token: String, userId: String): Session {
+    private fun mediaBrowserSession(type: ProviderType, token: String, userId: String, authenticated: Boolean): Session {
         val profile = ServerProfile(
             id = type.name.lowercase(),
             type = type,
             serverUrl = "http://server",
             token = token,
             userId = userId,
+            authenticated = authenticated,
         )
         return Session(profiles = listOf(profile), activeProfileId = profile.id)
     }

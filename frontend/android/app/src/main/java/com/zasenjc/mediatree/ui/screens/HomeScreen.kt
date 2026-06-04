@@ -146,7 +146,13 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
-    fun load(providerType: ProviderType, profileId: String, activeLibrary: String, sort: String = _state.value.sortMode) {
+    fun load(
+        providerType: ProviderType,
+        profileId: String,
+        activeLibrary: String,
+        sort: String = _state.value.sortMode,
+        forceScan: Boolean = false,
+    ) {
         viewModelScope.launch {
             val hasContent = _state.value.hasHomeContent()
             _state.update {
@@ -169,7 +175,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     loadWebDavLibrary(webDavSourceId, sort)
                     return@launch
                 }
-                loadRemoteHome(providerType, profileId, activeLibrary, sort)
+                loadRemoteHome(providerType, profileId, activeLibrary, sort, forceScan)
             } catch (e: Throwable) {
                 _state.update { it.copy(loading = false, refreshing = false, error = e) }
             }
@@ -181,6 +187,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         profileId: String,
         activeLibrary: String,
         sort: String,
+        forceScan: Boolean,
     ) {
         val cachedSnapshot = cachedRemoteHomeSnapshot(
             providerType = providerType,
@@ -199,6 +206,10 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
 
+        val provider = container.mediaProviderFor(providerType)
+        if (forceScan && providerType == ProviderType.MediaTree) {
+            provider.scan(activeLibrary)
+        }
         val current = refreshHomeLibraryStage(providerType, activeLibrary, sort, cachedSnapshot)
         val recent = refreshHomeRecentStage(providerType, profileId, current.mediaRoot)
         _state.update {
@@ -495,7 +506,7 @@ fun HomeScreen(
                 isRefreshing = state.refreshing,
                 onRefresh = {
                     if (session.canLoadHomeContent()) {
-                        vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary)
+                        vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, forceScan = true)
                     }
                 },
                 modifier = Modifier.fillMaxSize(),

@@ -66,58 +66,20 @@ class SessionStore(context: Context) {
         )
     }
 
-    suspend fun saveServer(
-        serverUrl: String,
-        type: ProviderType = ProviderType.MediaTree,
-        name: String = "",
-    ) {
-        val current = sessionFlow.first()
-        val normalized = UrlUtils.normalizeServerUrl(serverUrl)
-        val existing = current.activeProfile?.takeIf { it.type == type }
-        val profile = (existing ?: providerProfile(type, normalized))
-            .copy(type = type, name = name.ifBlank { existing?.name.orEmpty() }.ifBlank { type.name }, serverUrl = normalized)
-        val profiles = current.resolvedProfiles.upsertProfile(profile)
-        appContext.sessionDataStore.edit { prefs ->
-            prefs[SERVER_URL] = normalized
-            prefs[SERVER_PROFILES] = sessionJson.encodeToString(profiles.withoutStoredSecrets())
-            prefs[ACTIVE_PROFILE_ID] = profile.id
-        }
-    }
-
-    suspend fun saveProfile(
-        profileId: String?,
-        serverUrl: String,
-        type: ProviderType,
-        name: String = "",
-    ) {
-        val current = sessionFlow.first()
-        val normalized = UrlUtils.normalizeServerUrl(serverUrl)
-        val existing = profileId
-            ?.let { id -> current.resolvedProfiles.firstOrNull { it.id == id } }
-            ?.takeIf { it.type == type }
-        val profile = (existing ?: providerProfile(type, normalized)).copy(
-            type = type,
-            name = name.ifBlank { existing?.name.orEmpty() }.ifBlank { type.name },
-            serverUrl = normalized,
-        )
-        val profiles = current.resolvedProfiles.upsertProfile(profile)
-        appContext.sessionDataStore.edit { prefs ->
-            prefs[SERVER_URL] = normalized
-            prefs[SERVER_PROFILES] = sessionJson.encodeToString(profiles.withoutStoredSecrets())
-            prefs[ACTIVE_PROFILE_ID] = profile.id
-        }
-    }
-
     suspend fun saveSession(
         serverUrl: String,
         token: String,
         type: ProviderType = ProviderType.MediaTree,
         userId: String = "",
         name: String = "",
+        profileId: String? = null,
     ) {
         val current = sessionFlow.first()
         val normalized = UrlUtils.normalizeServerUrl(serverUrl)
-        val existing = current.activeProfile?.takeIf { it.type == type }
+        val existing = profileId
+            ?.let { id -> current.resolvedProfiles.firstOrNull { it.id == id } }
+            ?.takeIf { it.type == type }
+            ?: current.activeProfile?.takeIf { it.type == type }
         val profile = (existing ?: providerProfile(type, normalized)).copy(
             type = type,
             name = name.ifBlank { existing?.name.orEmpty() }.ifBlank { type.name },
@@ -125,6 +87,7 @@ class SessionStore(context: Context) {
             userId = userId,
             token = "",
             activeLibrary = existing?.activeLibrary.orEmpty(),
+            authenticated = true,
         )
         val profiles = current.resolvedProfiles.upsertProfile(profile)
         writeToken(token, profile.id)
@@ -134,6 +97,28 @@ class SessionStore(context: Context) {
             prefs[SERVER_URL] = normalized
             prefs[SERVER_PROFILES] = sessionJson.encodeToString(profiles.withoutStoredSecrets())
             prefs[ACTIVE_PROFILE_ID] = profile.id
+        }
+    }
+
+    suspend fun removeProfile(profileId: String) {
+        val current = sessionFlow.first()
+        val profile = current.resolvedProfiles.firstOrNull { it.id == profileId } ?: return
+        writeToken("", profile.id)
+        if (profile.id == DEFAULT_MEDIATREE_PROFILE_ID) writeToken("")
+        val profiles = current.resolvedProfiles.filterNot { it.id == profile.id }
+        val nextActive = profiles.firstOrNull()
+        appContext.sessionDataStore.edit { prefs ->
+            if (profiles.isEmpty()) {
+                prefs.remove(SERVER_URL)
+                prefs.remove(ACTIVE_LIBRARY)
+                prefs.remove(SERVER_PROFILES)
+                prefs.remove(ACTIVE_PROFILE_ID)
+            } else {
+                prefs[SERVER_PROFILES] = sessionJson.encodeToString(profiles.withoutStoredSecrets())
+                prefs[ACTIVE_PROFILE_ID] = nextActive?.id.orEmpty()
+                prefs[SERVER_URL] = nextActive?.serverUrl.orEmpty()
+                prefs[ACTIVE_LIBRARY] = nextActive?.activeLibrary.orEmpty()
+            }
         }
     }
 

@@ -582,9 +582,9 @@ fun initialTopDestinationPage(session: Session): Int {
 fun shouldLoadRemoteContent(session: Session): Boolean = session.canLoadRemoteContent()
 
 fun Session.canLoadRemoteContent(): Boolean = when (activeProviderType) {
-    ProviderType.MediaTree -> serverUrl.isNotBlank()
+    ProviderType.MediaTree -> serverUrl.isNotBlank() && (activeProfile?.authenticated == true || token.isNotBlank())
     ProviderType.Jellyfin, ProviderType.Emby ->
-        serverUrl.isNotBlank() && token.isNotBlank() && activeUserId.isNotBlank()
+        serverUrl.isNotBlank() && activeProfile?.authenticated == true && token.isNotBlank() && activeUserId.isNotBlank()
     ProviderType.WebDAV, ProviderType.SMB -> false
 }
 

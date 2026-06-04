@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Cached
@@ -153,7 +152,6 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         val password: String = "",
         val roots: List<MediaRootDto> = emptyList(),
         val backendLibraries: List<BackendLibraryItem> = emptyList(),
-        val scanning: Boolean = false,
         val message: String = "",
         val error: String? = null,
         val clientStorageSources: List<ClientStorageSource> = emptyList(),
@@ -252,16 +250,6 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.uiPreferencesStore.setFullscreenModePreference(value) }
     }
 
-    fun saveServerProfile(profileId: String?, providerType: ProviderType, serverUrl: String, profileName: String) {
-        viewModelScope.launch {
-            kotlin.runCatching {
-                container.sessionStore.saveProfile(profileId, serverUrl, providerType, profileName)
-            }
-                .onSuccess { _state.update { it.copy(message = "${providerType.labelText()} 已保存", error = null) } }
-                .onFailure { throwable -> _state.update { it.copy(error = throwable.message) } }
-        }
-    }
-
     fun loginServerProfile(
         profileId: String?,
         providerType: ProviderType,
@@ -274,17 +262,16 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             val normalized = UrlUtils.normalizeServerUrl(serverUrl)
             _state.update { it.copy(message = "", error = null) }
             try {
-                container.sessionStore.saveProfile(profileId, normalized, providerType, profileName)
                 val provider = container.mediaProviderFor(providerType)
                 val status = provider.authStatus(normalized)
                 if (!status.needAuth) {
-                    container.sessionStore.saveSession(normalized, "", type = providerType, name = profileName)
-                    _state.update { it.copy(message = "${providerType.labelText()} 无需登录，已连接") }
+                    container.sessionStore.saveSession(normalized, "", type = providerType, name = profileName, profileId = profileId)
+                    _state.update { it.copy(message = "${providerType.labelText()} 登录成功") }
                     return@launch
                 }
                 val result = provider.login(normalized, username, password)
                 if (result.ok) {
-                    container.sessionStore.saveSession(normalized, result.token, type = providerType, userId = result.userId, name = profileName)
+                    container.sessionStore.saveSession(normalized, result.token, type = providerType, userId = result.userId, name = profileName, profileId = profileId)
                     _state.update { it.copy(message = "${providerType.labelText()} 登录成功") }
                 } else {
                     _state.update { it.copy(error = "${providerType.labelText()} 登录失败") }
@@ -292,6 +279,14 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             } catch (e: Throwable) {
                 _state.update { it.copy(error = e.message ?: "${providerType.labelText()} 登录失败") }
             }
+        }
+    }
+
+    fun logoutServerProfile(profileId: String?) {
+        if (profileId == null) return
+        viewModelScope.launch {
+            container.sessionStore.removeProfile(profileId)
+            _state.update { it.copy(message = "后端已登出", error = null) }
         }
     }
 
@@ -344,14 +339,9 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.sessionStore.activateProfile(profileId)
             container.sessionStore.setActiveLibrary(path)
-        }
-    }
-
-    fun saveServer() {
-        viewModelScope.launch {
-            val state = _state.value
-            container.sessionStore.saveServer(state.serverInput, type = state.providerType)
-            _state.update { it.copy(message = "服务器地址已保存") }
+            val profile = _state.value.backendLibraries.firstOrNull { it.profileId == profileId } ?: return@launch
+            kotlin.runCatching { container.mediaProviderFor(profile.providerType).scan(path) }
+                .onFailure { throwable -> _state.update { it.copy(error = throwable.message) } }
         }
     }
 
@@ -365,7 +355,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 val status = provider.authStatus(normalized)
                 if (!status.needAuth) {
                     container.sessionStore.saveSession(normalized, "", type = state.providerType)
-                    _state.update { it.copy(message = "服务器无需登录，已连接") }
+                    _state.update { it.copy(message = "登录成功") }
                     return@launch
                 }
                 val result = provider.login(normalized, state.username, state.password)
@@ -387,15 +377,6 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setActiveLibrary(path: String) {
         viewModelScope.launch { container.sessionStore.setActiveLibrary(path) }
-    }
-
-    fun scan(activeLibrary: String) {
-        viewModelScope.launch {
-            _state.update { it.copy(scanning = true, message = "", error = null) }
-            kotlin.runCatching { container.mediaProviderFor(_state.value.providerType).scan(activeLibrary) }
-                .onSuccess { r -> _state.update { it.copy(scanning = false, message = "扫描任务已触发，共 ${r.total} 项") } }
-                .onFailure { throwable -> _state.update { it.copy(scanning = false, error = throwable.message) } }
-        }
     }
 
     fun saveWebDavSource() {
@@ -599,7 +580,6 @@ fun SettingsScreen(
                     onAdd = { editingConnection = it },
                     onEdit = { editingConnection = it },
                     onDeleteClientStorageSource = vm::deleteClientStorageSource,
-                    onLogout = vm::logout,
                 )
             }
             item {
@@ -630,15 +610,6 @@ fun SettingsScreen(
                                 onClick = { vm.setActiveLibrary(libraryPath) },
                             )
                         }
-                    Button(
-                        enabled = !state.scanning,
-                        onClick = { vm.scan(session.activeLibrary) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (state.scanning) "触发中..." else "立即扫描媒体库")
-                    }
                 }
             }
             item {
@@ -701,12 +672,12 @@ fun SettingsScreen(
         ConnectionEditorDialog(
             target = target,
             onDismiss = { editingConnection = null },
-            onSaveServer = { profileId, providerType, serverUrl, profileName ->
-                vm.saveServerProfile(profileId, providerType, serverUrl, profileName)
-                editingConnection = null
-            },
             onLoginServer = { profileId, providerType, serverUrl, profileName, username, password ->
                 vm.loginServerProfile(profileId, providerType, serverUrl, profileName, username, password)
+                editingConnection = null
+            },
+            onLogoutServer = { profileId ->
+                vm.logoutServerProfile(profileId)
                 editingConnection = null
             },
             onSaveWebDav = { id, name, url, username, password, authType, enabled ->
@@ -779,7 +750,6 @@ private fun ConnectionsSection(
     onAdd: (ConnectionEditorTarget) -> Unit,
     onEdit: (ConnectionEditorTarget) -> Unit,
     onDeleteClientStorageSource: (String) -> Unit,
-    onLogout: () -> Unit,
 ) {
     var addMenuExpanded by remember { mutableStateOf(false) }
     SettingsSectionCard(
@@ -862,17 +832,6 @@ private fun ConnectionsSection(
                 },
             )
         }
-        if (profiles.isNotEmpty()) {
-            TextButton(
-                onClick = onLogout,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("退出所有后端登录")
-            }
-        }
     }
 }
 
@@ -880,8 +839,8 @@ private fun ConnectionsSection(
 private fun ConnectionEditorDialog(
     target: ConnectionEditorTarget,
     onDismiss: () -> Unit,
-    onSaveServer: (String?, ProviderType, String, String) -> Unit,
     onLoginServer: (String?, ProviderType, String, String, String, String) -> Unit,
+    onLogoutServer: (String?) -> Unit,
     onSaveWebDav: (String?, String, String, String, String, ClientStorageAuthType, Boolean) -> Unit,
     onSaveSmb: (String?, String, String, String, String, String, Boolean) -> Unit,
 ) {
@@ -889,8 +848,8 @@ private fun ConnectionEditorDialog(
         is ConnectionEditorTarget.Server -> ServerConnectionDialog(
             target = target,
             onDismiss = onDismiss,
-            onSave = onSaveServer,
             onLogin = onLoginServer,
+            onLogout = onLogoutServer,
         )
         is ConnectionEditorTarget.WebDav -> WebDavConnectionDialog(
             target = target,
@@ -909,8 +868,8 @@ private fun ConnectionEditorDialog(
 private fun ServerConnectionDialog(
     target: ConnectionEditorTarget.Server,
     onDismiss: () -> Unit,
-    onSave: (String?, ProviderType, String, String) -> Unit,
     onLogin: (String?, ProviderType, String, String, String, String) -> Unit,
+    onLogout: (String?) -> Unit,
 ) {
     var profileName by remember(target) { mutableStateOf(target.profile?.displayName ?: target.type.labelText()) }
     var serverUrl by remember(target) { mutableStateOf(target.profile?.serverUrl.orEmpty()) }
@@ -974,8 +933,17 @@ private fun ServerConnectionDialog(
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (target.profile != null) {
+                    TextButton(
+                        onClick = { onLogout(target.profile.id) },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("登出")
+                    }
+                }
                 TextButton(onClick = onDismiss) { Text("取消") }
-                Button(onClick = { onSave(target.profile?.id, target.type, serverUrl, profileName) }) { Text("保存") }
             }
         },
     )
@@ -1280,10 +1248,8 @@ private fun ClientStorageSource.storageSummary(): String {
 }
 
 private fun ServerProfile.connectionStatus(session: Session): String = when {
-    id == session.activeProfileId && token.isNotBlank() -> "当前 · 已登录"
-    id == session.activeProfileId -> "当前 · 已连接"
-    token.isNotBlank() -> "已登录"
-    serverUrl.isNotBlank() -> "已连接"
+    id == session.activeProfileId && authenticated -> "当前 · 已登录"
+    authenticated -> "已登录"
     else -> "未配置"
 }
 
@@ -1294,8 +1260,8 @@ private fun MediaRootDto.displayName(): String =
     label.ifBlank { path.substringAfterLast("/") }.ifBlank { path }
 
 private fun ServerProfile.canLoadMediaRoots(): Boolean = when (type) {
-    ProviderType.MediaTree -> serverUrl.isNotBlank()
+    ProviderType.MediaTree -> serverUrl.isNotBlank() && authenticated
     ProviderType.Jellyfin, ProviderType.Emby ->
-        serverUrl.isNotBlank() && token.isNotBlank() && userId.isNotBlank()
+        serverUrl.isNotBlank() && authenticated && token.isNotBlank() && userId.isNotBlank()
     ProviderType.WebDAV, ProviderType.SMB -> false
 }

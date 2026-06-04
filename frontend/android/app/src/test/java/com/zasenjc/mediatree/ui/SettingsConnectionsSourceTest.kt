@@ -35,7 +35,6 @@ class SettingsConnectionsSourceTest {
         assertTrue(source.contains("ServerConnectionDialog"))
         assertTrue(source.contains("WebDavConnectionDialog"))
         assertTrue(source.contains("SmbConnectionDialog"))
-        assertTrue(source.contains("saveServerProfile"))
         assertTrue(source.contains("loginServerProfile"))
     }
 
@@ -47,10 +46,41 @@ class SettingsConnectionsSourceTest {
 
         assertTrue(source.contains("profileName"))
         assertTrue(source.contains("label = { Text(\"媒体库名称\") }"))
-        assertTrue(source.contains("saveServerProfile(profileId, providerType, serverUrl, profileName)"))
         assertTrue(source.contains("loginServerProfile(profileId, providerType, serverUrl, profileName, username, password)"))
         assertTrue(source.contains("title = profile.displayName()"))
         assertTrue(source.contains("title = firstLibrary.profileName"))
+    }
+
+    @Test
+    fun backendProfilesAreSavedOnlyAfterLoginSucceeds() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
+            .readText()
+        val loginBlock = source
+            .substringAfter("fun loginServerProfile(")
+            .substringBefore("fun loadRoots(")
+
+        assertFalse(source.contains("fun saveServerProfile("))
+        assertFalse(loginBlock.contains("saveProfile("))
+        assertTrue(loginBlock.contains("saveSession(normalized, \"\", type = providerType, name = profileName, profileId = profileId"))
+        assertTrue(loginBlock.contains("saveSession(normalized, result.token, type = providerType, userId = result.userId, name = profileName, profileId = profileId"))
+    }
+
+    @Test
+    fun serverConnectionDialogHasOnlyLoginPrimaryActionAndRedLogoutOnLeft() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
+            .readText()
+        val dialogBlock = source
+            .substringAfter("private fun ServerConnectionDialog(")
+            .substringBefore("@Composable\nprivate fun WebDavConnectionDialog")
+
+        assertTrue(dialogBlock.contains("confirmButton"))
+        assertTrue(dialogBlock.contains("Text(\"登录\")"))
+        assertFalse(dialogBlock.contains("Text(\"保存\")"))
+        assertTrue(dialogBlock.contains("onLogout"))
+        assertTrue(dialogBlock.contains("Text(\"登出\")"))
+        assertTrue(dialogBlock.contains("MaterialTheme.colorScheme.error"))
     }
 
     @Test

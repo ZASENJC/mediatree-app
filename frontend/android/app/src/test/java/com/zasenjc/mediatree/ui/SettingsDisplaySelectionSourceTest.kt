@@ -92,6 +92,17 @@ class SettingsDisplaySelectionSourceTest {
         assertTrue(block.contains("webDavLibraryPath(source.id)"))
         assertTrue(block.contains("activeProfileId = session.activeProfileId"))
         assertTrue(block.contains("activeLibrary = session.activeLibrary"))
+        assertFalse(block.contains("立即扫描媒体库"))
+        assertFalse(block.contains("vm.scan("))
+        assertFalse(block.contains("state.scanning"))
+        assertFalse(block.contains("Icons.Default.Refresh"))
+    }
+
+    @Test
+    fun settingsDoesNotExposeManualBackendScanAction() {
+        assertFalse(settingsSource.contains("fun scan(activeLibrary"))
+        assertFalse(settingsSource.contains("mediaProviderFor(_state.value.providerType).scan"))
+        assertFalse(settingsSource.contains("扫描任务已触发"))
     }
 
     @Test
@@ -132,9 +143,20 @@ class SettingsDisplaySelectionSourceTest {
     @Test
     fun backendLibrariesAreLoadedOnlyFromProfilesWithUsableCredentials() {
         assertTrue(settingsSource.contains(".filter { it.canLoadMediaRoots() }"))
-        assertTrue(settingsSource.contains("ProviderType.MediaTree -> serverUrl.isNotBlank()"))
+        assertTrue(settingsSource.contains("ProviderType.MediaTree -> serverUrl.isNotBlank() && authenticated"))
         assertTrue(settingsSource.contains("ProviderType.Jellyfin, ProviderType.Emby ->"))
-        assertTrue(settingsSource.contains("token.isNotBlank() && userId.isNotBlank()"))
+        assertTrue(settingsSource.contains("authenticated && token.isNotBlank() && userId.isNotBlank()"))
+    }
+
+    @Test
+    fun backendLibrarySwitchTriggersBackendScanImplicitly() {
+        val block = settingsSource
+            .substringAfter("fun selectBackendLibrary(")
+            .substringBefore("fun login()")
+
+        assertTrue(block.contains("container.sessionStore.activateProfile(profileId)"))
+        assertTrue(block.contains("container.sessionStore.setActiveLibrary(path)"))
+        assertTrue(block.contains("container.mediaProviderFor(profile.providerType).scan(path)"))
     }
 
     @Test
