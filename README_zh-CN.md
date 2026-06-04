@@ -4,10 +4,10 @@
 
 <h1 align="center">MediaTree App</h1>
 
-<p align="center"><strong>一个支持 MediaTree、Jellyfin、Emby、SMB 和 WebDAV 媒体库的独立 Android 媒体 app。</strong></p>
+<p align="center"><strong>一个支持 MediaTree、Jellyfin、Emby、SMB 和 WebDAV 的媒体库 App。</strong></p>
 
 <p align="center">
-  <a href="README.md">English</a> | <strong>简体中文</strong>
+  <a href="README_en-US.md">English</a> | <strong>简体中文</strong>
 </p>
 
 <p align="center">
@@ -34,9 +34,9 @@
 
 ## 展示截图
 
-| 首页 | 浏览 | 播放器 | 设置 |
-|---|---|---|---|
-| `docs/screenshots/home.png` | `docs/screenshots/browse.png` | `docs/screenshots/player.png` | `docs/screenshots/settings.png` |
+| 首页 | 浏览 | 播放器 | 设置 | 收藏 |
+|---|---|---|---|---|
+| ![home](https://img.qunq.de/file/1780586139237_Screenshot_2026-06-04-23-11-40-076_com.zasenjc.mediatree-edit.png) | ![browse](https://img.qunq.de/file/1780586435134_Screenshot_2026-06-04-23-20-22-202_com.zasenjc.mediatree-edit.png) | ![player](https://img.qunq.de/file/1780586129865_Screenshot_2026-06-04-23-12-14-940_com.zasenjc.mediatree-edit.png) | ![settings](https://img.qunq.de/file/1780586136918_Screenshot_2026-06-04-23-14-33-243_com.zasenjc.mediatree-edit.png) | ![favorites](https://img.qunq.de/file/1780586132880_Screenshot_2026-06-04-23-14-09-157_com.zasenjc.mediatree-edit.png) |
 
 ## 支持来源
 

@@ -4,50 +4,50 @@
 
 <h1 align="center">MediaTree App</h1>
 
-<p align="center"><strong>A standalone Android media app for MediaTree, Jellyfin, Emby, SMB, and WebDAV libraries.</strong></p>
+<p align="center"><strong>一个支持 MediaTree、Jellyfin、Emby、SMB 和 WebDAV 的媒体库 App。</strong></p>
 
 <p align="center">
-  <strong>English</strong> | <a href="README_zh-CN.md">简体中文</a>
+  <a href="README_en-US.md">English</a> | <strong>简体中文</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZASENJC/mediatree-app/releases/latest/download/app-release.apk"><img src="https://img.shields.io/badge/Download-APK-2f6fed?style=for-the-badge&logo=android&logoColor=white" alt="Download APK"></a>
-  <a href="https://github.com/ZASENJC/mediatree-app/releases/latest"><img src="https://img.shields.io/badge/Latest-Release-2f855a?style=for-the-badge" alt="Latest release"></a>
+  <a href="https://github.com/ZASENJC/mediatree-app/releases/latest/download/app-release.apk"><img src="https://img.shields.io/badge/下载-APK-2f6fed?style=for-the-badge&logo=android&logoColor=white" alt="Download APK"></a>
+  <a href="https://github.com/ZASENJC/mediatree-app/releases/latest"><img src="https://img.shields.io/badge/最新-Release-2f855a?style=for-the-badge" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Android-native-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Native Android">
 </p>
 
 ---
 
-## Download
+## 下载
 
-**[Download the latest APK](https://github.com/ZASENJC/mediatree-app/releases/latest/download/app-release.apk)**
+**[下载最新 APK](https://github.com/ZASENJC/mediatree-app/releases/latest/download/app-release.apk)**
 
-Open the APK on your Android device and install it. If Android blocks installation, allow installation from your browser or file manager, then try again.
+在 Android 设备上打开 APK 并安装。如果系统拦截安装，请允许浏览器或文件管理器安装未知来源应用后重试。
 
-## Why Use It
+## 为什么用它
 
-- One Android app for `MediaTree`, `Jellyfin`, `Emby`, `SMB`, and `WebDAV`
-- Poster-first library browsing with recent watching, folders, favorites, and detail pages
-- Native playback with subtitles, progress memory, gestures, and landscape mode
-- Server profiles for different media services
-- Clean Material 3 interface built for phones and tablets
+- 一个 app 连接 `MediaTree`、`Jellyfin`、`Emby`、`SMB` 和 `WebDAV`
+- 海报优先的媒体库浏览，支持最近观看、文件夹、收藏和详情页
+- 原生播放，支持字幕、进度记忆、手势和横屏模式
+- 可为不同媒体服务保存连接配置
+- 适合手机和平板的 Material 3 界面
 
-## Screenshots
+## 展示截图
 
-| Home | Browse | Player | Settings |
-|---|---|---|---|
-| `docs/screenshots/home.png` | `docs/screenshots/browse.png` | `docs/screenshots/player.png` | `docs/screenshots/settings.png` |
+| 首页 | 浏览 | 播放器 | 设置 | 收藏 |
+|---|---|---|---|---|
+| ![home](https://img.qunq.de/file/1780586139237_Screenshot_2026-06-04-23-11-40-076_com.zasenjc.mediatree-edit.png) | ![browse](https://img.qunq.de/file/1780586435134_Screenshot_2026-06-04-23-20-22-202_com.zasenjc.mediatree-edit.png) | ![player](https://img.qunq.de/file/1780586129865_Screenshot_2026-06-04-23-12-14-940_com.zasenjc.mediatree-edit.png) | ![settings](https://img.qunq.de/file/1780586136918_Screenshot_2026-06-04-23-14-33-243_com.zasenjc.mediatree-edit.png) | ![favorites](https://img.qunq.de/file/1780586132880_Screenshot_2026-06-04-23-14-09-157_com.zasenjc.mediatree-edit.png) |
 
-## Supported Sources
+## 支持来源
 
-| Source | Support |
+| 来源 | 支持内容 |
 |---|---|
-| `MediaTree` | Server library, metadata, playback, progress, favorites |
-| `Jellyfin` | MediaBrowser-compatible login, library, metadata, stream, progress, favorites |
-| `Emby` | Emby-compatible login, library, metadata, stream, progress, favorites |
-| `SMB` | Storage source setup and browsing |
-| `WebDAV` | Storage source setup and browsing |
+| `MediaTree` | 服务端媒体库、元数据、播放、进度、收藏 |
+| `Jellyfin` | MediaBrowser 兼容登录、媒体库、元数据、播放流、进度、收藏 |
+| `Emby` | Emby 兼容登录、媒体库、元数据、播放流、进度、收藏 |
+| `SMB` | 存储源设置和浏览 |
+| `WebDAV` | 存储源设置和浏览 |
 
-## License
+## 许可证
 
 MIT © [ZASENJC](https://github.com/ZASENJC)

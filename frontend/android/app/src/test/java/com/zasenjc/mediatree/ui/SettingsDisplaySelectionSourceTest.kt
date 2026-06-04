@@ -31,7 +31,7 @@ class SettingsDisplaySelectionSourceTest {
             .substringAfter("SettingsSectionCard(title = \"显示偏好\"")
             .substringBefore("ConnectionsSection(")
 
-        assertTrue(block.contains("Text(\"深浅色模式\""))
+        assertFalse(block.contains("Text(\"深浅色模式\""))
         assertTrue(block.contains("PreferenceExpandableRow("))
         assertTrue(block.contains("title = \"首页布局\""))
         assertTrue(block.contains("title = \"主题模式\""))

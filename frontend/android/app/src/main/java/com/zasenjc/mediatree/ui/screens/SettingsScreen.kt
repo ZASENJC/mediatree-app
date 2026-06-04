@@ -526,7 +526,6 @@ fun SettingsScreen(
                         selected = state.homeLayoutPreference,
                         onSelect = vm::setHomeLayoutPreference,
                     )
-                    Text("深浅色模式", style = MaterialTheme.typography.titleSmall)
                     PreferenceExpandableRow(
                         title = "主题模式",
                         selectedLabel = state.themeModePreference.labelText(),
