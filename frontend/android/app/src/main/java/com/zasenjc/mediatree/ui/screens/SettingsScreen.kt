@@ -240,6 +240,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.uiPreferencesStore.setThemeModePreference(value) }
     }
 
+    fun consumeMessage() {
+        _state.update { it.copy(message = "") }
+    }
+
     fun setThemeColorPreference(value: String) {
         viewModelScope.launch { container.uiPreferencesStore.setThemeColorPreference(value) }
     }
@@ -536,6 +540,15 @@ fun SettingsScreen(
         state.error?.let { onError(ApiException(0, it)) }
     }
 
+    LaunchedEffect(active, state.message) {
+        if (!active) return@LaunchedEffect
+        val message = state.message
+        if (message.isNotBlank()) {
+            onError(ApiException(0, message))
+            vm.consumeMessage()
+        }
+    }
+
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -626,15 +639,6 @@ fun SettingsScreen(
                         Spacer(Modifier.width(8.dp))
                         Text(if (state.scanning) "触发中..." else "立即扫描媒体库")
                     }
-                }
-            }
-            if (state.message.isNotBlank()) {
-                item {
-                    Text(
-                        text = state.message,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
                 }
             }
             item {

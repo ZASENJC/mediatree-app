@@ -79,7 +79,7 @@ class SettingsDisplaySelectionSourceTest {
     fun mediaLibraryDisplayUsesBackendLibrariesAndMountedSources() {
         val block = settingsSource
             .substringAfter("SettingsSectionCard(title = \"媒体库显示\"")
-            .substringBefore("if (state.message")
+            .substringBefore("SettingsSectionCard(title = \"缓存\"")
 
         assertFalse(settingsSource.contains("private val libraryViews"))
         assertFalse(block.contains("全部媒体库"))
@@ -92,6 +92,15 @@ class SettingsDisplaySelectionSourceTest {
         assertTrue(block.contains("webDavLibraryPath(source.id)"))
         assertTrue(block.contains("activeProfileId = session.activeProfileId"))
         assertTrue(block.contains("activeLibrary = session.activeLibrary"))
+    }
+
+    @Test
+    fun settingsMessagesUseSharedErrorChannelInsteadOfInlineRows() {
+        assertFalse(settingsSource.contains("if (state.message.isNotBlank())"))
+        assertFalse(settingsSource.contains("text = state.message"))
+        assertTrue(settingsSource.contains("LaunchedEffect(active, state.message)"))
+        assertTrue(settingsSource.contains("onError(ApiException(0, message))"))
+        assertTrue(settingsSource.contains("vm.consumeMessage()"))
     }
 
     @Test
