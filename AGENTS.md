@@ -98,7 +98,7 @@ Prefer app-side compatibility for response shape differences. If an API mismatch
 - `BrowseScreen.kt` — folder browsing, movie lists, breadcrumbs, search, sort, and scroll-aware overlay chrome.
 - `FavoritesScreen.kt` — favorite-tagged media with mixed episode/poster grid and scroll-aware overlay chrome.
 - `DetailScreen.kt` — player, subtitle selector, metadata, favorite/watched actions, cast, episodes, stills, and staff.
-- `SettingsScreen.kt` — backend connection, logout, SMB draft UI, active library, and scan trigger.
+- `SettingsScreen.kt` — backend connection profiles, per-profile logout, SMB/WebDAV sources, active library selection, and release update checks.
 - `LoginScreen.kt` — server URL and credential login flow.
 
 ## Packaging Boundaries

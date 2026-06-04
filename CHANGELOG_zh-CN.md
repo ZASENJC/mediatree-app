@@ -6,6 +6,26 @@
 
 ---
 
+## 0.1.01 (2026-06-05) — 设置与登录体验打磨
+
+### Android UI
+
+- 将 Android `versionCode` 更新为 `2`，`versionName` 更新为 `0.1.01`
+- 默认主题模式改为跟随 Android 系统，并刷新默认绿色主题色板
+- 首页、浏览和收藏在没有可用后端时统一使用居中的后端配置空状态
+- snackbar 消息上移避开 overlay 底部导航，避免临时提示被遮挡
+- 调整首页顶栏 chrome 和排序图标，使 overlay 布局更干净
+
+### 连接管理
+
+- 后端配置只在登录成功后保存；仅填写但未验证的服务器地址不再加载远程媒体库
+- 服务器连接编辑器新增单个后端配置登出，替代全局“退出所有后端登录”
+- 设置页移除手动后端扫描按钮；MediaTree 扫描改由首页刷新或切换后端媒体库触发
+- 设置页成功消息改走共享 snackbar 通道，不再渲染内联状态行
+- MediaBrowser authorization header 改用 `BuildConfig.VERSION_NAME`，让 Jellyfin/Emby 请求报告实际构建版本
+
+---
+
 ## 0.1.00 (2026-06-04) — Android App 首个正式版
 
 ### Android UI

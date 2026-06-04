@@ -1,5 +1,6 @@
 package com.zasenjc.mediatree.data
 
+import com.zasenjc.mediatree.BuildConfig
 import com.zasenjc.mediatree.playback.PlaybackSource
 import com.zasenjc.mediatree.playback.toPlaybackSubtitleTrack
 import com.zasenjc.mediatree.util.UrlUtils
@@ -498,7 +499,9 @@ private fun ServerProfile.requireUserId(): String =
 internal fun mediaBrowserAuthorizationValue(scheme: String, token: String, userId: String): String =
     buildString {
         append(scheme)
-        append(" Client=\"MediaTree\", Device=\"Android\", DeviceId=\"mediatree-android\", Version=\"0.1.00\"")
+        append(" Client=\"MediaTree\", Device=\"Android\", DeviceId=\"mediatree-android\", Version=\"")
+        append(BuildConfig.VERSION_NAME)
+        append("\"")
         if (userId.isNotBlank()) append(", UserId=\"").append(userId).append("\"")
         if (token.isNotBlank()) append(", Token=\"").append(token).append("\"")
     }

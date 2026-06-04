@@ -1,5 +1,6 @@
 package com.zasenjc.mediatree.playback
 
+import com.zasenjc.mediatree.BuildConfig
 import com.zasenjc.mediatree.data.SubtitleTrackDto
 import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.WebDavClient
@@ -173,7 +174,9 @@ private fun mediaBrowserHeaders(
 ): Map<String, String> {
     val authValue = buildString {
         append(authorizationScheme)
-        append(" Client=\"MediaTree\", Device=\"Android\", DeviceId=\"mediatree-android\", Version=\"0.1.00\"")
+        append(" Client=\"MediaTree\", Device=\"Android\", DeviceId=\"mediatree-android\", Version=\"")
+        append(BuildConfig.VERSION_NAME)
+        append("\"")
         if (userId.isNotBlank()) append(", UserId=\"").append(userId).append("\"")
         if (token.isNotBlank()) append(", Token=\"").append(token).append("\"")
     }

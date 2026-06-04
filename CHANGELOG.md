@@ -6,6 +6,26 @@ All notable changes to MediaTree are documented here.
 
 ---
 
+## 0.1.01 (2026-06-05) — Settings and Login Polish
+
+### Android UI
+
+- Updated Android `versionCode` to `2` and `versionName` to `0.1.01`
+- Set the default theme mode to follow the Android system setting and refreshed the default green theme palette
+- Centered the shared backend setup empty state across home, browse, and favorites when no usable backend is configured
+- Kept snackbar messages above the overlay bottom navigation so transient prompts remain visible
+- Refined the home top bar chrome and sort action icon for a cleaner overlay layout
+
+### Connections
+
+- Backend profiles are now saved only after login succeeds; saved-but-unauthenticated server URLs no longer load remote content
+- Added per-profile backend logout in the server connection editor instead of a global "logout all" action
+- Removed the manual backend scan button from Settings; MediaTree scans are triggered from home refresh or backend library selection
+- Routed Settings success messages through the shared snackbar channel instead of inline status rows
+- Reused `BuildConfig.VERSION_NAME` for MediaBrowser authorization headers so Jellyfin/Emby requests report the built app version
+
+---
+
 ## 0.1.00 (2026-06-04) — First Android App Release
 
 ### Android UI

@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.00.apk"><img src="https://img.shields.io/badge/下载-APK-2f6fed?style=for-the-badge&logo=android&logoColor=white" alt="Download APK"></a>
+  <a href="https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.01.apk"><img src="https://img.shields.io/badge/下载-APK-2f6fed?style=for-the-badge&logo=android&logoColor=white" alt="Download APK"></a>
   <a href="https://github.com/ZASENJC/mediatree-app/releases/latest"><img src="https://img.shields.io/badge/最新-Release-2f855a?style=for-the-badge" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Android-native-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Native Android">
 </p>
@@ -20,7 +20,7 @@
 
 ## 下载
 
-**[下载最新 APK](https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.00.apk)**
+**[下载最新 APK](https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.01.apk)**
 
 在 Android 设备上打开 APK 并安装。如果系统拦截安装，请允许浏览器或文件管理器安装未知来源应用后重试。
 
@@ -36,7 +36,7 @@
 - 一个 app 连接 `MediaTree`、`Jellyfin`、`Emby`、`SMB` 和 `WebDAV`
 - 海报优先的媒体库浏览，支持最近观看、文件夹、收藏和详情页
 - 原生播放，支持字幕、进度记忆、手势和横屏模式
-- 可为不同媒体服务保存连接配置
+- 登录后保存不同媒体服务的连接配置，未验证后端不会加载媒体库
 - 适合手机和平板的 Material 3 界面
 
 ## 展示截图
