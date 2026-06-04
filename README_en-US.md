@@ -28,7 +28,7 @@ Deploying with the [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) b
 
 ## Community / Channels
 
-- Telegram group: [Join the discussion](https://t.me/+-4Ezcae7I74yMmI1)
+- Telegram group: [Join the discussion](https://t.me/mediatree_group)
 - Telegram update channel: [Subscribe for updates](https://t.me/mediatreex)
 
 ## Why Use It

@@ -42,7 +42,7 @@
 
 ## 群组 / 频道
 
-- Telegram 群组：[加入讨论](https://t.me/+-4Ezcae7I74yMmI1)
+- Telegram 群组：[加入讨论](https://t.me/mediatree_group)
 - Telegram 更新通知频道：[订阅更新](https://t.me/mediatreex)
 
 ## 支持来源
