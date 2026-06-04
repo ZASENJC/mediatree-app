@@ -52,4 +52,20 @@ class SettingsConnectionsSourceTest {
         assertTrue(source.contains("title = profile.displayName()"))
         assertTrue(source.contains("title = firstLibrary.profileName"))
     }
+
+    @Test
+    fun mediaTreeServerConnectionEditorShowsBackendGuideLink() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
+            .readText()
+        val block = source
+            .substringAfter("private fun ServerConnectionDialog(")
+            .substringBefore("@Composable\nprivate fun WebDavConnectionDialog")
+
+        assertTrue(source.contains("MEDIATREE_BACKEND_REPOSITORY_URL = \"https://github.com/ZASENJC/mediatree\""))
+        assertTrue(block.contains("val uriHandler = LocalUriHandler.current"))
+        assertTrue(block.contains("if (target.type == ProviderType.MediaTree)"))
+        assertTrue(block.contains("MediaTree 配套后端，兼容性更高"))
+        assertTrue(block.contains("uriHandler.openUri(MEDIATREE_BACKEND_REPOSITORY_URL)"))
+    }
 }

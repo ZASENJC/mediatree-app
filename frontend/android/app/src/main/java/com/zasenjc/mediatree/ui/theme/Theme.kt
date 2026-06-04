@@ -1,13 +1,17 @@
 package com.zasenjc.mediatree.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import com.zasenjc.mediatree.data.DEFAULT_THEME_COLOR
+import com.zasenjc.mediatree.data.sanitizeThemeColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -153,9 +157,10 @@ private val MediaTreeShapes = Shapes(
 fun MediaTreeTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
+    themeColorHex: String = DEFAULT_THEME_COLOR,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (darkTheme) MediaTreeDarkScheme else MediaTreeLightScheme
+    val colorScheme = themedColorScheme(darkTheme = darkTheme, themeColorHex = themeColorHex)
     MaterialTheme(
         colorScheme = colorScheme,
         typography = MediaTreeTypography,
@@ -163,3 +168,46 @@ fun MediaTreeTheme(
         content = content,
     )
 }
+
+private fun themedColorScheme(darkTheme: Boolean, themeColorHex: String): ColorScheme {
+    val seed = parseThemeColor(themeColorHex)
+    val base = if (darkTheme) MediaTreeDarkScheme else MediaTreeLightScheme
+    return base.copy(
+        primary = if (darkTheme) seed.lighten(0.24f) else seed,
+        onPrimary = seed.readableOnColor(),
+        primaryContainer = if (darkTheme) seed.darken(0.28f) else seed.lighten(0.78f),
+        onPrimaryContainer = if (darkTheme) seed.lighten(0.86f) else seed.darken(0.5f),
+        secondary = if (darkTheme) seed.lighten(0.18f) else seed.darken(0.08f),
+        onSecondary = seed.readableOnColor(),
+        secondaryContainer = if (darkTheme) seed.darken(0.34f) else seed.lighten(0.82f),
+        onSecondaryContainer = if (darkTheme) seed.lighten(0.86f) else seed.darken(0.52f),
+    )
+}
+
+private fun parseThemeColor(value: String): Color {
+    val normalized = sanitizeThemeColor(value).removePrefix("#")
+    val rgb = normalized.toInt(16)
+    return Color(
+        red = ((rgb shr 16) and 0xFF) / 255f,
+        green = ((rgb shr 8) and 0xFF) / 255f,
+        blue = (rgb and 0xFF) / 255f,
+        alpha = 1f,
+    )
+}
+
+private fun Color.lighten(amount: Float): Color = blend(Color.White, amount)
+
+private fun Color.darken(amount: Float): Color = blend(Color.Black, amount)
+
+private fun Color.blend(target: Color, amount: Float): Color {
+    val ratio = amount.coerceIn(0f, 1f)
+    return Color(
+        red = red + (target.red - red) * ratio,
+        green = green + (target.green - green) * ratio,
+        blue = blue + (target.blue - blue) * ratio,
+        alpha = alpha,
+    )
+}
+
+private fun Color.readableOnColor(): Color =
+    if (luminance() > 0.52f) Color(0xFF10140D) else Color.White

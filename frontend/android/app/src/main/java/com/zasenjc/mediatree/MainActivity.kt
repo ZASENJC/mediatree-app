@@ -38,7 +38,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val container = remember { AppContainer(this) }
             val themeMode by container.uiPreferencesStore.themeModeFlow.collectAsStateWithLifecycle(
-                initialValue = ThemeModePreference.System,
+                initialValue = ThemeModePreference.Light,
+            )
+            val themeColor by container.uiPreferencesStore.themeColorFlow.collectAsStateWithLifecycle(
+                initialValue = com.zasenjc.mediatree.data.DEFAULT_THEME_COLOR,
             )
             val darkTheme = resolveDarkTheme(themeMode)
             LaunchedEffect(darkTheme) {
@@ -47,7 +50,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(container) {
                 container.releaseUpdateChecker.checkForUpdates(BuildConfig.VERSION_NAME)
             }
-            MediaTreeTheme(darkTheme = darkTheme) {
+            MediaTreeTheme(darkTheme = darkTheme, themeColorHex = themeColor) {
                 MediaTreeApp(container = container, deepLinkData = deepLinkData)
             }
         }

@@ -26,7 +26,7 @@ class SettingsDisplaySelectionSourceTest {
     }
 
     @Test
-    fun displayPreferenceUsesExpandableSettingRowsForLayoutAndThemeOnly() {
+    fun displayPreferenceUsesExpandableSettingRowsAndThemeColorPicker() {
         val block = settingsSource
             .substringAfter("SettingsSectionCard(title = \"显示偏好\"")
             .substringBefore("ConnectionsSection(")
@@ -36,6 +36,10 @@ class SettingsDisplaySelectionSourceTest {
         assertTrue(block.contains("title = \"首页布局\""))
         assertTrue(block.contains("title = \"主题模式\""))
         assertTrue(block.contains("selectedLabel = state.themeModePreference.labelText()"))
+        assertTrue(block.contains("ThemeColorPreferenceRow("))
+        assertTrue(block.contains("title = \"主题色\""))
+        assertTrue(block.contains("themeColorPreference = state.themeColorPreference"))
+        assertTrue(block.contains("onThemeColorChange = vm::setThemeColorPreference"))
         assertFalse(block.contains("title = \"播放全屏模式\""))
         assertFalse(block.contains("selectedLabel = state.fullscreenModePreference.labelText()"))
         assertFalse(block.contains("Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth())"))

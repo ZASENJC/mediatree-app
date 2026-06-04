@@ -1,6 +1,9 @@
 package com.zasenjc.mediatree.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,8 +14,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
@@ -42,6 +47,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,6 +73,7 @@ import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageAuthType
 import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.ClientStorageType
+import com.zasenjc.mediatree.data.DEFAULT_THEME_COLOR
 import com.zasenjc.mediatree.data.FullscreenModePreference
 import com.zasenjc.mediatree.data.HomeLayoutPreference
 import com.zasenjc.mediatree.data.MediaRootDto
@@ -76,6 +83,7 @@ import com.zasenjc.mediatree.data.ReleaseUpdateState
 import com.zasenjc.mediatree.data.ServerProfile
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.ThemeModePreference
+import com.zasenjc.mediatree.data.sanitizeThemeColor
 import com.zasenjc.mediatree.data.smbLibraryPath
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.data.webDavLibraryPath
@@ -93,6 +101,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 
 private val serverProviderTypes = listOf(ProviderType.MediaTree, ProviderType.Jellyfin, ProviderType.Emby)
+private const val MEDIATREE_BACKEND_REPOSITORY_URL = "https://github.com/ZASENJC/mediatree"
 
 private fun ProviderType.labelText(): String = when (this) {
     ProviderType.MediaTree -> "MediaTree"
@@ -119,6 +128,15 @@ private fun ClientStorageType.connectionIcon(): ImageVector = when (this) {
     ClientStorageType.WebDAV -> Icons.Default.Storage
     ClientStorageType.SMB -> Icons.Default.Router
 }
+
+private val themeColorPresets = listOf(
+    DEFAULT_THEME_COLOR,
+    "#5E9C76",
+    "#4F8EDB",
+    "#8E6AD8",
+    "#D16B86",
+    "#C78A2C",
+)
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     data class BackendLibraryItem(
@@ -151,7 +169,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         val smbUsername: String = "",
         val smbPassword: String = "",
         val homeLayoutPreference: HomeLayoutPreference = HomeLayoutPreference.MediaFeed,
-        val themeModePreference: ThemeModePreference = ThemeModePreference.System,
+        val themeModePreference: ThemeModePreference = ThemeModePreference.Light,
+        val themeColorPreference: String = DEFAULT_THEME_COLOR,
         val fullscreenModePreference: FullscreenModePreference = FullscreenModePreference.Landscape,
     )
 
@@ -172,6 +191,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.uiPreferencesStore.themeModeFlow.collect { preference ->
                 _state.update { it.copy(themeModePreference = preference) }
+            }
+        }
+        viewModelScope.launch {
+            container.uiPreferencesStore.themeColorFlow.collect { preference ->
+                _state.update { it.copy(themeColorPreference = preference) }
             }
         }
         viewModelScope.launch {
@@ -214,6 +238,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setThemeModePreference(value: ThemeModePreference) {
         viewModelScope.launch { container.uiPreferencesStore.setThemeModePreference(value) }
+    }
+
+    fun setThemeColorPreference(value: String) {
+        viewModelScope.launch { container.uiPreferencesStore.setThemeColorPreference(value) }
     }
 
     fun setFullscreenModePreference(value: FullscreenModePreference) {
@@ -543,6 +571,11 @@ fun SettingsScreen(
                         ),
                         selected = state.themeModePreference,
                         onSelect = vm::setThemeModePreference,
+                    )
+                    ThemeColorPreferenceRow(
+                        title = "主题色",
+                        themeColorPreference = state.themeColorPreference,
+                        onThemeColorChange = vm::setThemeColorPreference,
                     )
                 }
             }
@@ -880,6 +913,7 @@ private fun ServerConnectionDialog(
     var username by remember(target) { mutableStateOf("") }
     var password by remember(target) { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
     val title = "${if (target.profile == null) "添加" else "编辑"}${target.type.labelText()} 后端"
 
     AlertDialog(
@@ -894,6 +928,18 @@ private fun ServerConnectionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
+                if (target.type == ProviderType.MediaTree) {
+                    TextButton(
+                        onClick = { uriHandler.openUri(MEDIATREE_BACKEND_REPOSITORY_URL) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = "MediaTree 配套后端，兼容性更高。点击了解",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
                 OutlinedTextField(
                     value = serverUrl,
                     onValueChange = { serverUrl = it },
@@ -1093,6 +1139,95 @@ private fun <T> PreferenceExpandableRow(
             }
         }
     }
+}
+
+@Composable
+private fun ThemeColorPreferenceRow(
+    title: String,
+    themeColorPreference: String,
+    onThemeColorChange: (String) -> Unit,
+) {
+    var expanded by remember(title) { mutableStateOf(false) }
+    var customColor by remember(themeColorPreference) { mutableStateOf(themeColorPreference) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        DesignSettingsRow(
+            title = title,
+            subtitle = themeColorPreference,
+            icon = Icons.Default.Visibility,
+            trailing = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeColorSwatch(colorHex = themeColorPreference, selected = false, onClick = null)
+                    Icon(Icons.Default.ChevronRight, contentDescription = null)
+                }
+            },
+            onClick = { expanded = !expanded },
+        )
+        AnimatedVisibility(visible = expanded) {
+            Column(modifier = Modifier.padding(start = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    themeColorPresets.forEach { colorHex ->
+                        ThemeColorSwatch(
+                            colorHex = colorHex,
+                            selected = colorHex.equals(themeColorPreference, ignoreCase = true),
+                            onClick = { onThemeColorChange(colorHex) },
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = customColor,
+                    onValueChange = { value ->
+                        customColor = value
+                        if (isValidThemeColor(value)) onThemeColorChange(sanitizeThemeColor(value))
+                    },
+                    label = { Text("#RRGGBB") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = customColor.isNotBlank() && !isValidThemeColor(customColor),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemeColorSwatch(
+    colorHex: String,
+    selected: Boolean,
+    onClick: (() -> Unit)?,
+) {
+    val color = remember(colorHex) { themeColorFromHex(colorHex) }
+    val shape = CircleShape
+    Surface(
+        modifier = Modifier
+            .size(32.dp)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        shape = shape,
+        color = Color.Transparent,
+    ) {
+        Box(
+            modifier = Modifier
+                .background(color, shape)
+                .border(
+                    width = if (selected) 3.dp else 1.dp,
+                    color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+                    shape = shape,
+                ),
+        )
+    }
+}
+
+private fun isValidThemeColor(value: String): Boolean =
+    Regex("^#?[0-9A-Fa-f]{6}$").matches(value.trim())
+
+private fun themeColorFromHex(value: String): Color {
+    val normalized = sanitizeThemeColor(value).removePrefix("#")
+    val rgb = normalized.toInt(16)
+    return Color(
+        red = ((rgb shr 16) and 0xFF) / 255f,
+        green = ((rgb shr 8) and 0xFF) / 255f,
+        blue = (rgb and 0xFF) / 255f,
+        alpha = 1f,
+    )
 }
 
 private fun HomeLayoutPreference.labelText(): String = when (this) {

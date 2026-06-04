@@ -22,6 +22,19 @@ class ThemePreferenceSourceTest {
     }
 
     @Test
+    fun uiPreferencesStorePersistsThemeColorPreference() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/data/UiPreferencesStore.kt")
+            .readText()
+
+        assertTrue(source.contains("const val DEFAULT_THEME_COLOR = \"#DDEFD1\""))
+        assertTrue(source.contains("val themeColorFlow"))
+        assertTrue(source.contains("sanitizeThemeColor"))
+        assertTrue(source.contains("setThemeColorPreference"))
+        assertTrue(source.contains("private val THEME_COLOR = stringPreferencesKey(\"theme_color\")"))
+    }
+
+    @Test
     fun uiPreferencesStorePersistsFullscreenModePreference() {
         val source = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/data/UiPreferencesStore.kt")
@@ -43,9 +56,26 @@ class ThemePreferenceSourceTest {
             .readText()
 
         assertTrue(source.contains("themeModeFlow.collectAsStateWithLifecycle"))
+        assertTrue(source.contains("initialValue = ThemeModePreference.Light"))
+        assertTrue(source.contains("themeColorFlow.collectAsStateWithLifecycle"))
         assertTrue(source.contains("resolveDarkTheme"))
         assertTrue(source.contains("ThemeModePreference.System -> isSystemInDarkTheme()"))
-        assertTrue(source.contains("MediaTreeTheme(darkTheme = darkTheme"))
+        assertTrue(source.contains("MediaTreeTheme(darkTheme = darkTheme, themeColorHex = themeColor"))
+    }
+
+    @Test
+    fun themeColorParsingUsesRgbChannelsInsteadOfPackedComposeColor() {
+        val themeSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/theme/Theme.kt")
+            .readText()
+        val settingsSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
+            .readText()
+
+        assertTrue(themeSource.contains("red = ((rgb shr 16) and 0xFF) / 255f"))
+        assertTrue(settingsSource.contains("red = ((rgb shr 16) and 0xFF) / 255f"))
+        assertTrue(!themeSource.contains("toULong()"))
+        assertTrue(!settingsSource.contains("toULong()"))
     }
 
     @Test
@@ -56,8 +86,12 @@ class ThemePreferenceSourceTest {
 
         assertTrue(source.contains("themeModePreference"))
         assertTrue(source.contains("setThemeModePreference"))
+        assertTrue(source.contains("themeColorPreference"))
+        assertTrue(source.contains("setThemeColorPreference"))
         assertTrue(source.contains("title = \"主题模式\""))
         assertTrue(source.contains("selectedLabel = state.themeModePreference.labelText()"))
+        assertTrue(source.contains("title = \"主题色\""))
+        assertTrue(source.contains("ThemeColorPreferenceRow("))
         assertTrue(source.contains("跟随系统"))
         assertTrue(source.contains("浅色模式"))
         assertTrue(source.contains("深色模式"))

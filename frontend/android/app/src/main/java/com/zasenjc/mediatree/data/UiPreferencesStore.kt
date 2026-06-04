@@ -24,6 +24,8 @@ enum class FullscreenModePreference(val value: String) {
     Auto("auto"),
 }
 
+const val DEFAULT_THEME_COLOR = "#DDEFD1"
+
 private val Context.uiPreferencesDataStore by preferencesDataStore("mediatree_ui_preferences")
 
 class UiPreferencesStore(context: Context) {
@@ -40,8 +42,12 @@ class UiPreferencesStore(context: Context) {
         when (prefs[THEME_MODE]) {
             ThemeModePreference.Light.value -> ThemeModePreference.Light
             ThemeModePreference.Dark.value -> ThemeModePreference.Dark
-            else -> ThemeModePreference.System
+            else -> ThemeModePreference.Light
         }
+    }
+
+    val themeColorFlow: Flow<String> = appContext.uiPreferencesDataStore.data.map { prefs ->
+        sanitizeThemeColor(prefs[THEME_COLOR].orEmpty())
     }
 
     val fullscreenModeFlow: Flow<FullscreenModePreference> = appContext.uiPreferencesDataStore.data.map { prefs ->
@@ -64,6 +70,12 @@ class UiPreferencesStore(context: Context) {
         }
     }
 
+    suspend fun setThemeColorPreference(value: String) {
+        appContext.uiPreferencesDataStore.edit { prefs ->
+            prefs[THEME_COLOR] = sanitizeThemeColor(value)
+        }
+    }
+
     suspend fun setFullscreenModePreference(preference: FullscreenModePreference) {
         appContext.uiPreferencesDataStore.edit { prefs ->
             prefs[FULLSCREEN_MODE] = preference.value
@@ -73,6 +85,13 @@ class UiPreferencesStore(context: Context) {
     companion object {
         private val HOME_LAYOUT = stringPreferencesKey("home_layout")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
+        private val THEME_COLOR = stringPreferencesKey("theme_color")
         private val FULLSCREEN_MODE = stringPreferencesKey("fullscreen_mode")
     }
+}
+
+fun sanitizeThemeColor(value: String): String {
+    val normalized = value.trim().uppercase()
+    val withPrefix = if (normalized.startsWith("#")) normalized else "#$normalized"
+    return if (Regex("^#[0-9A-F]{6}$").matches(withPrefix)) withPrefix else DEFAULT_THEME_COLOR
 }
