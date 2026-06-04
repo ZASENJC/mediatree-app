@@ -434,8 +434,6 @@ private fun DesignBottomNavigationBar(
             .padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 14.dp),
         shape = RoundedCornerShape(38.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        tonalElevation = 4.dp,
-        shadowElevation = 12.dp,
     ) {
         Row(
             modifier = Modifier
@@ -473,7 +471,7 @@ private fun BottomNavItem(
         animationSpec = tween(durationMillis = if (pressed) 70 else 120, easing = Md3StandardEasing),
         label = "bottomNavScale",
     )
-    val indicatorScale = 0.58f + 0.42f * selectedAmount
+    val indicatorWidthFraction = 0.58f + 0.42f * selectedAmount
 
     Box(
         modifier = modifier
@@ -481,7 +479,6 @@ private fun BottomNavItem(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(32.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -491,12 +488,11 @@ private fun BottomNavItem(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(32.dp))
+                .height(44.dp)
+                .fillMaxWidth(indicatorWidthFraction)
+                .clip(RoundedCornerShape(28.dp))
                 .graphicsLayer {
                     alpha = selectedAmount
-                    scaleX = indicatorScale
-                    scaleY = 0.96f + 0.04f * selectedAmount
                 }
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f + 0.74f * selectedAmount)),
         )
