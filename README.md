@@ -42,7 +42,7 @@
 
 | 来源 | 支持内容 |
 |---|---|
-| `MediaTree` | 服务端媒体库、元数据、播放、进度、收藏 |
+| [`MediaTree`](https://github.com/ZASENJC/mediatree) | 服务端媒体库、元数据、播放、进度、收藏 |
 | `Jellyfin` | MediaBrowser 兼容登录、媒体库、元数据、播放流、进度、收藏 |
 | `Emby` | Emby 兼容登录、媒体库、元数据、播放流、进度、收藏 |
 | `SMB` | 存储源设置和浏览 |
