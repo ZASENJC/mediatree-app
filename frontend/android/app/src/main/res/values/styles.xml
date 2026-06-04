@@ -5,9 +5,9 @@
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowBackground">#101014</item>
+        <item name="android:windowBackground">#10140D</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
-        <item name="android:colorAccent">#8AB4F8</item>
+        <item name="android:colorAccent">#A8C98B</item>
     </style>
 </resources>
