@@ -42,7 +42,7 @@ class StartupPerformanceSourceTest {
             .readText()
 
         assertTrue(appShell.contains("beyondViewportPageCount = 0"))
-        assertTrue(appShell.contains("val pageActive = page == pagerState.currentPage"))
+        assertTrue(appShell.contains("val pageActive = currentRoute == \"main\" && page == pagerState.currentPage"))
         assertTrue(appShell.contains("HomeScreen(") && appShell.contains("active = pageActive"))
         assertTrue(appShell.contains("BrowseScreen(") && appShell.contains("active = pageActive"))
         assertTrue(appShell.contains("FavoritesScreen(") && appShell.contains("active = pageActive"))

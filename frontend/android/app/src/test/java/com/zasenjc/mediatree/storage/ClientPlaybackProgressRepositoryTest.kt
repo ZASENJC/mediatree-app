@@ -25,17 +25,31 @@ class ClientPlaybackProgressRepositoryTest {
     }
 
     @Test
-    fun doesNotResumeTinyPositions() = runTest {
+    fun doesNotRememberPositionsBeforeOneMinute() = runTest {
         val repository = ClientPlaybackProgressRepository(FakeClientPlaybackProgressStore())
 
         repository.save(
             sourceId = "webdav-home",
             path = "/Series/E01.mp4",
-            positionSeconds = 4.9,
+            positionSeconds = 59.9,
             durationSeconds = 1_200.0,
         )
 
         assertEquals(0.0, repository.resumePosition("webdav-home", "/Series/E01.mp4"), 0.001)
+    }
+
+    @Test
+    fun remembersPositionsAtOneMinuteBoundary() = runTest {
+        val repository = ClientPlaybackProgressRepository(FakeClientPlaybackProgressStore())
+
+        repository.save(
+            sourceId = "smb-nas",
+            path = "/Series/E02.mp4",
+            positionSeconds = 60.0,
+            durationSeconds = 1_200.0,
+        )
+
+        assertEquals(60.0, repository.resumePosition("smb-nas", "/Series/E02.mp4"), 0.001)
     }
 
     @Test
@@ -61,11 +75,11 @@ class ClientPlaybackProgressRepositoryTest {
         repository.save(
             sourceId = "webdav-home",
             path = "/Raw/Clip.mov",
-            positionSeconds = 42.0,
+            positionSeconds = 61.0,
             durationSeconds = 0.0,
         )
 
-        assertEquals(42.0, repository.resumePosition("webdav-home", "/Raw/Clip.mov"), 0.001)
+        assertEquals(61.0, repository.resumePosition("webdav-home", "/Raw/Clip.mov"), 0.001)
     }
 }
 
@@ -74,6 +88,9 @@ private class FakeClientPlaybackProgressStore : ClientPlaybackProgressStore {
 
     override suspend fun load(sourceId: String, path: String): ClientPlaybackProgress? =
         items[sourceId to path]
+
+    override suspend fun list(sourceId: String): List<ClientPlaybackProgress> =
+        items.values.filter { it.sourceId == sourceId }
 
     override suspend fun save(progress: ClientPlaybackProgress) {
         items[progress.sourceId to progress.path] = progress

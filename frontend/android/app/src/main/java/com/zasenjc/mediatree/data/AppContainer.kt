@@ -13,6 +13,8 @@ class AppContainer(context: Context) {
     val clientStorageRepository = ClientStorageRepository(clientStorageStore)
     val clientPlaybackProgressStore = AndroidClientPlaybackProgressStore(context)
     val clientPlaybackProgressRepository = ClientPlaybackProgressRepository(clientPlaybackProgressStore)
+    val remotePlaybackMemoryStore = AndroidRemotePlaybackMemoryStore(context)
+    val remotePlaybackMemoryRepository = RemotePlaybackMemoryRepository(remotePlaybackMemoryStore)
     val webDavClient = WebDavClient()
     val smbClient = SmbClient()
     val smbRangeProxy = SmbRangeProxy(smbClient)
@@ -21,6 +23,9 @@ class AppContainer(context: Context) {
     val jellyfinProvider: MediaProvider = JellyfinProvider(sessionStore)
     val embyProvider: MediaProvider = EmbyProvider(sessionStore)
     val mediaProvider: MediaProvider = mediaTreeProvider
+    val remotePlaybackMemoryCoordinator = RemotePlaybackMemoryCoordinator(remotePlaybackMemoryRepository) { type ->
+        mediaProviderFor(type)
+    }
 
     fun mediaProviderFor(type: ProviderType?): MediaProvider = when (type) {
         ProviderType.Jellyfin -> jellyfinProvider

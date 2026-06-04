@@ -83,7 +83,8 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("FullscreenControl("))
         assertTrue(player.contains("AspectRatioMenu("))
         assertFalse(player.contains("private fun FullscreenButton"))
-        assertTrue(detailScreen.contains("playbackPositions"))
+        assertTrue(detailScreen.contains("playbackResumePositions"))
+        assertTrue(detailScreen.contains("lastKnownPlaybackPositions"))
         assertTrue(detailScreen.contains("onPlaybackPositionChange"))
         assertTrue(detailScreen.contains("ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT"))
         assertTrue(detailScreen.contains("onChromeVisibleChange"))
@@ -228,9 +229,37 @@ class PlayerUiCompletenessSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
             .readText()
 
-        assertTrue(detailScreen.contains("fun syncPlaybackProgress(providerType: ProviderType, movieId: Int, snapshot: PlaybackPositionSnapshot?)"))
-        assertTrue(detailScreen.contains("mediaTreeResumePosition(provider.progress(movieId))"))
-        assertTrue(detailScreen.contains("vm.syncPlaybackProgress(session.activeProviderType, movieId, snapshot)"))
+        assertTrue(detailScreen.contains("fun syncPlaybackProgress(providerType: ProviderType, profileId: String, movieId: Int, snapshot: PlaybackPositionSnapshot?)"))
+        val memoryStore = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/data/RemotePlaybackMemoryStore.kt")
+            .readText()
+        val coordinator = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/data/RemotePlaybackMemoryCoordinator.kt")
+            .readText()
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+
+        assertTrue(memoryStore.contains("fun remotePlaybackMemoryKey(providerType: ProviderType, profileId: String, movieId: Int): Pair<String, String>"))
+        assertTrue(detailScreen.contains("container.remotePlaybackMemoryCoordinator.resumePosition(providerType, profileId, movieId)"))
+        assertTrue(detailScreen.contains("container.remotePlaybackMemoryCoordinator.recordProgress("))
+        assertTrue(detailScreen.contains("container.remotePlaybackMemoryCoordinator.recordExit("))
+        assertTrue(detailScreen.contains("container.remotePlaybackMemoryCoordinator.markFinished(providerType, profileId, movie.id)"))
+        assertTrue(coordinator.contains("fun backendPlaybackResumePosition(progress: ProgressDto): Double"))
+        assertTrue(coordinator.contains("providerFor(providerType).saveProgress("))
+        assertTrue(detailScreen.contains("vm.syncPlaybackProgress(session.activeProviderType, session.activeProfileId, movieId, snapshot)"))
+        assertTrue(player.contains("PlaybackMemorySaveIntervalMillis = 5_000L"))
+        assertTrue(coordinator.contains("progress.position.takeIf { it.isFinite() && it >= PlaybackMemoryMinimumPositionSeconds }"))
+        assertTrue(coordinator.contains("fun shouldSyncBackendProgress(position: Double): Boolean"))
+        assertTrue(coordinator.contains("position >= PlaybackMemoryMinimumPositionSeconds"))
+        assertTrue(coordinator.contains("if (providerType.syncsPlaybackMemoryToBackend() && shouldSyncBackendProgress(positionSeconds))"))
+        assertTrue(player.contains("onProgressUpdate(target, durationSeconds)"))
+        assertTrue(detailScreen.contains("bestPlaybackSnapshot("))
+        assertTrue(detailScreen.contains("rememberablePlaybackPosition(snapshot.positionSeconds, snapshot.durationSeconds)"))
+        assertTrue(detailScreen.contains("if (pos.isFinite() && pos > 0.0)"))
+        assertTrue(detailScreen.contains("lastKnownPlaybackPositions[activeMovieId] = snapshot"))
+        assertTrue(detailScreen.contains("LaunchedEffect(movieId, providerItemId, session.activeProviderType)"))
+        assertTrue(detailScreen.contains("container.registerProviderItemId(session.activeProviderType, movieId, providerItemId)"))
         assertTrue(detailScreen.contains("capturePlaybackPosition(syncToBackend = true)"))
         assertTrue(detailScreen.contains("val onSelectEpisode: (Int) -> Unit = { episodeId ->"))
         assertTrue(detailScreen.contains("capturePlaybackPosition(syncToBackend = true)"))
@@ -238,6 +267,19 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(detailScreen.contains("val playingMovieId = activeMovieId"))
         assertTrue(detailScreen.contains("onDispose { capturePlaybackPosition(movieId = playingMovieId, syncToBackend = true) }"))
         assertTrue(detailScreen.contains("stopped = true"))
+    }
+
+    @Test
+    fun playerResetsVisiblePositionWhenPlaybackSourceReloadsWithResumePoint() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+        val loadBlock = player.substringAfter("LaunchedEffect(playbackSource.uri, playbackSource.headers)").substringBefore("DisposableEffect(controller, playbackSource, selectedSubtitle)")
+
+        assertTrue(loadBlock.contains("positionSeconds = startPosition.coerceAtLeast(0.0)"))
+        assertTrue(loadBlock.contains("seekingPositionSeconds = null"))
+        assertTrue(loadBlock.contains("completedReported = false"))
+        assertTrue(loadBlock.contains("startPositionSeconds = startPosition"))
     }
 
     @Test

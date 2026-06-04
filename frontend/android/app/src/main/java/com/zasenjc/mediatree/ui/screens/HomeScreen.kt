@@ -77,17 +77,20 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.ClientStorageType
+import com.zasenjc.mediatree.data.ClientPlaybackProgress
 import com.zasenjc.mediatree.data.HomeLayoutPreference
 import com.zasenjc.mediatree.data.FolderNodeDto
 import com.zasenjc.mediatree.data.MediaRootDto
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.MoviesResponseDto
+import com.zasenjc.mediatree.data.RemotePlaybackMemory
 import com.zasenjc.mediatree.data.SmbEntry
 import com.zasenjc.mediatree.data.WebDavEntry
 import com.zasenjc.mediatree.data.smbLibraryPath
 import com.zasenjc.mediatree.data.smbLibrarySourceId
 import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
+import com.zasenjc.mediatree.data.toMovieDto
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.data.webDavLibraryPath
 import com.zasenjc.mediatree.data.webDavLibrarySourceId
@@ -131,7 +134,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
-    fun load(providerType: ProviderType, activeLibrary: String, sort: String = _state.value.sortMode) {
+    fun load(providerType: ProviderType, profileId: String, activeLibrary: String, sort: String = _state.value.sortMode) {
         viewModelScope.launch {
             val hasContent = _state.value.hasHomeContent()
             _state.update {
@@ -167,7 +170,14 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     .tree
                     .filter { it.movieCount > 0 }
                     .sortedForHome(sort)
-                val recent = provider.recentWatched(limit = 20, mediaRoot = lib).movies
+                val providerRecent = provider.recentWatched(limit = 20, mediaRoot = lib).movies
+                val localRecent = container.remotePlaybackMemoryRepository.listContinueWatching(
+                    providerType = providerType,
+                    profileId = profileId,
+                    mediaRoot = lib,
+                    limit = 20,
+                )
+                val recent = mergeContinueWatchingWithMemory(providerRecent, localRecent, limit = 20)
                 _state.update {
                     it.copy(
                         loading = false,
@@ -192,10 +202,16 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         val folders = entries.filter { it.isDirectory }
             .map { entry -> entry.toFolderNode(source.id) }
             .sortedForHome(sort)
-        val recent = entries.filter { it.isPlayableVideo }
-            .map { entry -> entry.toMovieDto(source) }
-            .sortedMoviesForHome(sort)
-            .take(20)
+        val progressByPath = container.clientPlaybackProgressRepository.listContinueWatching(source.id, limit = 20)
+            .associateBy { it.path }
+        val recent = progressByPath.values
+            .sortedByDescending { it.updatedAtMillis }
+            .map { progress ->
+                entries.firstOrNull { it.path == progress.path }
+                    ?.toMovieDto(source)
+                    ?.withClientPlaybackProgress(progress)
+                    ?: progress.toMovieDto(source)
+            }
         _state.update {
             it.copy(
                 loading = false,
@@ -216,10 +232,16 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         val folders = entries.filter { it.isDirectory }
             .map { entry -> entry.toFolderNode(source.id) }
             .sortedForHome(sort)
-        val recent = entries.filter { it.isPlayableVideo }
-            .map { entry -> entry.toMovieDto(source) }
-            .sortedMoviesForHome(sort)
-            .take(20)
+        val progressByPath = container.clientPlaybackProgressRepository.listContinueWatching(source.id, limit = 20)
+            .associateBy { it.path }
+        val recent = progressByPath.values
+            .sortedByDescending { it.updatedAtMillis }
+            .map { progress ->
+                entries.firstOrNull { it.path == progress.path }
+                    ?.toMovieDto(source)
+                    ?.withClientPlaybackProgress(progress)
+                    ?: progress.toMovieDto(source)
+            }
         _state.update {
             it.copy(
                 loading = false,
@@ -237,6 +259,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun openLibraryItem(
         providerType: ProviderType,
+        profileId: String,
         item: FolderNodeDto,
         fallbackMediaRoot: String,
         onNavigate: (String) -> Unit,
@@ -256,7 +279,13 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                         limit = 500,
                         mediaRoot = item.mediaRoot?.takeIf { it.isNotBlank() } ?: fallbackMediaRoot,
                     )
-                    val movie = response.movies.latestHomePlaybackCandidate()
+                    val localMemories = container.remotePlaybackMemoryRepository.listContinueWatching(
+                        providerType = providerType,
+                        profileId = profileId,
+                        mediaRoot = item.mediaRoot?.takeIf { it.isNotBlank() } ?: fallbackMediaRoot,
+                        limit = 100,
+                    )
+                    val movie = response.movies.latestHomePlaybackCandidateWithMemory(localMemories)
                     if (movie == null) {
                         _state.update { it.copy(error = IllegalStateException("未找到可播放影片")) }
                     } else {
@@ -318,10 +347,10 @@ fun HomeScreen(
         onChromeVisibleChange(true)
     }
 
-    LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeLibrary) {
+    LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeProfileId, session.activeLibrary) {
         if (!active) return@LaunchedEffect
         if (session.canLoadHomeContent()) {
-            vm.load(session.activeProviderType, session.activeLibrary)
+            vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary)
         }
     }
 
@@ -340,7 +369,7 @@ fun HomeScreen(
                 isRefreshing = state.refreshing,
                 onRefresh = {
                     if (session.canLoadHomeContent()) {
-                        vm.load(session.activeProviderType, session.activeLibrary)
+                        vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary)
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -367,7 +396,7 @@ fun HomeScreen(
                             item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, contentType = "recent") {
                                 HomeHeroRail(
                                     movies = state.recent,
-                                    imageUrl = { movie -> provider.episodeStillUrl(session.serverUrl, movie.id) },
+                                    imageUrl = { movie -> movie.episodeStill ?: provider.episodeStillUrl(session.serverUrl, movie.id) },
                                     onOpen = { movie -> onNavigate(movie.openRoute()) },
                                 )
                             }
@@ -391,6 +420,7 @@ fun HomeScreen(
                                     onClick = {
                                         vm.openLibraryItem(
                                             providerType = session.activeProviderType,
+                                            profileId = session.activeProfileId,
                                             item = item,
                                             fallbackMediaRoot = session.activeLibrary,
                                             onNavigate = onNavigate,
@@ -426,7 +456,7 @@ fun HomeScreen(
                                         onClick = {
                                             showSort = false
                                             if (session.canLoadHomeContent()) {
-                                                vm.load(session.activeProviderType, session.activeLibrary, key)
+                                                vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, key)
                                             }
                                         },
                                     )
@@ -1030,6 +1060,35 @@ private fun WebDavEntry.toMovieDto(source: ClientStorageSource): MovieDto = Movi
     createdAt = modified.ifBlank { null },
 )
 
+private fun ClientPlaybackProgress.toMovieDto(source: ClientStorageSource): MovieDto = MovieDto(
+    id = (source.id + ":" + path).hashCode(),
+    path = path,
+    code = storageFileName(path),
+    title = storageFileName(path),
+    displayTitle = storageFileName(path),
+    mediaRoot = when (source.type) {
+        ClientStorageType.SMB -> smbLibraryPath(source.id)
+        ClientStorageType.WebDAV -> webDavLibraryPath(source.id)
+    },
+    playbackPosition = positionSeconds,
+    progressPercent = progressPercent(durationSeconds),
+    updatedAt = updatedAtMillis.toString(),
+)
+
+private fun MovieDto.withClientPlaybackProgress(progress: ClientPlaybackProgress): MovieDto =
+    copy(
+        playbackPosition = progress.positionSeconds,
+        progressPercent = progress.progressPercent(progress.durationSeconds),
+        updatedAt = progress.updatedAtMillis.toString(),
+    )
+
+private fun ClientPlaybackProgress.progressPercent(durationSeconds: Double): Double? =
+    if (durationSeconds.isFinite() && durationSeconds > 0.0) {
+        (positionSeconds / durationSeconds * 100.0).coerceIn(0.0, 100.0)
+    } else {
+        null
+    }
+
 private fun FolderNodeDto.homeTitle(): String = displayTitle ?: name.ifBlank { path }
 
 private fun FolderNodeDto.detailRoute(): String =
@@ -1059,6 +1118,18 @@ fun List<MovieDto>.latestHomePlaybackCandidate(): MovieDto? {
             .thenByDescending { it.id },
     )
     return latestEpisodes.firstOrNull { it.isUnfinishedForHomePlayback() } ?: latestEpisodes.firstOrNull()
+}
+
+fun List<MovieDto>.latestHomePlaybackCandidateWithMemory(localMemories: List<RemotePlaybackMemory>): MovieDto? {
+    val moviesByKey = flatMap { movie -> movie.continueWatchingKeys().map { it to movie } }.toMap()
+    return localMemories
+        .sortedByDescending { it.updatedAtMillis }
+        .firstNotNullOfOrNull { memory ->
+            memory.toMovieDto()
+                .continueWatchingKeys()
+                .firstNotNullOfOrNull { key -> moviesByKey[key] }
+        }
+        ?: latestHomePlaybackCandidate()
 }
 
 private fun MovieDto.homePlaybackSeason(): Int = tmdbSeason ?: homePlaybackSeasonFromFolder(folderLevels) ?: 0
@@ -1099,6 +1170,27 @@ private fun List<MovieDto>.sortedForHomeSearch(): List<MovieDto> =
     sortedWith(compareBy<MovieDto> { it.homeTitle() }.thenBy { it.path })
 
 private fun MovieDto.homeTitle(): String = displayTitle ?: title ?: code
+
+fun mergeContinueWatchingWithMemory(
+    providerRecent: List<MovieDto>,
+    localMemories: List<RemotePlaybackMemory>,
+    limit: Int,
+): List<MovieDto> {
+    val localMovies = localMemories
+        .sortedByDescending { it.updatedAtMillis }
+        .map { it.toMovieDto() }
+    val localKeys = localMovies.flatMap { it.continueWatchingKeys() }.toSet()
+    val providerOnly = providerRecent.filter { movie ->
+        movie.continueWatchingKeys().none { it in localKeys }
+    }
+    return (localMovies + providerOnly).take(limit)
+}
+
+private fun MovieDto.continueWatchingKeys(): List<String> = buildList {
+    add("id:$id")
+    providerItemId?.takeIf { it.isNotBlank() }?.let { add("provider:$it") }
+    path.takeIf { it.isNotBlank() }?.let { add("path:$it") }
+}
 
 private fun ProviderType.defaultHomeSearchSort(): String = when (this) {
     ProviderType.MediaTree -> "created_desc"

@@ -245,7 +245,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                         key = { page -> topDestinations[page].route },
                     ) { page ->
                         val route = topDestinations[page].route
-                        val pageActive = page == pagerState.currentPage
+                        val pageActive = currentRoute == "main" && page == pagerState.currentPage
                         when (route) {
                             "home" -> HomeScreen(
                                 container = container,

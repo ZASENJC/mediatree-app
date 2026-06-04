@@ -75,6 +75,7 @@ import kotlinx.coroutines.isActive
 
 private const val SourceSwapCurtainFadeInMillis = 120
 private const val SourceSwapCurtainFadeOutMillis = 220
+private const val PlaybackMemorySaveIntervalMillis = 5_000L
 private const val OverlayAutoHideMillis = 3_500L
 private const val HudAutoHideMillis = 1_500L
 private const val LockedButtonAutoHideMillis = 5_000L
@@ -172,12 +173,14 @@ fun MediaTreePlayer(
                 percentPosition = playbackPercent(target, durationSeconds, percentPosition)
                 hudMessage = seekHudMessage(deltaSeconds, target, durationSeconds)
                 showOverlay = true
+                onProgressUpdate(target, durationSeconds)
             } else {
                 controller.seekBy(deltaSeconds)
                 val target = (positionSeconds + deltaSeconds).coerceAtLeast(0.0)
                 positionSeconds = target
                 hudMessage = relativeSeekHudMessage(deltaSeconds)
                 showOverlay = true
+                onProgressUpdate(target, durationSeconds)
             }
         },
     )
@@ -222,6 +225,11 @@ fun MediaTreePlayer(
     LaunchedEffect(playbackSource.uri, playbackSource.headers) {
         curtainVisible = true
         playbackError = null
+        positionSeconds = startPosition.coerceAtLeast(0.0)
+        durationSeconds = 0.0
+        percentPosition = 0.0
+        seekingPositionSeconds = null
+        completedReported = false
         delay(SourceSwapCurtainFadeInMillis.toLong())
         runCatching {
             controller.loadUrl(
@@ -308,7 +316,7 @@ fun MediaTreePlayer(
 
     LaunchedEffect(controller) {
         while (isActive) {
-            delay(15_000)
+            delay(PlaybackMemorySaveIntervalMillis)
             if (positionSeconds > 0) {
                 onProgressUpdate(positionSeconds, durationSeconds)
             }
@@ -468,6 +476,7 @@ fun MediaTreePlayer(
                     percentPosition = playbackPercent(target, durationSeconds, percentPosition)
                     hudMessage = formatTime(target)
                     showOverlay = true
+                    onProgressUpdate(target, durationSeconds)
                 },
                 onAudioMenuOpen = {
                     audioTracks = controller.audioTrackOptions()

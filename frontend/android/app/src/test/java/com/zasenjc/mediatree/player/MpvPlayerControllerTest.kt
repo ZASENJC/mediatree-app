@@ -27,8 +27,7 @@ class MpvPlayerControllerTest {
             listOf(
                 listOf("change-list", "http-header-fields", "clr", ""),
                 listOf("change-list", "http-header-fields", "append", "Authorization: Bearer token"),
-                listOf("loadfile", "http://media.local/api/stream/42", "replace"),
-                listOf("seek", "12.5", "absolute", "exact"),
+                listOf("loadfile", "http://media.local/api/stream/42", "replace", "-1", "start=12.5"),
             ),
             backend.commands,
         )
@@ -53,8 +52,24 @@ class MpvPlayerControllerTest {
             listOf(
                 listOf("change-list", "http-header-fields", "clr", ""),
                 listOf("change-list", "http-header-fields", "append", "Authorization: Bearer token"),
+                listOf("loadfile", "http://media.local/api/stream/42", "replace", "-1", "start=12.5"),
+            ),
+            backend.commands,
+        )
+    }
+
+    @Test
+    fun loadUrlWithoutResumeDoesNotSendStartOption() {
+        val backend = RecordingMpvBackend()
+        val controller = MpvPlayerController(appContext, backend)
+
+        controller.attachSurface(Any())
+        controller.loadUrl(url = "http://media.local/api/stream/42", startPositionSeconds = 0.0)
+
+        assertEquals(
+            listOf(
+                listOf("change-list", "http-header-fields", "clr", ""),
                 listOf("loadfile", "http://media.local/api/stream/42", "replace"),
-                listOf("seek", "12.5", "absolute", "exact"),
             ),
             backend.commands,
         )

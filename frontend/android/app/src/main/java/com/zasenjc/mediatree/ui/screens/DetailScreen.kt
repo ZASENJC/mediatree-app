@@ -91,7 +91,9 @@ import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.ProgressDto
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.SubtitleTrackDto
+import com.zasenjc.mediatree.data.backendPlaybackResumePosition
 import com.zasenjc.mediatree.data.mediaBrowserSeriesFolder
+import com.zasenjc.mediatree.data.rememberablePlaybackPosition
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.player.MediaTreePlayer
 import com.zasenjc.mediatree.player.PlaybackPositionSnapshot
@@ -118,9 +120,18 @@ import androidx.compose.ui.graphics.Color
 private const val ExitPlayerReleaseDelayMillis = PlayerExitNavigationDelayMillis
 
 fun mediaTreeResumePosition(progress: ProgressDto): Double {
-    val position = progress.position.takeIf { it.isFinite() && it >= 5.0 } ?: return 0.0
-    if (progress.played || progress.progressPercent >= 95.0) return 0.0
-    return position
+    return backendPlaybackResumePosition(progress)
+}
+
+fun bestPlaybackSnapshot(
+    controllerSnapshot: PlaybackPositionSnapshot?,
+    lastKnownSnapshot: PlaybackPositionSnapshot?,
+): PlaybackPositionSnapshot? {
+    if (controllerSnapshot?.positionSeconds?.isFinite() == true && controllerSnapshot.positionSeconds > 0.0) {
+        return controllerSnapshot
+    }
+    val lastKnownPosition = lastKnownSnapshot?.positionSeconds?.takeIf { it.isFinite() && it > 0.0 }
+    return if (lastKnownPosition != null) lastKnownSnapshot else null
 }
 
 class DetailViewModel(private val container: AppContainer) : ViewModel() {
@@ -129,6 +140,7 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
         val movie: MovieDto? = null,
         val mediaInfo: MediaInfoDto? = null,
         val seriesItems: List<MovieDto> = emptyList(),
+        val mediaRoot: String = "",
         val resume: Double = 0.0,
         val subtitleTracks: List<SubtitleTrackDto> = emptyList(),
         val selectedSubtitle: Int = -1,
@@ -138,13 +150,14 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
-    fun load(providerType: ProviderType, movieId: Int, mediaRoot: String) {
+    fun load(providerType: ProviderType, profileId: String, movieId: Int, mediaRoot: String) {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             try {
                 val provider = container.mediaProviderFor(providerType)
                 val movie = provider.detail(movieId)
-                val resume = mediaTreeResumePosition(provider.progress(movieId))
+                val resolvedMediaRoot = mediaRoot.ifBlank { movie.mediaRoot.orEmpty() }
+                val resume = container.remotePlaybackMemoryCoordinator.resumePosition(providerType, profileId, movieId)
                 val subs = runCatching { provider.subtitleTracks(movieId) }.getOrDefault(emptyList())
                 val mediaInfo = runCatching { provider.mediaInfo(movieId) }.getOrNull()
                 val seriesFolder = seriesFolderFor(movie)
@@ -160,7 +173,7 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
                             folder = seriesQueryFolder,
                             sort = "created_desc",
                             limit = 500,
-                            mediaRoot = movie.mediaRoot?.takeIf { it.isNotBlank() } ?: mediaRoot,
+                            mediaRoot = resolvedMediaRoot,
                         ).movies.sortedForEpisodes()
                     }.getOrDefault(emptyList())
                 }
@@ -170,6 +183,7 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
                         movie = movie,
                         mediaInfo = mediaInfo,
                         seriesItems = seriesItems,
+                        mediaRoot = resolvedMediaRoot,
                         resume = resume,
                         subtitleTracks = subs,
                     )
@@ -194,10 +208,11 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun markWatched(providerType: ProviderType) {
+    fun markWatched(providerType: ProviderType, profileId: String) {
         val movie = _state.value.movie ?: return
         viewModelScope.launch {
             container.mediaProviderFor(providerType).addTag(movie.id, "watched")
+            container.remotePlaybackMemoryCoordinator.markFinished(providerType, profileId, movie.id)
             _state.update { it.copy(movie = it.movie?.copy(tags = it.movie!!.tags + "watched")) }
         }
     }
@@ -206,34 +221,57 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
         _state.update { it.copy(selectedSubtitle = index) }
     }
 
-    fun saveProgress(providerType: ProviderType, movieId: Int, position: Double, duration: Double) {
-        viewModelScope.launch {
-            runCatching { container.mediaProviderFor(providerType).saveProgress(movieId, position, duration) }
-        }
-    }
-
-    fun syncPlaybackProgress(providerType: ProviderType, movieId: Int, snapshot: PlaybackPositionSnapshot?) {
-        val position = snapshot?.positionSeconds?.takeIf { it.isFinite() && it > 0.0 } ?: return
-        val duration = snapshot.durationSeconds.takeIf { it.isFinite() && it > 0.0 }
+    fun saveProgress(providerType: ProviderType, profileId: String, movieId: Int, position: Double, duration: Double) {
+        val movie = playbackMemoryMovie(movieId) ?: return
+        val mediaRoot = playbackMemoryMediaRoot(movie)
         viewModelScope.launch {
             runCatching {
-                container.mediaProviderFor(providerType).saveProgress(
-                    movieId = movieId,
-                    position = position,
-                    duration = duration,
-                    stopped = true,
+                container.remotePlaybackMemoryCoordinator.recordProgress(
+                    providerType = providerType,
+                    profileId = profileId,
+                    mediaRoot = mediaRoot,
+                    movie = movie,
+                    positionSeconds = position,
+                    durationSeconds = duration,
                 )
             }
         }
     }
 
-    fun onPlaybackComplete(providerType: ProviderType, movieId: Int, position: Double, duration: Double) {
+    fun syncPlaybackProgress(providerType: ProviderType, profileId: String, movieId: Int, snapshot: PlaybackPositionSnapshot?) {
+        val position = snapshot?.positionSeconds?.takeIf { it.isFinite() && it > 0.0 } ?: return
+        val duration = snapshot.durationSeconds.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
+        val movie = playbackMemoryMovie(movieId) ?: return
+        val mediaRoot = playbackMemoryMediaRoot(movie)
+        container.applicationScope.launch {
+            runCatching {
+                container.remotePlaybackMemoryCoordinator.recordExit(
+                    providerType = providerType,
+                    profileId = profileId,
+                    mediaRoot = mediaRoot,
+                    movie = movie,
+                    positionSeconds = position,
+                    durationSeconds = duration,
+                )
+            }
+        }
+    }
+
+    fun onPlaybackComplete(providerType: ProviderType, profileId: String, movieId: Int, position: Double, duration: Double) {
         viewModelScope.launch {
             val provider = container.mediaProviderFor(providerType)
+            runCatching { container.remotePlaybackMemoryCoordinator.markFinished(providerType, profileId, movieId) }
             runCatching { provider.saveProgress(movieId, position, duration, stopped = true) }
             runCatching { provider.addTag(movieId, "watched") }
         }
     }
+
+    private fun playbackMemoryMovie(movieId: Int): MovieDto? =
+        _state.value.movie?.takeIf { it.id == movieId }
+            ?: _state.value.seriesItems.firstOrNull { it.id == movieId }
+
+    private fun playbackMemoryMediaRoot(movie: MovieDto): String =
+        _state.value.mediaRoot.takeIf { it.isNotBlank() } ?: movie.mediaRoot.orEmpty()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
@@ -258,7 +296,8 @@ fun DetailScreen(
     var activeMovieId by remember(movieId) { mutableStateOf(movieId) }
     var leavingDetail by remember { mutableStateOf(false) }
     var fullscreenRequested by remember { mutableStateOf(false) }
-    val playbackPositions = remember { mutableMapOf<Int, Double>() }
+    val playbackResumePositions = remember { mutableStateMapOf<Int, Double>() }
+    val lastKnownPlaybackPositions = remember { mutableStateMapOf<Int, PlaybackPositionSnapshot>() }
     var playbackPositionSnapshot by remember { mutableStateOf<(() -> PlaybackPositionSnapshot?)?>(null) }
 
     val vm: DetailViewModel = viewModel(factory = viewModelFactory { DetailViewModel(container) })
@@ -267,10 +306,15 @@ fun DetailScreen(
     val activeMovie = state.movie?.takeIf { it.id == activeMovieId }
 
     fun capturePlaybackPosition(movieId: Int = activeMovieId, syncToBackend: Boolean = false) {
-        val snapshot = playbackPositionSnapshot?.invoke() ?: return
-        playbackPositions[movieId] = snapshot.positionSeconds
+        val snapshot = bestPlaybackSnapshot(
+            controllerSnapshot = playbackPositionSnapshot?.invoke(),
+            lastKnownSnapshot = lastKnownPlaybackPositions[movieId],
+        ) ?: return
+        rememberablePlaybackPosition(snapshot.positionSeconds, snapshot.durationSeconds)
+            .takeIf { it > 0.0 }
+            ?.let { playbackResumePositions[movieId] = it }
         if (syncToBackend) {
-            vm.syncPlaybackProgress(session.activeProviderType, movieId, snapshot)
+            vm.syncPlaybackProgress(session.activeProviderType, session.activeProfileId, movieId, snapshot)
         }
     }
 
@@ -308,14 +352,14 @@ fun DetailScreen(
         }
     }
 
-    LaunchedEffect(activeMovieId, providerItemId, session.activeProviderType) {
-        container.registerProviderItemId(session.activeProviderType, activeMovieId, providerItemId)
+    LaunchedEffect(movieId, providerItemId, session.activeProviderType) {
+        container.registerProviderItemId(session.activeProviderType, movieId, providerItemId)
     }
 
     LaunchedEffect(activeMovieId, session.serverUrl, session.activeProviderType, session.activeLibrary) {
         playbackPositionSnapshot = null
         if (shouldLoadRemoteContent(session)) {
-            vm.load(session.activeProviderType, activeMovieId, session.activeLibrary)
+            vm.load(session.activeProviderType, session.activeProfileId, activeMovieId, session.activeLibrary)
         }
     }
 
@@ -324,7 +368,10 @@ fun DetailScreen(
     }
 
     LaunchedEffect(state.movie?.id, state) {
-        state.movie?.let { contentSnapshots[it.id] = state }
+        state.movie?.let { movie ->
+            contentSnapshots[movie.id] = state
+            state.resume.takeIf { it > 0.0 }?.let { playbackResumePositions[movie.id] = it }
+        }
     }
 
     if (!shouldLoadRemoteContent(session)) {
@@ -397,7 +444,7 @@ fun DetailScreen(
                 state.loading && activeMovie == null -> LoadingPane()
                 activeMovie == null -> ErrorPane(
                     message = state.error?.message ?: "影片加载失败",
-                    onRetry = { vm.load(session.activeProviderType, activeMovieId, session.activeLibrary) },
+                    onRetry = { vm.load(session.activeProviderType, session.activeProfileId, activeMovieId, session.activeLibrary) },
                 )
                 !playerFullscreen -> PortraitPlayerCard(
                     activeMovie = activeMovie,
@@ -408,7 +455,7 @@ fun DetailScreen(
                     onSelectEpisode = onSelectEpisode,
                     onNavigate = onNavigate,
                     onFavorite = { vm.toggleFavorite(session.activeProviderType) },
-                    onWatched = { vm.markWatched(session.activeProviderType) },
+                    onWatched = { vm.markWatched(session.activeProviderType, session.activeProfileId) },
                 )
             }
 
@@ -424,12 +471,20 @@ fun DetailScreen(
                 }
                 MediaTreePlayer(
                     playbackSource = playbackSource,
-                    startPosition = playbackPositions[activeMovieId] ?: state.resume,
+                    startPosition = playbackResumePositions[activeMovieId] ?: state.resume,
                     selectedSubtitle = state.selectedSubtitle,
-                    onPlaybackPositionChange = { pos, _ -> playbackPositions[activeMovieId] = pos },
+                    onPlaybackPositionChange = { pos, dur ->
+                        val snapshot = PlaybackPositionSnapshot(positionSeconds = pos, durationSeconds = dur)
+                        if (pos.isFinite() && pos > 0.0) {
+                            lastKnownPlaybackPositions[activeMovieId] = snapshot
+                        }
+                        rememberablePlaybackPosition(pos, dur)
+                            .takeIf { it > 0.0 }
+                            ?.let { playbackResumePositions[activeMovieId] = it }
+                    },
                     onPlaybackPositionSnapshot = { playbackPositionSnapshot = it },
-                    onProgressUpdate = { pos, dur -> vm.saveProgress(session.activeProviderType, activeMovieId, pos, dur) },
-                    onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(session.activeProviderType, activeMovieId, pos, dur) },
+                    onProgressUpdate = { pos, dur -> vm.saveProgress(session.activeProviderType, session.activeProfileId, activeMovieId, pos, dur) },
+                    onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(session.activeProviderType, session.activeProfileId, activeMovieId, pos, dur) },
                     isFullscreen = playerFullscreen,
                     showFullscreenButton = true,
                     showAspectRatioControls = playerFullscreen,

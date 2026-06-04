@@ -28,6 +28,7 @@ data class ClientPlaybackProgress(
 
 interface ClientPlaybackProgressStore {
     suspend fun load(sourceId: String, path: String): ClientPlaybackProgress?
+    suspend fun list(sourceId: String): List<ClientPlaybackProgress>
     suspend fun save(progress: ClientPlaybackProgress)
     suspend fun delete(sourceId: String, path: String)
 }
@@ -43,6 +44,9 @@ class ClientPlaybackProgressRepository(
         if (position == 0.0) {
             store.delete(sourceId, path)
         }
+        PlaybackMemoryLogger.debug(
+            "client-resume sourceHash=${sourceId.memorySafeHash()} pathHash=${path.memorySafeHash()} position=${position.memoryLogValue()}",
+        )
         return position
     }
 
@@ -53,25 +57,56 @@ class ClientPlaybackProgressRepository(
         durationSeconds: Double,
     ) {
         if (sourceId.isBlank() || path.isBlank()) return
-        val position = rememberablePlaybackPosition(positionSeconds, durationSeconds)
-        if (position == 0.0) {
-            store.delete(sourceId, path)
-            return
+        when (val decision = playbackMemorySaveDecision(positionSeconds, durationSeconds)) {
+            PlaybackMemorySaveDecision.Clear -> {
+                PlaybackMemoryLogger.debug(
+                    "client-save sourceHash=${sourceId.memorySafeHash()} pathHash=${path.memorySafeHash()} position=${positionSeconds.memoryLogValue()} duration=${durationSeconds.memoryLogValue()} decision=clear",
+                )
+                store.delete(sourceId, path)
+            }
+            PlaybackMemorySaveDecision.Ignore -> {
+                PlaybackMemoryLogger.debug(
+                    "client-save sourceHash=${sourceId.memorySafeHash()} pathHash=${path.memorySafeHash()} position=${positionSeconds.memoryLogValue()} duration=${durationSeconds.memoryLogValue()} decision=ignore",
+                )
+            }
+            is PlaybackMemorySaveDecision.Remember -> {
+                PlaybackMemoryLogger.debug(
+                    "client-save sourceHash=${sourceId.memorySafeHash()} pathHash=${path.memorySafeHash()} position=${decision.positionSeconds.memoryLogValue()} duration=${durationSeconds.memoryLogValue()} decision=remember",
+                )
+                store.save(
+                    ClientPlaybackProgress(
+                        sourceId = sourceId,
+                        path = path,
+                        positionSeconds = decision.positionSeconds,
+                        durationSeconds = durationSeconds.takeIf { it.isFinite() }?.coerceAtLeast(0.0) ?: 0.0,
+                        updatedAtMillis = clockMillis(),
+                    ),
+                )
+            }
         }
-        store.save(
-            ClientPlaybackProgress(
-                sourceId = sourceId,
-                path = path,
-                positionSeconds = position,
-                durationSeconds = durationSeconds.takeIf { it.isFinite() }?.coerceAtLeast(0.0) ?: 0.0,
-                updatedAtMillis = clockMillis(),
-            ),
-        )
     }
 
     suspend fun markFinished(sourceId: String, path: String) {
         if (sourceId.isBlank() || path.isBlank()) return
+        PlaybackMemoryLogger.debug(
+            "client-finish sourceHash=${sourceId.memorySafeHash()} pathHash=${path.memorySafeHash()}",
+        )
         store.delete(sourceId, path)
+    }
+
+    suspend fun listContinueWatching(sourceId: String, limit: Int): List<ClientPlaybackProgress> {
+        if (sourceId.isBlank()) return emptyList()
+        val valid = mutableListOf<ClientPlaybackProgress>()
+        store.list(sourceId).forEach { progress ->
+            if (rememberablePlaybackPosition(progress.positionSeconds, progress.durationSeconds) == 0.0) {
+                store.delete(sourceId, progress.path)
+            } else {
+                valid.add(progress)
+            }
+        }
+        return valid
+            .sortedByDescending { it.updatedAtMillis }
+            .take(limit)
     }
 }
 
@@ -81,6 +116,10 @@ class AndroidClientPlaybackProgressStore(context: Context) : ClientPlaybackProgr
     override suspend fun load(sourceId: String, path: String): ClientPlaybackProgress? =
         decode(appContext.clientPlaybackProgressDataStore.data.first()[PROGRESS_KEY])
             .firstOrNull { it.sourceId == sourceId && it.path == path }
+
+    override suspend fun list(sourceId: String): List<ClientPlaybackProgress> =
+        decode(appContext.clientPlaybackProgressDataStore.data.first()[PROGRESS_KEY])
+            .filter { it.sourceId == sourceId }
 
     override suspend fun save(progress: ClientPlaybackProgress) {
         appContext.clientPlaybackProgressDataStore.edit { prefs ->
@@ -113,11 +152,28 @@ class AndroidClientPlaybackProgressStore(context: Context) : ClientPlaybackProgr
 }
 
 fun rememberablePlaybackPosition(positionSeconds: Double, durationSeconds: Double): Double {
-    if (!positionSeconds.isFinite()) return 0.0
-    val position = positionSeconds.coerceAtLeast(0.0)
-    if (position < 5.0) return 0.0
-    if (durationSeconds.isFinite() && durationSeconds > 0.0 && position / durationSeconds >= 0.95) {
-        return 0.0
+    return when (val decision = playbackMemorySaveDecision(positionSeconds, durationSeconds)) {
+        is PlaybackMemorySaveDecision.Remember -> decision.positionSeconds
+        PlaybackMemorySaveDecision.Clear,
+        PlaybackMemorySaveDecision.Ignore,
+        -> 0.0
     }
-    return position
 }
+
+internal sealed interface PlaybackMemorySaveDecision {
+    data object Ignore : PlaybackMemorySaveDecision
+    data object Clear : PlaybackMemorySaveDecision
+    data class Remember(val positionSeconds: Double) : PlaybackMemorySaveDecision
+}
+
+internal fun playbackMemorySaveDecision(positionSeconds: Double, durationSeconds: Double): PlaybackMemorySaveDecision {
+    if (!positionSeconds.isFinite()) return PlaybackMemorySaveDecision.Ignore
+    val position = positionSeconds.coerceAtLeast(0.0)
+    if (position < PlaybackMemoryMinimumPositionSeconds) return PlaybackMemorySaveDecision.Ignore
+    if (durationSeconds.isFinite() && durationSeconds > 0.0 && position / durationSeconds >= 0.95) {
+        return PlaybackMemorySaveDecision.Clear
+    }
+    return PlaybackMemorySaveDecision.Remember(position)
+}
+
+const val PlaybackMemoryMinimumPositionSeconds = 60.0

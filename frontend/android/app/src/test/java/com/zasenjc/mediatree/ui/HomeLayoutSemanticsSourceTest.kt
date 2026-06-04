@@ -60,7 +60,7 @@ class HomeLayoutSemanticsSourceTest {
 
         assertTrue(source.contains("private fun Session.canLoadHomeContent()"))
         assertTrue(actionsBlock.contains("session.canLoadHomeContent()"))
-        assertTrue(actionsBlock.contains("vm.load(session.activeProviderType, session.activeLibrary, key)"))
+        assertTrue(actionsBlock.contains("vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, key)"))
         assertFalse(actionsBlock.contains("if (shouldLoadRemoteContent(session))"))
 
         assertTrue(searchBlock.contains("session.activeLibrary.smbLibrarySourceId()"))
@@ -81,6 +81,9 @@ class HomeLayoutSemanticsSourceTest {
         val source = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
             .readText()
+        val appShell = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/MediaTreeApp.kt")
+            .readText()
         val screenBlock = source
             .substringAfter("fun HomeScreen(")
             .substringBefore("@Composable\nprivate fun HomeSectionHeader")
@@ -88,11 +91,12 @@ class HomeLayoutSemanticsSourceTest {
             .substringAfter("actions = {")
             .substringBefore("HomeSearchOverlay(")
 
+        assertTrue(appShell.contains("val pageActive = currentRoute == \"main\" && page == pagerState.currentPage"))
         assertTrue(source.contains("import androidx.compose.material3.pulltorefresh.PullToRefreshBox"))
         assertTrue(screenBlock.contains("PullToRefreshBox("))
         assertTrue(screenBlock.contains("isRefreshing = state.refreshing"))
         assertTrue(screenBlock.contains("onRefresh = {"))
-        assertTrue(screenBlock.contains("vm.load(session.activeProviderType, session.activeLibrary)"))
+        assertTrue(screenBlock.contains("vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary)"))
         assertFalse(screenBlock.contains("var showMore"))
         assertFalse(actionsBlock.contains("MoreVert"))
         assertFalse(actionsBlock.contains("Text(\"刷新\")"))
@@ -116,8 +120,12 @@ class HomeLayoutSemanticsSourceTest {
         assertFalse(loadBlock.contains("val roots = provider.mediaRoots().items"))
         assertTrue(loadBlock.contains("provider.folders(mediaRoot = lib)"))
         assertTrue(loadBlock.contains("provider.recentWatched(limit = 20, mediaRoot = lib)"))
-        assertTrue(loadBlock.indexOf("val recent = provider.recentWatched(limit = 20, mediaRoot = lib).movies") < loadBlock.indexOf("libraryItems = items"))
+        assertTrue(loadBlock.indexOf("val providerRecent = provider.recentWatched(limit = 20, mediaRoot = lib).movies") < loadBlock.indexOf("libraryItems = items"))
         assertTrue(loadBlock.contains("recent = recent"))
+        assertTrue(loadBlock.contains("container.remotePlaybackMemoryRepository.listContinueWatching("))
+        assertTrue(loadBlock.contains("mergeContinueWatchingWithMemory(providerRecent, localRecent, limit = 20)"))
+        assertTrue(source.contains("container.clientPlaybackProgressRepository.listContinueWatching(source.id, limit = 20)"))
+        assertTrue(source.contains("withClientPlaybackProgress(progress)"))
         assertFalse(loadBlock.contains("provider.movies("))
         assertFalse(source.contains("feedMovies"))
         assertTrue(searchBlock.contains("provider.search("))
@@ -135,9 +143,13 @@ class HomeLayoutSemanticsSourceTest {
             .substringBefore("private suspend fun loadSmbLibrary")
 
         assertTrue(openBlock.contains("limit = 500"))
-        assertTrue(openBlock.contains("response.movies.latestHomePlaybackCandidate()"))
+        assertTrue(openBlock.contains("profileId: String"))
+        assertTrue(openBlock.contains("container.remotePlaybackMemoryRepository.listContinueWatching("))
+        assertTrue(openBlock.contains("limit = 100"))
+        assertTrue(openBlock.contains("response.movies.latestHomePlaybackCandidateWithMemory(localMemories)"))
         assertFalse(openBlock.contains("response.movies.firstOrNull()"))
         assertTrue(source.contains("fun List<MovieDto>.latestHomePlaybackCandidate()"))
+        assertTrue(source.contains("fun List<MovieDto>.latestHomePlaybackCandidateWithMemory(localMemories: List<RemotePlaybackMemory>)"))
         assertTrue(source.contains("private fun MovieDto.isUnfinishedForHomePlayback()"))
         assertTrue(source.contains("progressPercent == null || progressPercent < 95.0"))
     }

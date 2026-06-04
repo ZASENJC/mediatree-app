@@ -2,6 +2,8 @@ package com.zasenjc.mediatree.player
 
 import android.content.Context
 import android.view.Surface
+import com.zasenjc.mediatree.data.PlaybackMemoryLogger
+import com.zasenjc.mediatree.data.memoryLogValue
 import `is`.xyz.mpv.MPVLib
 
 interface MpvBackend {
@@ -131,8 +133,17 @@ class MpvPlayerController(
         startPositionSeconds: Double = 0.0,
     ) {
         initialize()
-        if (loadedSource?.sameMediaRequest(url, headers) == true && pendingLoad == null) return
-        pendingLoad = PendingLoad(url, headers, startPositionSeconds)
+        val startPosition = rememberableStartPosition(startPositionSeconds)
+        if (loadedSource?.sameMediaRequest(url, headers) == true && pendingLoad == null) {
+            PlaybackMemoryLogger.debug(
+                "mpv-load-skip sameSource=true start=${startPosition.memoryLogValue()}",
+            )
+            return
+        }
+        pendingLoad = PendingLoad(url, headers, startPosition)
+        PlaybackMemoryLogger.debug(
+            "mpv-load-queue hasSurface=$surfaceAttached start=${startPosition.memoryLogValue()} headers=${headers.size}",
+        )
         if (!surfaceAttached) return
         flushPendingLoad()
     }
@@ -147,13 +158,23 @@ class MpvPlayerController(
         pendingLoad = null
         clearHttpHeaders()
         setHttpHeaders(request.headers)
-        backend.command(arrayOf("loadfile", request.url, "replace"))
+        backend.command(loadFileCommand(request))
         fileLoaded = true
         loadedSource = request
-        if (request.startPositionSeconds > 0.0) {
-            seekTo(request.startPositionSeconds)
-        }
+        PlaybackMemoryLogger.debug(
+            "mpv-load-dispatch start=${request.startPositionSeconds.memoryLogValue()} option=${request.startPositionSeconds > 0.0}",
+        )
     }
+
+    private fun loadFileCommand(request: PendingLoad): Array<String> =
+        if (request.startPositionSeconds > 0.0) {
+            arrayOf("loadfile", request.url, "replace", "-1", "start=${request.startPositionSeconds}")
+        } else {
+            arrayOf("loadfile", request.url, "replace")
+        }
+
+    private fun rememberableStartPosition(positionSeconds: Double): Double =
+        positionSeconds.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
 
     fun play() {
         if (!initialized) return

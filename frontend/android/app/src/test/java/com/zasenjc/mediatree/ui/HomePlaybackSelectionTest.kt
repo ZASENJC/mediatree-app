@@ -1,7 +1,10 @@
 package com.zasenjc.mediatree.ui
 
 import com.zasenjc.mediatree.data.MovieDto
+import com.zasenjc.mediatree.data.ProviderType
+import com.zasenjc.mediatree.data.RemotePlaybackMemory
 import com.zasenjc.mediatree.ui.screens.latestHomePlaybackCandidate
+import com.zasenjc.mediatree.ui.screens.latestHomePlaybackCandidateWithMemory
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -46,6 +49,23 @@ class HomePlaybackSelectionTest {
         assertEquals(2, selected?.id)
     }
 
+    @Test
+    fun picksEpisodeWithNewestPlaybackMemoryBeforeLatestUnfinishedEpisode() {
+        val episodes = listOf(
+            episode(id = 1, season = 1, episode = 1, progress = 60.0),
+            episode(id = 2, season = 1, episode = 2, progress = null),
+            episode(id = 3, season = 1, episode = 3, progress = null),
+        )
+        val localMemories = listOf(
+            memory(movieId = 1, position = 90.0, updatedAtMillis = 2_000L),
+            memory(movieId = 2, position = 80.0, updatedAtMillis = 3_000L),
+        )
+
+        val selected = episodes.latestHomePlaybackCandidateWithMemory(localMemories)
+
+        assertEquals(2, selected?.id)
+    }
+
     private fun episode(
         id: Int,
         season: Int?,
@@ -63,4 +83,15 @@ class HomePlaybackSelectionTest {
         tags = tags,
         progressPercent = progress,
     )
+
+    private fun memory(movieId: Int, position: Double, updatedAtMillis: Long): RemotePlaybackMemory =
+        RemotePlaybackMemory(
+            providerType = ProviderType.MediaTree,
+            profileId = "main",
+            mediaRoot = "root",
+            movieId = movieId,
+            positionSeconds = position,
+            durationSeconds = 1_000.0,
+            updatedAtMillis = updatedAtMillis,
+        )
 }
