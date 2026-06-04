@@ -97,4 +97,21 @@ class WebDavBrowserSourceTest {
         assertTrue(screenSource.contains("onPlaybackComplete = { _, _ ->"))
         assertTrue(screenSource.contains("container.clientPlaybackProgressRepository.markFinished(sourceId, playingPath)"))
     }
+
+    @Test
+    fun favoritesScreenHandlesWebDavLibraryAndPlaybackRoutes() {
+        val screenSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/FavoritesScreen.kt")
+            .readText()
+
+        assertTrue(screenSource.contains("webDavLibrarySourceId"))
+        assertTrue(screenSource.contains("webDavLibraryPath(sourceId)"))
+        assertTrue(screenSource.contains("loadWebDavMovies(webDavSourceId)"))
+        assertTrue(screenSource.contains("webdavPlayer/${'$'}sourceId?path="))
+        assertTrue(screenSource.contains("movie.isMountedLibraryItem()"))
+        assertTrue(screenSource.contains("private fun Session.canLoadFavoritesContent()"))
+        assertTrue(screenSource.contains("activeLibrary.smbLibrarySourceId() != null"))
+        assertTrue(screenSource.contains("activeLibrary.webDavLibrarySourceId() != null"))
+        assertTrue(screenSource.contains("session.canLoadFavoritesContent()"))
+    }
 }

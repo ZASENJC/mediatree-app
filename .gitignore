@@ -43,6 +43,7 @@ frontend/public/fonts/
 
 # Android build output and local SDK configuration.
 frontend/android/.gradle/
+.gradle-user-home/
 frontend/android/local.properties
 frontend/android/build/
 frontend/android/app/build/

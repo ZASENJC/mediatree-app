@@ -50,7 +50,10 @@ import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
+import com.zasenjc.mediatree.data.webDavLibraryPath
+import com.zasenjc.mediatree.data.webDavLibrarySourceId
 import com.zasenjc.mediatree.data.smbLibrarySourceId
+import com.zasenjc.mediatree.data.smbLibraryPath
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.ui.components.EpisodeLandscapeCard
 import com.zasenjc.mediatree.ui.components.DesignFilterChip
@@ -89,7 +92,7 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
     fun loadMore(providerType: ProviderType, activeLibrary: String = "") {
         val s = _state.value
         if (s.loading || s.movies.size >= s.total && s.total > 0) return
-        if (activeLibrary.smbLibrarySourceId() != null) return
+        if (activeLibrary.smbLibrarySourceId() != null || activeLibrary.webDavLibrarySourceId() != null) return
         loadPage(providerType, activeLibrary, page = s.page + 1, replace = false)
     }
 
@@ -100,6 +103,12 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
                 val smbSourceId = activeLibrary.smbLibrarySourceId()
                 if (smbSourceId != null) {
                     val movies = loadSmbMovies(smbSourceId)
+                    _state.update { it.copy(page = 0, loading = false, movies = movies, total = movies.size) }
+                    return@launch
+                }
+                val webDavSourceId = activeLibrary.webDavLibrarySourceId()
+                if (webDavSourceId != null) {
+                    val movies = loadWebDavMovies(webDavSourceId)
                     _state.update { it.copy(page = 0, loading = false, movies = movies, total = movies.size) }
                     return@launch
                 }
@@ -131,9 +140,32 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
                     code = entry.name,
                     title = entry.name,
                     displayTitle = entry.name,
-                    mediaRoot = "smb/$sourceId",
+                    mediaRoot = smbLibraryPath(sourceId),
                     fileSize = entry.sizeBytes,
                     size = entry.sizeBytes,
+                )
+            }
+            .sortedBy { it.title.orEmpty() }
+    }
+
+    private suspend fun loadWebDavMovies(sourceId: String): List<MovieDto> {
+        val source = container.clientStorageRepository.load()
+            .firstOrNull { it.id == sourceId && it.type == com.zasenjc.mediatree.data.ClientStorageType.WebDAV && it.enabled }
+            ?: throw IllegalArgumentException("WebDAV 存储源不可用")
+        return container.webDavClient.list(source)
+            .filter { it.isPlayableVideo }
+            .map { entry ->
+                MovieDto(
+                    id = (source.id + ":" + entry.path).hashCode(),
+                    path = entry.path,
+                    code = entry.name,
+                    title = entry.name,
+                    displayTitle = entry.name,
+                    mediaRoot = webDavLibraryPath(sourceId),
+                    fileSize = entry.sizeBytes,
+                    size = entry.sizeBytes,
+                    updatedAt = entry.modified.ifBlank { null },
+                    createdAt = entry.modified.ifBlank { null },
                 )
             }
             .sortedBy { it.title.orEmpty() }
@@ -170,7 +202,7 @@ fun FavoritesScreen(
 
     LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeLibrary) {
         if (!active) return@LaunchedEffect
-        if (shouldLoadRemoteContent(session)) {
+        if (session.canLoadFavoritesContent()) {
             vm.refresh(session.activeProviderType, session.activeLibrary)
         }
     }
@@ -191,7 +223,7 @@ fun FavoritesScreen(
 
     Scaffold(containerColor = Color.Transparent) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            if (!shouldLoadRemoteContent(session)) {
+            if (!session.canLoadFavoritesContent()) {
                 FavoriteEmptyState("请先在设置页连接 MediaTree 服务器")
             } else if (state.loading && state.movies.isEmpty()) {
                 LoadingPane(Modifier.fillMaxSize())
@@ -237,17 +269,18 @@ fun FavoritesScreen(
                         key = { it.id },
                         span = { movie -> GridItemSpan(if (movie.isEpisodeFavorite()) maxLineSpan else 1) },
                     ) { movie ->
+                        val isMountedLibraryItem = movie.isMountedLibraryItem()
                         if (movie.isEpisodeFavorite()) {
                             EpisodeLandscapeCard(
                                 movie = movie,
-                                imageUrl = movie.mediaRoot?.smbLibrarySourceId()?.let { null } ?: provider.episodeStillUrl(session.serverUrl, movie.id),
+                                imageUrl = if (isMountedLibraryItem) null else provider.episodeStillUrl(session.serverUrl, movie.id),
                                 onClick = { onNavigate(movie.openRoute()) },
                                 showFavorite = true,
                             )
                         } else {
                             MoviePosterCard(
                                 movie = movie,
-                                imageUrl = movie.mediaRoot?.smbLibrarySourceId()?.let { null } ?: provider.coverUrl(session.serverUrl, movie.id),
+                                imageUrl = if (isMountedLibraryItem) null else provider.coverUrl(session.serverUrl, movie.id),
                                 onClick = { onNavigate(movie.openRoute()) },
                             )
                         }
@@ -256,7 +289,7 @@ fun FavoritesScreen(
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Button(
                                 onClick = {
-                                    if (shouldLoadRemoteContent(session)) {
+                                    if (session.canLoadFavoritesContent()) {
                                         vm.loadMore(session.activeProviderType, session.activeLibrary)
                                     }
                                 },
@@ -298,7 +331,7 @@ fun FavoritesScreen(
                                     leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
                                     onClick = {
                                         moreVisible = false
-                                        if (shouldLoadRemoteContent(session)) {
+                                        if (session.canLoadFavoritesContent()) {
                                             vm.refresh(session.activeProviderType, session.activeLibrary)
                                         }
                                     },
@@ -358,7 +391,17 @@ private fun MovieDto.detailRoute(): String =
 private fun MovieDto.providerRouteItemId(): String = providerItemId?.takeIf { it.isNotBlank() } ?: path
 
 private fun MovieDto.openRoute(): String =
-    mediaRoot?.smbLibrarySourceId()?.let { sourceId -> "smbPlayer/$sourceId?path=${android.net.Uri.encode(path)}" } ?: detailRoute()
+    mediaRoot?.smbLibrarySourceId()?.let { sourceId -> "smbPlayer/$sourceId?path=${android.net.Uri.encode(path)}" }
+        ?: mediaRoot?.webDavLibrarySourceId()?.let { sourceId -> "webdavPlayer/$sourceId?path=${android.net.Uri.encode(path)}" }
+        ?: detailRoute()
+
+private fun MovieDto.isMountedLibraryItem(): Boolean =
+    mediaRoot?.smbLibrarySourceId() != null || mediaRoot?.webDavLibrarySourceId() != null
+
+private fun Session.canLoadFavoritesContent(): Boolean =
+    shouldLoadRemoteContent(this) ||
+        activeLibrary.smbLibrarySourceId() != null ||
+        activeLibrary.webDavLibrarySourceId() != null
 
 private fun String.toMovieRouteId(): Int =
     takeLast(8).toUIntOrNull(16)?.toInt() ?: hashCode()
