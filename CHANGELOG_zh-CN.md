@@ -27,6 +27,7 @@
 ### App 定位
 
 - 将 README 品牌图替换为圆角 MediaTree logo 资源，并把 README 重写为面向用户的精简 app 页面，保留 APK 下载入口、来源兼容性和截图占位
+- 在 README 中补充推荐配合 `ZASENJC/mediatree` 后端部署的说明、Telegram 讨论群和 Telegram 更新通知频道
 - 强化 push 前同步规则，要求 `AGENTS.md`、`CHANGELOG.md`、`CHANGELOG_zh-CN.md`、`README.md` 和 `README_zh-CN.md` 必须反映当前 app 状态
 - 将后端、Docker/部署、旧 React/Vite 前端和服务端 wiki 文件移出 Git 跟踪，使仓库只跟踪 app 代码
 - 将本地后端/参考、生成数据、旧 Web 前端和本地 agent/config 文件移动到被忽略的 `_reference/` 目录

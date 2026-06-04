@@ -24,7 +24,12 @@
 
 在 Android 设备上打开 APK 并安装。如果系统拦截安装，请允许浏览器或文件管理器安装未知来源应用后重试。
 
-发布版本会同步到维护者配置的 Telegram 频道；APK 未超过 Telegram Bot API 云端上传限制时会直接发送文件，超过限制时发送 GitHub Release 下载链接。
+部署配合 [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) 后端使用时，可获得对媒体库、元数据、播放、进度和收藏等功能的最佳适配。
+
+## 群组 / 频道
+
+- Telegram 群组：[加入讨论](https://t.me/+-4Ezcae7I74yMmI1)
+- Telegram 更新通知频道：[订阅更新](https://t.me/mediatreex)
 
 ## 为什么用它
 

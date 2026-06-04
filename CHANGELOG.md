@@ -27,6 +27,7 @@ All notable changes to MediaTree are documented here.
 ### App Scope
 
 - Replaced the README branding with a rounded MediaTree logo asset and rewrote the README as a concise user-facing app page with APK download links, source compatibility, and screenshot placeholders
+- Added README links for the recommended `ZASENJC/mediatree` backend pairing, Telegram discussion group, and Telegram update channel
 - Strengthened the pre-push rule to keep `AGENTS.md`, `CHANGELOG.md`, `CHANGELOG_zh-CN.md`, `README.md`, and `README_zh-CN.md` synced with the current app state
 - Removed backend, Docker/deployment, legacy React/Vite frontend, and server wiki files from Git tracking so the repository now tracks app code only
 - Moved local backend/reference, generated data, old web frontend, and local agent/config files under ignored `_reference/` directories

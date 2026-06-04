@@ -24,7 +24,12 @@
 
 Open the APK on your Android device and install it. If Android blocks the installation, allow your browser or file manager to install apps from unknown sources, then try again.
 
-Releases are also mirrored to the maintainer-configured Telegram channel. APKs within the Telegram Bot API cloud upload limit are sent as files; larger APKs fall back to GitHub Release download links.
+Deploying with the [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) backend provides the best fit for media libraries, metadata, playback, progress, and favorites.
+
+## Community / Channels
+
+- Telegram group: [Join the discussion](https://t.me/+-4Ezcae7I74yMmI1)
+- Telegram update channel: [Subscribe for updates](https://t.me/mediatreex)
 
 ## Why Use It
 

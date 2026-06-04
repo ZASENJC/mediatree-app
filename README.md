@@ -24,7 +24,7 @@
 
 在 Android 设备上打开 APK 并安装。如果系统拦截安装，请允许浏览器或文件管理器安装未知来源应用后重试。
 
-发布版本会同步到维护者配置的 Telegram 频道；APK 未超过 Telegram Bot API 云端上传限制时会直接发送文件，超过限制时发送 GitHub Release 下载链接。
+部署配合 [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) 后端使用时，可获得对媒体库、元数据、播放、进度和收藏等功能的最佳适配。
 
 ## 为什么用它
 
@@ -39,6 +39,11 @@
 | 首页 | 浏览 | 播放器 | 设置 | 收藏 |
 |---|---|---|---|---|
 | ![home](https://img.qunq.de/file/1780586139237_Screenshot_2026-06-04-23-11-40-076_com.zasenjc.mediatree-edit.png) | ![browse](https://img.qunq.de/file/1780586435134_Screenshot_2026-06-04-23-20-22-202_com.zasenjc.mediatree-edit.png) | ![player](https://img.qunq.de/file/1780586129865_Screenshot_2026-06-04-23-12-14-940_com.zasenjc.mediatree-edit.png) | ![settings](https://img.qunq.de/file/1780586136918_Screenshot_2026-06-04-23-14-33-243_com.zasenjc.mediatree-edit.png) | ![favorites](https://img.qunq.de/file/1780586132880_Screenshot_2026-06-04-23-14-09-157_com.zasenjc.mediatree-edit.png) |
+
+## 群组 / 频道
+
+- Telegram 群组：[加入讨论](https://t.me/+-4Ezcae7I74yMmI1)
+- Telegram 更新通知频道：[订阅更新](https://t.me/mediatreex)
 
 ## 支持来源
 
