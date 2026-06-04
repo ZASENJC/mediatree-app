@@ -370,7 +370,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             try {
                 if (item.mediaRoot?.smbLibrarySourceId() != null || item.mediaRoot?.webDavLibrarySourceId() != null) {
                     onNavigate("browse?folder=${Uri.encode(item.path)}&recursiveVideos=true")
-                } else if (item.isLeaf) {
+                } else if (item.isLeaf && providerType != ProviderType.MediaTree) {
                     onNavigate(item.detailRoute())
                 } else {
                     val response = container.mediaProviderFor(providerType).movies(

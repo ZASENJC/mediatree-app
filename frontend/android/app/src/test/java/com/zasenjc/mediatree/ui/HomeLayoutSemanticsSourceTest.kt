@@ -156,4 +156,19 @@ class HomeLayoutSemanticsSourceTest {
         assertTrue(source.contains("private fun MovieDto.isUnfinishedForHomePlayback()"))
         assertTrue(source.contains("progressPercent == null || progressPercent < 95.0"))
     }
+
+    @Test
+    fun homeMediaTreeLeafPosterDoesNotOpenSyntheticDetailRoute() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
+            .readText()
+        val openBlock = source
+            .substringAfter("fun openLibraryItem(")
+            .substringBefore("fun HomeScreen(")
+
+        assertTrue(openBlock.contains("item.isLeaf && providerType != ProviderType.MediaTree"))
+        assertFalse(openBlock.contains("} else if (item.isLeaf) {\n                    onNavigate(item.detailRoute())"))
+        assertTrue(openBlock.contains("container.mediaProviderFor(providerType).movies("))
+        assertTrue(openBlock.contains("onNavigate(movie.detailRoute())"))
+    }
 }
