@@ -140,6 +140,9 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     var browseRecursiveVideos by remember { mutableStateOf(false) }
     val browseScrollPositions = remember { mutableMapOf<String, BrowseScrollPosition>() }
     var chromeVisible by remember { mutableStateOf(true) }
+    val bottomChromeVisible = chromeVisible &&
+        !currentRoute.startsWith("detail") &&
+        !currentRoute.endsWith("Player/{sourceId}?path={path}")
 
     LaunchedEffect(currentRoute) {
         chromeVisible = true
@@ -225,7 +228,12 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     MediaTreePageBackground {
         Scaffold(
             contentWindowInsets = WindowInsets.safeDrawing,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.padding(bottom = if (bottomChromeVisible) SnackbarBottomChromePadding else 0.dp),
+                )
+            },
             containerColor = androidx.compose.ui.graphics.Color.Transparent,
         ) { padding ->
             NavHost(
@@ -412,7 +420,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
             }
         }
         AnimatedVisibility(
-            visible = chromeVisible && !currentRoute.startsWith("detail") && !currentRoute.endsWith("Player/{sourceId}?path={path}"),
+            visible = bottomChromeVisible,
             enter = bottomChromeEnterTransition(),
             exit = bottomChromeExitTransition(),
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -425,6 +433,8 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         }
     }
 }
+
+private val SnackbarBottomChromePadding = 96.dp
 
 @Composable
 private fun DesignBottomNavigationBar(
