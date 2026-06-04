@@ -10,7 +10,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
@@ -100,6 +99,7 @@ import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MediaAsyncImage
 import com.zasenjc.mediatree.ui.components.SyncChromeWithGridScroll
+import com.zasenjc.mediatree.ui.components.shapeAwareClickable
 import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.topChromeExitTransition
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
@@ -412,6 +412,7 @@ fun HomeScreen(
     active: Boolean = true,
     browseViewMode: String,
     onBrowseViewModeChange: (String) -> Unit,
+    browseScrollPositions: MutableMap<String, BrowseScrollPosition>,
     chromeVisible: Boolean = true,
     onChromeVisibleChange: (Boolean) -> Unit = {},
 ) {
@@ -426,6 +427,7 @@ fun HomeScreen(
             initialFolder = "",
             viewMode = browseViewMode,
             onViewModeChange = onBrowseViewModeChange,
+            browseScrollPositions = browseScrollPositions,
             chromeVisible = chromeVisible,
             onChromeVisibleChange = onChromeVisibleChange,
         )
@@ -638,10 +640,11 @@ private fun HomeMoviePosterCard(
     modifier: Modifier = Modifier,
 ) {
     val title = movie.displayTitle ?: movie.title ?: movie.code
+    val cardShape = RoundedCornerShape(16.dp)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Card(
-            modifier = Modifier.clickable(onClick = onClick),
-            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.shapeAwareClickable(shape = cardShape, onClick = onClick),
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
@@ -680,10 +683,11 @@ private fun HomeMediaPosterCard(
     modifier: Modifier = Modifier,
 ) {
     val title = item.displayTitle ?: item.name.ifBlank { item.path.substringAfterLast("/") }
+    val cardShape = RoundedCornerShape(16.dp)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Card(
-            modifier = Modifier.clickable(enabled = !opening, onClick = onClick),
-            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.shapeAwareClickable(shape = cardShape, enabled = !opening, onClick = onClick),
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
@@ -735,10 +739,11 @@ private fun RecentWatchingCard(
     modifier: Modifier = Modifier,
 ) {
     val title = movie.displayTitle ?: movie.title ?: movie.code
+    val cardShape = RoundedCornerShape(16.dp)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Card(
-            modifier = Modifier.clickable(onClick = onClick),
-            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.shapeAwareClickable(shape = cardShape, onClick = onClick),
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
@@ -1013,13 +1018,13 @@ private fun HomeSearchResultRow(
     onClick: () -> Unit,
 ) {
     val title = movie.displayTitle ?: movie.title ?: movie.code
+    val shape = RoundedCornerShape(16.dp)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
+            .shapeAwareClickable(shape = shape, onClick = onClick),
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.38f),
-        shape = RoundedCornerShape(16.dp),
+        shape = shape,
     ) {
         Row(
             modifier = Modifier.padding(10.dp),

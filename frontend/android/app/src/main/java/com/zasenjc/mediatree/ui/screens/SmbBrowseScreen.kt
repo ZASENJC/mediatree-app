@@ -6,7 +6,6 @@ import android.content.res.Configuration
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +66,7 @@ import com.zasenjc.mediatree.player.MediaTreePlayer
 import com.zasenjc.mediatree.ui.components.ErrorPane
 import com.zasenjc.mediatree.ui.components.FullscreenSystemBarsEffect
 import com.zasenjc.mediatree.ui.components.LoadingPane
+import com.zasenjc.mediatree.ui.components.shapeAwareClickable
 import com.zasenjc.mediatree.ui.motion.PlayerExitNavigationDelayMillis
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -217,9 +217,12 @@ private fun SmbEntryList(
 
 @Composable
 private fun SmbEntryRow(entry: SmbEntry, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth().clickable(enabled = entry.isDirectory || entry.isPlayableVideo, onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shapeAwareClickable(shape = shape, enabled = entry.isDirectory || entry.isPlayableVideo, onClick = onClick),
+        shape = shape,
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Row(

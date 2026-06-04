@@ -1,7 +1,6 @@
 package com.zasenjc.mediatree.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,7 +76,10 @@ fun MoviePosterCard(
             ListItem(
                 headlineContent = { Text("播放") },
                 leadingContent = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
-                modifier = Modifier.combinedClickable(onClick = { sheetOpen = false; onClick() }),
+                modifier = Modifier.shapeAwareCombinedClickable(
+                    shape = RoundedCornerShape(12.dp),
+                    onClick = { sheetOpen = false; onClick() },
+                ),
             )
             ListItem(
                 headlineContent = { Text("更多操作未实现") },
@@ -130,9 +132,10 @@ private fun PosterImageFrame(
     onLongClick: () -> Unit,
     leadingPlayIcon: Boolean = false,
 ) {
+    val posterShape = RoundedCornerShape(16.dp)
     Card(
-        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.shapeAwareCombinedClickable(shape = posterShape, onClick = onClick, onLongClick = onLongClick),
+        shape = posterShape,
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {

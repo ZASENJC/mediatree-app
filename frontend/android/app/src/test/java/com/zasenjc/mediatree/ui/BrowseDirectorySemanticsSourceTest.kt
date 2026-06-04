@@ -23,6 +23,11 @@ class BrowseDirectorySemanticsSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
             .readText()
 
+    private val thumbnailCacheSource: String
+        get() = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/data/MountedVideoThumbnailCache.kt")
+            .readText()
+
     @Test
     fun browseFolderTitleUsesOriginalFolderNameOnly() {
         val source = browseSource
@@ -68,6 +73,66 @@ class BrowseDirectorySemanticsSourceTest {
         assertFalse(browseSource.contains("var viewMode by remember { mutableStateOf(\"compact\") }"))
         assertTrue(appBrowseCall.contains("viewMode = browseViewMode"))
         assertTrue(appBrowseCall.contains("onViewModeChange = { browseViewMode = it }"))
+    }
+
+    @Test
+    fun browseFolderNavigationRemembersScrollPositionPerDirectory() {
+        val screenBlock = browseSource
+            .substringAfter("fun BrowseScreen(")
+            .substringBefore("@Composable\nprivate fun DesignFolderRow")
+        val browseSignature = browseSource
+            .substringAfter("fun BrowseScreen(")
+            .substringBefore(") {")
+        val mainShellBlock = appSource
+            .substringAfter("private fun MainShell")
+            .substringBefore("fun detailMovieIdFromUri")
+        val scrollKeyBlock = browseSource
+            .substringAfter("private fun BrowseContentSnapshot.scrollMemoryKey")
+            .substringBefore("private fun String.mountedLibrarySourceId")
+
+        assertTrue(browseSource.contains("data class BrowseScrollPosition"))
+        assertTrue(mainShellBlock.contains("val browseScrollPositions = remember { mutableMapOf<String, BrowseScrollPosition>() }"))
+        assertTrue(browseSignature.contains("browseScrollPositions: MutableMap<String, BrowseScrollPosition>"))
+        assertFalse(screenBlock.contains("val browseScrollPositions = remember { mutableMapOf<String, BrowseScrollPosition>() }"))
+        assertTrue(screenBlock.contains("val scrollKey = snapshot.scrollMemoryKey("))
+        assertTrue(screenBlock.contains("val rememberedScroll = browseScrollPositions[scrollKey]"))
+        assertTrue(screenBlock.contains("initialFirstVisibleItemIndex = rememberedScroll?.firstVisibleItemIndex ?: 0"))
+        assertTrue(screenBlock.contains("initialFirstVisibleItemScrollOffset = rememberedScroll?.firstVisibleItemScrollOffset ?: 0"))
+        assertTrue(screenBlock.contains("DisposableEffect(scrollKey, snapshotListState)"))
+        assertTrue(screenBlock.contains("browseScrollPositions[scrollKey] = snapshotListState.toBrowseScrollPosition()"))
+        assertTrue(screenBlock.contains("snapshotFlow { snapshotListState.toBrowseScrollPosition() }"))
+        assertTrue(scrollKeyBlock.contains("providerType.name"))
+        assertTrue(scrollKeyBlock.contains("activeProfileId"))
+        assertTrue(scrollKeyBlock.contains("activeLibrary"))
+        assertTrue(scrollKeyBlock.contains("currentFolder"))
+        assertTrue(scrollKeyBlock.contains("viewMode"))
+        assertTrue(scrollKeyBlock.contains("sortMode"))
+        assertTrue(scrollKeyBlock.contains("query.trim()"))
+        assertTrue(scrollKeyBlock.contains("recursiveVideosOnly"))
+    }
+
+    @Test
+    fun browseScrollMemorySurvivesOpeningVideoAndReturning() {
+        val imports = appSource.substringBefore("private val Md3StandardEasing")
+        val mainShellBlock = appSource
+            .substringAfter("private fun MainShell")
+            .substringBefore("fun detailMovieIdFromUri")
+        val appBrowseCall = appSource
+            .substringAfter("\"browse\" -> BrowseScreen(")
+            .substringBefore(")")
+        val homeSignature = homeSource
+            .substringAfter("fun HomeScreen(")
+            .substringBefore(") {")
+        val homeBrowseWrapperCall = homeSource
+            .substringAfter("BrowseScreen(")
+            .substringBefore("return")
+
+        assertTrue(imports.contains("import com.zasenjc.mediatree.ui.screens.BrowseScrollPosition"))
+        assertTrue(mainShellBlock.contains("val browseScrollPositions = remember { mutableMapOf<String, BrowseScrollPosition>() }"))
+        assertTrue(appBrowseCall.contains("browseScrollPositions = browseScrollPositions"))
+        assertTrue(homeSignature.contains("browseScrollPositions: MutableMap<String, BrowseScrollPosition>"))
+        assertTrue(homeBrowseWrapperCall.contains("browseScrollPositions = browseScrollPositions"))
+        assertFalse(homeSource.contains("remember { mutableMapOf<String, BrowseScrollPosition>() }"))
     }
 
     @Test
@@ -179,6 +244,9 @@ class BrowseDirectorySemanticsSourceTest {
         val screenBlock = browseSource
             .substringAfter("fun BrowseScreen(")
             .substringBefore("@Composable\nprivate fun DesignFolderRow")
+        val thumbnailBlock = browseSource
+            .substringAfter("private fun MountedVideoThumbnail")
+            .substringBefore("@Composable\nprivate fun BrowserListRow")
         val iconMovieRowBlock = browseSource
             .substringAfter("private fun IconMovieRow")
             .substringBefore("@Composable\nprivate fun IconTile")
@@ -200,26 +268,59 @@ class BrowseDirectorySemanticsSourceTest {
         assertTrue(compactMovieRowBlock.contains("MountedVideoThumbnail("))
         assertTrue(compactMovieRowBlock.contains("framedIcon = !movie.isMountedLibraryItem()"))
         assertTrue(browseSource.contains("private fun MountedVideoThumbnail"))
-        assertTrue(browseSource.contains("MediaMetadataRetriever"))
-        assertTrue(browseSource.contains("setDataSource(source.uri, source.headers)"))
-        assertTrue(browseSource.contains("getScaledFrameAtTime"))
-        assertTrue(browseSource.contains("limitedParallelism(1)"))
-        assertTrue(browseSource.contains("MountedVideoFrameWidth = 240"))
-        assertTrue(browseSource.contains("MountedVideoFrameHeight = 360"))
-        assertTrue(browseSource.contains("mountedVideoFrameCache"))
-        assertTrue(browseSource.contains("MountedVideoFrameMemoryCache"))
-        assertTrue(browseSource.contains("MountedVideoFrameCacheTtlMillis"))
-        assertTrue(browseSource.contains("MountedVideoFrameCacheMaxBytes"))
-        assertTrue(browseSource.contains("mountedVideoFrameRequests"))
-        assertTrue(browseSource.contains("Deferred<Bitmap?>"))
-        assertTrue(browseSource.contains("getCached"))
-        assertTrue(browseSource.contains("putCached"))
-        assertTrue(browseSource.contains("removeOldestCacheEntry"))
-        assertFalse(browseSource.contains("DiskCache"))
-        assertTrue(browseSource.contains("sourceInfo.onClose?.invoke()"))
-        assertTrue(browseSource.contains("container.smbRangeProxy.playbackSource"))
-        assertTrue(browseSource.contains("PlaybackSource.webDav"))
+        assertTrue(thumbnailCacheSource.contains("MediaMetadataRetriever"))
+        assertTrue(thumbnailCacheSource.contains("setDataSource(source.uri, source.headers)"))
+        assertTrue(thumbnailCacheSource.contains("getScaledFrameAtTime"))
+        assertTrue(thumbnailCacheSource.contains("data class MountedVideoThumbnailSpec"))
+        assertTrue(browseSource.contains("MountedPosterVideoFrameWidth = 120"))
+        assertTrue(browseSource.contains("MountedPosterVideoFrameHeight = 180"))
+        assertTrue(browseSource.contains("MountedLandscapeVideoFrameWidth = 128"))
+        assertTrue(browseSource.contains("MountedLandscapeVideoFrameHeight = 72"))
+        assertFalse(browseSource.contains("MountedVideoFrameWidth = 240"))
+        assertFalse(browseSource.contains("MountedVideoFrameHeight = 360"))
+        assertTrue(thumbnailCacheSource.contains("limitedParallelism(MountedVideoFrameParallelism)"))
+        assertTrue(thumbnailCacheSource.contains("private const val MountedVideoFrameParallelism = 2"))
+        assertTrue(thumbnailCacheSource.contains("Bitmap.Config.RGB_565"))
+        assertTrue(thumbnailBlock.contains("filterQuality = FilterQuality.Low"))
+        assertTrue(thumbnailCacheSource.contains("MountedVideoThumbnailMemoryCache"))
+        assertTrue(thumbnailCacheSource.contains("MountedVideoThumbnailDiskCache"))
+        assertTrue(thumbnailCacheSource.contains("private const val MountedVideoThumbnailCacheTtlMillis = 7 * 24 * 60 * 60 * 1000L"))
+        assertTrue(thumbnailCacheSource.contains("context.cacheDir.resolve(\"mounted_video_thumbnails\")"))
+        assertTrue(thumbnailCacheSource.contains("BitmapFactory.decodeFile"))
+        assertTrue(thumbnailCacheSource.contains("Bitmap.CompressFormat.JPEG"))
+        assertTrue(thumbnailCacheSource.contains("diskCache.getCached(cacheKey)"))
+        assertTrue(thumbnailCacheSource.contains("diskCache.putCached(cacheKey, frame)"))
+        assertTrue(thumbnailCacheSource.contains("runCatching { diskCache.putCached(cacheKey, frame) }"))
+        assertTrue(thumbnailCacheSource.contains("pendingRequests.forEach { request -> request.cancel() }"))
+        assertTrue(thumbnailCacheSource.contains("clear()"))
+        assertTrue(thumbnailCacheSource.contains("sourceInfo.onClose?.invoke()"))
+        assertTrue(thumbnailCacheSource.contains("container.smbRangeProxy.playbackSource"))
+        assertTrue(thumbnailCacheSource.contains("PlaybackSource.webDav"))
         assertFalse(browseSource.contains("modifier = Modifier.align(Alignment.BottomStart).padding(6.dp)"))
+    }
+
+    @Test
+    fun mountedVideoThumbnailsUseViewportPriorityScheduling() {
+        val screenBlock = browseSource
+            .substringAfter("fun BrowseScreen(")
+            .substringBefore("@Composable\nprivate fun DesignFolderRow")
+        val thumbnailSignature = browseSource
+            .substringAfter("private fun MountedVideoThumbnail(")
+            .substringBefore(") {")
+        val thumbnailBlock = browseSource
+            .substringAfter("private fun MountedVideoThumbnail(")
+            .substringBefore("@Composable\nprivate fun BrowserListRow")
+
+        assertTrue(screenBlock.contains("val thumbnailViewportScheduler = rememberMountedThumbnailViewportScheduler(snapshotListState)"))
+        assertTrue(screenBlock.contains("thumbnailViewportScheduler = thumbnailViewportScheduler"))
+        assertTrue(browseSource.contains("private fun rememberMountedThumbnailViewportScheduler"))
+        assertTrue(browseSource.contains("snapshotFlow { listState.layoutInfo.visibleItemsInfo.mapNotNull"))
+        assertTrue(browseSource.contains("visibleKeys.indexOf(key)"))
+        assertTrue(browseSource.contains("mountedThumbnailKey("))
+        assertTrue(thumbnailSignature.contains("thumbnailViewportScheduler: MountedThumbnailViewportScheduler"))
+        assertTrue(thumbnailBlock.contains("thumbnailViewportScheduler.awaitVisible(keyToWait)"))
+        assertTrue(thumbnailBlock.contains("delay(MountedThumbnailVisibleDebounceMillis)"))
+        assertTrue(browseSource.contains("private const val MountedThumbnailVisibleDebounceMillis = 120L"))
     }
 
     @Test

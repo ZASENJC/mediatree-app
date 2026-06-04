@@ -1,7 +1,6 @@
 package com.zasenjc.mediatree.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zasenjc.mediatree.ui.components.shapeAwareClickable
 
 data class ClientStorageVideoItem(
     val name: String,
@@ -101,6 +101,7 @@ fun ClientStoragePlayerDetails(
         ) {
             items(videos, key = { it.path }) { item ->
                 val selected = item.path == currentPath
+                val rowShape = RoundedCornerShape(8.dp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -110,9 +111,9 @@ fun ClientStoragePlayerDetails(
                             } else {
                                 androidx.compose.ui.graphics.Color.Transparent
                             },
-                            shape = RoundedCornerShape(8.dp),
+                            shape = rowShape,
                         )
-                        .clickable(enabled = !selected) { onSelectVideo(item) }
+                        .shapeAwareClickable(shape = rowShape, enabled = !selected) { onSelectVideo(item) }
                         .padding(horizontal = 8.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,

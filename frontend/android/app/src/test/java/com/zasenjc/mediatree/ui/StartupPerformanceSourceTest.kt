@@ -130,9 +130,12 @@ class StartupPerformanceSourceTest {
     }
 
     @Test
-    fun browseListUsesStableContentTypesAndSerializedFrameExtraction() {
+    fun browseListUsesStableContentTypesAndBoundedFrameExtraction() {
         val browseScreen = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/BrowseScreen.kt")
+            .readText()
+        val thumbnailCache = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/data/MountedVideoThumbnailCache.kt")
             .readText()
         val chromeVisibility = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/components/ChromeVisibility.kt")
@@ -144,7 +147,8 @@ class StartupPerformanceSourceTest {
         assertTrue(browseScreen.contains("contentType = { \"movie-poster-row\" }"))
         assertTrue(browseScreen.contains("contentType = { \"movie-icon-row\" }"))
         assertTrue(browseScreen.contains("contentType = { \"movie-compact\" }"))
-        assertTrue(browseScreen.contains("Dispatchers.IO.limitedParallelism(1)"))
+        assertTrue(thumbnailCache.contains("Dispatchers.IO.limitedParallelism(MountedVideoFrameParallelism)"))
+        assertTrue(thumbnailCache.contains("private const val MountedVideoFrameParallelism = 2"))
         assertTrue(chromeVisibility.contains("var previousVisible: Boolean? = null"))
         assertTrue(chromeVisibility.contains("visible != previousVisible"))
     }

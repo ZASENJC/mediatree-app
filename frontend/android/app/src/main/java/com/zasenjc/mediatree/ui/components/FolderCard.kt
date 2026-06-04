@@ -1,6 +1,5 @@
 package com.zasenjc.mediatree.ui.components
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,12 +36,13 @@ fun FolderCard(
 ) {
     val title = folder.displayTitle ?: folder.name.ifBlank { folder.path.substringAfterLast("/") }
     val latest = folder.releaseDateMax ?: folder.createdMax
+    val shape = RoundedCornerShape(16.dp)
     ElevatedCard(
         modifier = modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = if (compact) 76.dp else 92.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+            .shapeAwareClickable(shape = shape, onClick = onClick),
+        shape = shape,
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Row(

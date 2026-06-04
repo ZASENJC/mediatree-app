@@ -68,6 +68,7 @@ import com.zasenjc.mediatree.ui.motion.md3DefaultPopEnterTransition
 import com.zasenjc.mediatree.ui.motion.md3DefaultPopExitTransition
 import com.zasenjc.mediatree.ui.navigation.TopDestination
 import com.zasenjc.mediatree.ui.navigation.topDestinations
+import com.zasenjc.mediatree.ui.screens.BrowseScrollPosition
 import com.zasenjc.mediatree.ui.screens.BrowseScreen
 import com.zasenjc.mediatree.ui.screens.DetailScreen
 import com.zasenjc.mediatree.ui.screens.FavoritesScreen
@@ -136,6 +137,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     var browseFolder by remember { mutableStateOf("") }
     var browseViewMode by rememberSaveable { mutableStateOf("compact") }
     var browseRecursiveVideos by remember { mutableStateOf(false) }
+    val browseScrollPositions = remember { mutableMapOf<String, BrowseScrollPosition>() }
     var chromeVisible by remember { mutableStateOf(true) }
 
     LaunchedEffect(currentRoute) {
@@ -255,6 +257,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 active = pageActive,
                                 browseViewMode = browseViewMode,
                                 onBrowseViewModeChange = { browseViewMode = it },
+                                browseScrollPositions = browseScrollPositions,
                                 chromeVisible = chromeVisible,
                                 onChromeVisibleChange = { chromeVisible = it },
                             )
@@ -268,6 +271,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 recursiveVideosOnly = browseRecursiveVideos,
                                 viewMode = browseViewMode,
                                 onViewModeChange = { browseViewMode = it },
+                                browseScrollPositions = browseScrollPositions,
                                 chromeVisible = chromeVisible,
                                 onChromeVisibleChange = { chromeVisible = it },
                             )

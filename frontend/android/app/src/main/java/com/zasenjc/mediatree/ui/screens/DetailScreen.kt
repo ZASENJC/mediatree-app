@@ -14,7 +14,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -106,6 +105,7 @@ import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.DesignFilterChip
 import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.ui.components.SectionHeader
+import com.zasenjc.mediatree.ui.components.shapeAwareClickable
 import com.zasenjc.mediatree.ui.motion.PlayerExitNavigationDelayMillis
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
@@ -711,11 +711,12 @@ private fun MovieInfoHeader(
     val seasonGroups = remember(seriesItems) { buildSeasonGroups(seriesItems) }
     val selectedGroup = seasonGroups.firstOrNull { it.key == selectedSeasonKey } ?: seasonGroups.firstOrNull()
     val canSelectEpisodes = seriesItems.size > 1
+    val episodeHeaderShape = RoundedCornerShape(12.dp)
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (canSelectEpisodes) Modifier.clickable(onClick = onToggleEpisodes) else Modifier),
+                .then(if (canSelectEpisodes) Modifier.shapeAwareClickable(shape = episodeHeaderShape, onClick = onToggleEpisodes) else Modifier),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -924,12 +925,13 @@ private fun EpisodeCoverCard(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(12.dp)
     Column(
-        modifier = Modifier.width(142.dp).clickable(onClick = onClick),
+        modifier = Modifier.width(142.dp).shapeAwareClickable(shape = shape, onClick = onClick),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         ElevatedCard(
-            shape = RoundedCornerShape(12.dp),
+            shape = shape,
             colors = CardDefaults.elevatedCardColors(
                 containerColor = if (selected) {
                     MaterialTheme.colorScheme.primaryContainer

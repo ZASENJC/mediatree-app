@@ -1,15 +1,11 @@
 package com.zasenjc.mediatree.ui.screens
 
 import android.graphics.Bitmap
-import android.os.Build
-import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.os.SystemClock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
@@ -26,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,16 +50,19 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,22 +72,24 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageSource
-import com.zasenjc.mediatree.data.ClientStorageType
 import com.zasenjc.mediatree.data.FolderNodeDto
+import com.zasenjc.mediatree.data.MountedVideoThumbnailRequest
+import com.zasenjc.mediatree.data.MountedVideoThumbnailSpec
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
+import com.zasenjc.mediatree.data.mountedThumbnailKey
 import com.zasenjc.mediatree.data.webDavLibraryPath
 import com.zasenjc.mediatree.data.webDavLibrarySourceId
 import com.zasenjc.mediatree.data.smbLibrarySourceId
 import com.zasenjc.mediatree.data.viewModelFactory
-import com.zasenjc.mediatree.playback.PlaybackSource
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MediaAsyncImage
 import com.zasenjc.mediatree.ui.components.MoviePosterCard
 import com.zasenjc.mediatree.ui.components.SyncChromeWithListScroll
 import com.zasenjc.mediatree.ui.components.DesignFilterChip
 import com.zasenjc.mediatree.ui.components.DesignTopAppBar
+import com.zasenjc.mediatree.ui.components.shapeAwareClickable
 import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.topChromeExitTransition
 import com.zasenjc.mediatree.ui.motion.md3DefaultContentTransform
@@ -97,13 +99,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.Color
 
 private val browseSortOptions = listOf(
@@ -124,7 +124,45 @@ private data class BrowseViewMode(
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
 )
 
-private typealias MountedVideoThumbnailLoader = suspend (ClientStorageSource?, MovieDto) -> Bitmap?
+private typealias MountedVideoThumbnailLoader = suspend (ClientStorageSource?, MovieDto, MountedVideoThumbnailSpec) -> Bitmap?
+
+private val MountedPosterVideoThumbnailSpec = MountedVideoThumbnailSpec(
+    width = MountedPosterVideoFrameWidth,
+    height = MountedPosterVideoFrameHeight,
+)
+private val MountedLandscapeVideoThumbnailSpec = MountedVideoThumbnailSpec(
+    width = MountedLandscapeVideoFrameWidth,
+    height = MountedLandscapeVideoFrameHeight,
+)
+private const val MountedThumbnailVisibleDebounceMillis = 120L
+
+data class BrowseScrollPosition(
+    val firstVisibleItemIndex: Int = 0,
+    val firstVisibleItemScrollOffset: Int = 0,
+)
+
+private class MountedThumbnailViewportScheduler {
+    private val visibleKeys = MutableStateFlow<List<String>>(emptyList())
+
+    fun updateVisibleKeys(keys: List<String>) {
+        visibleKeys.value = keys
+    }
+
+    suspend fun awaitVisible(key: String) {
+        visibleKeys.first { visibleKeys -> visibleKeys.indexOf(key) >= 0 }
+    }
+}
+
+@Composable
+private fun rememberMountedThumbnailViewportScheduler(listState: LazyListState): MountedThumbnailViewportScheduler {
+    val scheduler = remember { MountedThumbnailViewportScheduler() }
+    LaunchedEffect(listState, scheduler) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.mapNotNull { it.key as? String } }
+            .distinctUntilChanged()
+            .collect { keys -> scheduler.updateVisibleKeys(keys) }
+    }
+    return scheduler
+}
 
 private data class BrowseContentSnapshot(
     val folders: List<FolderNodeDto> = emptyList(),
@@ -147,7 +185,7 @@ private data class BrowseContentSnapshot(
     }
 }
 
-class BrowseViewModel(private val container: AppContainer) : ViewModel() {
+private class BrowseViewModel(private val container: AppContainer) : ViewModel() {
     data class UiState(
         val loading: Boolean = true,
         val folders: List<FolderNodeDto> = emptyList(),
@@ -163,8 +201,6 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
-    private val mountedVideoFrameCache = MountedVideoFrameMemoryCache()
-    private val mountedVideoFrameRequests = mutableMapOf<String, Deferred<Bitmap?>>()
 
     fun load(
         providerType: ProviderType,
@@ -401,24 +437,10 @@ class BrowseViewModel(private val container: AppContainer) : ViewModel() {
         return videos
     }
 
-    suspend fun loadMountedVideoFrame(source: ClientStorageSource?, movie: MovieDto): Bitmap? {
-        val cacheKey = mountedVideoFrameCacheKey(source, movie) ?: return null
-        mountedVideoFrameCache.getCached(cacheKey)?.let { return it }
-        val request = mountedVideoFrameRequests[cacheKey] ?: viewModelScope.async {
-            val sourceInfo = mountedVideoThumbnailSource(container, source, movie) ?: return@async null
-            try {
-                extractMountedVideoFrame(sourceInfo)
-                    ?.also { frame -> mountedVideoFrameCache.putCached(cacheKey, frame) }
-            } finally {
-                sourceInfo.onClose?.invoke()
-            }
-        }.also { newRequest ->
-            mountedVideoFrameRequests[cacheKey] = newRequest
-            newRequest.invokeOnCompletion {
-                mountedVideoFrameRequests.remove(cacheKey)
-            }
-        }
-        return request.await()
+    suspend fun loadMountedVideoFrame(source: ClientStorageSource?, movie: MovieDto, spec: MountedVideoThumbnailSpec): Bitmap? {
+        return container.mountedVideoThumbnailCache.getOrCreate(
+            MountedVideoThumbnailRequest(source = source, movie = movie, spec = spec),
+        )
     }
 }
 
@@ -434,6 +456,7 @@ fun BrowseScreen(
     recursiveVideosOnly: Boolean = false,
     viewMode: String,
     onViewModeChange: (String) -> Unit,
+    browseScrollPositions: MutableMap<String, BrowseScrollPosition>,
     chromeVisible: Boolean = true,
     onChromeVisibleChange: (Boolean) -> Unit = {},
 ) {
@@ -541,7 +564,32 @@ fun BrowseScreen(
                         val iconFolderRows = posterFolderRows
                         val posterMovieRows = remember(filteredMovies) { filteredMovies.chunked(2) }
                         val iconMovieRows = remember(filteredMovies) { filteredMovies.chunked(3) }
-                        val snapshotListState = rememberLazyListState()
+                        val scrollKey = snapshot.scrollMemoryKey(
+                            providerType = session.activeProviderType,
+                            activeProfileId = session.activeProfileId,
+                            activeLibrary = session.activeLibrary,
+                            viewMode = viewMode,
+                            query = query,
+                            recursiveVideosOnly = recursiveVideosOnly,
+                        )
+                        val rememberedScroll = browseScrollPositions[scrollKey]
+                        val snapshotListState = rememberLazyListState(
+                            initialFirstVisibleItemIndex = rememberedScroll?.firstVisibleItemIndex ?: 0,
+                            initialFirstVisibleItemScrollOffset = rememberedScroll?.firstVisibleItemScrollOffset ?: 0,
+                        )
+                        DisposableEffect(scrollKey, snapshotListState) {
+                            onDispose {
+                                browseScrollPositions[scrollKey] = snapshotListState.toBrowseScrollPosition()
+                            }
+                        }
+                        LaunchedEffect(scrollKey, snapshotListState) {
+                            snapshotFlow { snapshotListState.toBrowseScrollPosition() }
+                                .distinctUntilChanged()
+                                .collect { position ->
+                                    browseScrollPositions[scrollKey] = position
+                                }
+                        }
+                        val thumbnailViewportScheduler = rememberMountedThumbnailViewportScheduler(snapshotListState)
                         if (active) {
                             SyncChromeWithListScroll(snapshotListState, onChromeVisibleChange)
                         }
@@ -636,7 +684,7 @@ fun BrowseScreen(
                                     "poster" -> {
                                         items(
                                             posterMovieRows,
-                                            key = { row -> row.joinToString("|") { it.id.toString() } },
+                                            key = { row -> row.mountedThumbnailRowKey(snapshot.mountedSource, MountedPosterVideoThumbnailSpec) },
                                             contentType = { "movie-poster-row" },
                                         ) { row ->
                                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
@@ -644,6 +692,8 @@ fun BrowseScreen(
                                                     if (movie.isMountedLibraryItem()) {
                                                         MountedVideoPosterCard(
                                                             thumbnailLoader = mountedVideoThumbnailLoader,
+                                                            thumbnailViewportScheduler = thumbnailViewportScheduler,
+                                                            viewportKey = row.mountedThumbnailRowKey(snapshot.mountedSource, MountedPosterVideoThumbnailSpec),
                                                             source = snapshot.mountedSource,
                                                             movie = movie,
                                                             onClick = { onNavigate(movie.openRoute()) },
@@ -665,11 +715,12 @@ fun BrowseScreen(
                                     "icon" -> {
                                         items(
                                             iconMovieRows,
-                                            key = { row -> row.joinToString("|") { it.id.toString() } },
+                                            key = { row -> row.mountedThumbnailRowKey(snapshot.mountedSource, MountedLandscapeVideoThumbnailSpec) },
                                             contentType = { "movie-icon-row" },
                                         ) { row ->
                                             IconMovieRow(
                                                 thumbnailLoader = mountedVideoThumbnailLoader,
+                                                thumbnailViewportScheduler = thumbnailViewportScheduler,
                                                 source = snapshot.mountedSource,
                                                 row = row,
                                                 onOpen = { movie -> onNavigate(movie.openRoute()) },
@@ -677,9 +728,14 @@ fun BrowseScreen(
                                         }
                                     }
                                     "compact" -> {
-                                        items(filteredMovies, key = { it.id }, contentType = { "movie-compact" }) { movie ->
+                                        items(
+                                            filteredMovies,
+                                            key = { movie -> movie.mountedThumbnailItemKey(snapshot.mountedSource, MountedLandscapeVideoThumbnailSpec) },
+                                            contentType = { "movie-compact" },
+                                        ) { movie ->
                                             CompactMovieRow(
                                                 thumbnailLoader = mountedVideoThumbnailLoader,
+                                                thumbnailViewportScheduler = thumbnailViewportScheduler,
                                                 source = snapshot.mountedSource,
                                                 movie = movie,
                                                 onClick = { onNavigate(movie.openRoute()) },
@@ -687,9 +743,14 @@ fun BrowseScreen(
                                         }
                                     }
                                     else -> {
-                                        items(filteredMovies, key = { it.id }, contentType = { "movie-compact" }) { movie ->
+                                        items(
+                                            filteredMovies,
+                                            key = { movie -> movie.mountedThumbnailItemKey(snapshot.mountedSource, MountedLandscapeVideoThumbnailSpec) },
+                                            contentType = { "movie-compact" },
+                                        ) { movie ->
                                             CompactMovieRow(
                                                 thumbnailLoader = mountedVideoThumbnailLoader,
+                                                thumbnailViewportScheduler = thumbnailViewportScheduler,
                                                 source = snapshot.mountedSource,
                                                 movie = movie,
                                                 onClick = { onNavigate(movie.openRoute()) },
@@ -750,9 +811,10 @@ fun BrowseScreen(
 
 @Composable
 private fun DesignFolderRow(folder: FolderNodeDto, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
     Surface(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().shapeAwareClickable(shape = shape, onClick = onClick),
+        shape = shape,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 1.dp,
@@ -812,9 +874,10 @@ private fun FolderPosterCard(
     modifier: Modifier = Modifier,
 ) {
     val title = folder.browseTitle()
+    val shape = RoundedCornerShape(14.dp)
     ElevatedCard(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
+        modifier = modifier.shapeAwareClickable(shape = shape, onClick = onClick),
+        shape = shape,
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
@@ -883,6 +946,7 @@ private fun IconFolderRow(row: List<FolderNodeDto>, onOpen: (FolderNodeDto) -> U
 @Composable
 private fun IconMovieRow(
     thumbnailLoader: MountedVideoThumbnailLoader,
+    thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
     source: ClientStorageSource?,
     row: List<MovieDto>,
     onOpen: (MovieDto) -> Unit,
@@ -892,6 +956,8 @@ private fun IconMovieRow(
             if (movie.isMountedLibraryItem()) {
                 MountedVideoIconTile(
                     thumbnailLoader = thumbnailLoader,
+                    thumbnailViewportScheduler = thumbnailViewportScheduler,
+                    viewportKey = row.mountedThumbnailRowKey(source, MountedLandscapeVideoThumbnailSpec),
                     source = source,
                     movie = movie,
                     onClick = { onOpen(movie) },
@@ -916,18 +982,23 @@ private fun IconMovieRow(
 @Composable
 private fun MountedVideoIconTile(
     thumbnailLoader: MountedVideoThumbnailLoader,
+    thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
+    viewportKey: String,
     source: ClientStorageSource?,
     movie: MovieDto,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val shape = RoundedCornerShape(12.dp)
     Column(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier.shapeAwareClickable(shape = shape, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         MountedVideoThumbnail(
             thumbnailLoader = thumbnailLoader,
+            thumbnailViewportScheduler = thumbnailViewportScheduler,
+            viewportKey = viewportKey,
             source = source,
             movie = movie,
             modifier = Modifier
@@ -953,9 +1024,10 @@ private fun IconTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val shape = RoundedCornerShape(14.dp)
     ElevatedCard(
-        modifier = modifier.defaultMinSize(minHeight = 112.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
+        modifier = modifier.defaultMinSize(minHeight = 112.dp).shapeAwareClickable(shape = shape, onClick = onClick),
+        shape = shape,
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             contentColor = MaterialTheme.colorScheme.onSurface,
@@ -988,20 +1060,26 @@ private fun IconTile(
 @Composable
 private fun MountedVideoPosterCard(
     thumbnailLoader: MountedVideoThumbnailLoader,
+    thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
+    viewportKey: String,
     source: ClientStorageSource?,
     movie: MovieDto,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.clickable(onClick = onClick), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(modifier = modifier.shapeAwareClickable(shape = shape, onClick = onClick), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         MountedVideoThumbnail(
             thumbnailLoader = thumbnailLoader,
+            thumbnailViewportScheduler = thumbnailViewportScheduler,
+            viewportKey = viewportKey,
             source = source,
             movie = movie,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f),
             cornerRadius = 16.dp,
+            spec = MountedPosterVideoThumbnailSpec,
         )
         Text(
             text = movie.browseTitle(),
@@ -1023,18 +1101,30 @@ private fun MountedVideoPosterCard(
 @Composable
 private fun MountedVideoThumbnail(
     thumbnailLoader: MountedVideoThumbnailLoader,
+    thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
+    viewportKey: String? = null,
     source: ClientStorageSource?,
     movie: MovieDto,
     modifier: Modifier = Modifier,
     cornerRadius: androidx.compose.ui.unit.Dp = 12.dp,
+    spec: MountedVideoThumbnailSpec = MountedLandscapeVideoThumbnailSpec,
     showPlayIcon: Boolean = true,
 ) {
-    var bitmap by remember(source?.id, source?.type, movie.path, movie.fileSize, movie.size) {
+    var bitmap by remember(source?.id, source?.type, movie.path, movie.fileSize, movie.size, spec) {
         mutableStateOf<Bitmap?>(null)
     }
-    LaunchedEffect(thumbnailLoader, source?.id, movie.mediaRoot, movie.path, movie.fileSize, movie.size) {
+    val thumbnailKey = remember(source?.id, source?.type, movie.path, movie.fileSize, movie.size, spec) {
+        mountedThumbnailKey(source, movie, spec)
+    }
+    LaunchedEffect(thumbnailLoader, source?.id, movie.mediaRoot, movie.path, movie.fileSize, movie.size, spec) {
         if (bitmap == null) {
-            bitmap = thumbnailLoader(source, movie)
+            thumbnailKey?.let { key ->
+                val keyToWait = viewportKey ?: key
+                thumbnailViewportScheduler.awaitVisible(keyToWait)
+                delay(MountedThumbnailVisibleDebounceMillis)
+                thumbnailViewportScheduler.awaitVisible(keyToWait)
+            }
+            bitmap = thumbnailLoader(source, movie, spec)
         }
     }
     Box(
@@ -1048,6 +1138,7 @@ private fun MountedVideoThumbnail(
                 bitmap = frame.asImageBitmap(),
                 contentDescription = movie.browseTitle(),
                 contentScale = ContentScale.Crop,
+                filterQuality = FilterQuality.Low,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -1121,9 +1212,10 @@ private fun BrowserListRow(
     onClick: () -> Unit,
     leading: @Composable () -> Unit,
 ) {
+    val shape = RoundedCornerShape(14.dp)
     Surface(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().shapeAwareClickable(shape = shape, onClick = onClick),
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
@@ -1161,6 +1253,7 @@ private fun CompactFolderRow(folder: FolderNodeDto, onClick: () -> Unit) {
 @Composable
 private fun CompactMovieRow(
     thumbnailLoader: MountedVideoThumbnailLoader,
+    thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
     source: ClientStorageSource?,
     movie: MovieDto,
     onClick: () -> Unit,
@@ -1173,6 +1266,8 @@ private fun CompactMovieRow(
             if (movie.isMountedLibraryItem()) {
                 MountedVideoThumbnail(
                     thumbnailLoader = thumbnailLoader,
+                    thumbnailViewportScheduler = thumbnailViewportScheduler,
+                    viewportKey = movie.mountedThumbnailItemKey(source, MountedLandscapeVideoThumbnailSpec),
                     source = source,
                     movie = movie,
                     modifier = Modifier.size(width = 52.dp, height = 32.dp),
@@ -1195,9 +1290,10 @@ private fun CompactBrowserRow(
     icon: @Composable () -> Unit,
     framedIcon: Boolean = true,
 ) {
+    val shape = RoundedCornerShape(12.dp)
     Surface(
-        modifier = Modifier.fillMaxWidth().height(46.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().height(46.dp).shapeAwareClickable(shape = shape, onClick = onClick),
+        shape = shape,
         color = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
@@ -1288,6 +1384,30 @@ private fun List<MovieDto>.filterMoviesByQuery(query: String): List<MovieDto> {
     }
 }
 
+private fun BrowseContentSnapshot.scrollMemoryKey(
+    providerType: ProviderType,
+    activeProfileId: String,
+    activeLibrary: String,
+    viewMode: String,
+    query: String,
+    recursiveVideosOnly: Boolean,
+): String = listOf(
+    providerType.name,
+    activeProfileId,
+    activeLibrary,
+    currentFolder,
+    viewMode,
+    sortMode,
+    query.trim(),
+    recursiveVideosOnly.toString(),
+).joinToString("|")
+
+private fun androidx.compose.foundation.lazy.LazyListState.toBrowseScrollPosition(): BrowseScrollPosition =
+    BrowseScrollPosition(
+        firstVisibleItemIndex = firstVisibleItemIndex,
+        firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+    )
+
 private fun String.toProviderBrowseMovieSort(providerType: ProviderType): String = when (providerType) {
     ProviderType.MediaTree -> toMediaTreeBrowseMovieSort()
     ProviderType.Jellyfin, ProviderType.Emby -> toJellyfinBrowseMovieSort()
@@ -1320,6 +1440,12 @@ private fun List<MovieDto>.sortedMoviesForBrowse(sort: String): List<MovieDto> =
     else -> sortedWith(compareBy<MovieDto> { it.browseTitle() }.thenBy { it.code })
 }
 
+private fun List<MovieDto>.mountedThumbnailRowKey(source: ClientStorageSource?, spec: MountedVideoThumbnailSpec): String =
+    joinToString("|") { movie -> movie.mountedThumbnailItemKey(source, spec) }
+
+private fun MovieDto.mountedThumbnailItemKey(source: ClientStorageSource?, spec: MountedVideoThumbnailSpec): String =
+    mountedThumbnailKey(source, this, spec) ?: id.toString()
+
 private fun FolderNodeDto.browseTitle(): String = name
 
 private fun FolderNodeDto.detailRoute(): String =
@@ -1340,127 +1466,10 @@ private fun MovieDto.openRoute(): String =
 private fun MovieDto.isMountedLibraryItem(): Boolean =
     mediaRoot?.mountedLibrarySourceId() != null
 
-private data class MountedVideoThumbnailSource(
-    val uri: String,
-    val headers: Map<String, String>,
-    val onClose: (() -> Unit)? = null,
-)
-
-private val mountedVideoFrameDispatcher = Dispatchers.IO.limitedParallelism(1)
-private const val MountedVideoFrameWidth = 240
-private const val MountedVideoFrameHeight = 360
-private const val MountedVideoFrameCacheTtlMillis = 2 * 60 * 1000L
-private const val MountedVideoFrameCacheMaxBytes = 32 * 1024 * 1024L
-
-private class MountedVideoFrameMemoryCache(
-    private val ttlMillis: Long = MountedVideoFrameCacheTtlMillis,
-    private val maxBytes: Long = MountedVideoFrameCacheMaxBytes,
-) {
-    private data class Entry(
-        val bitmap: Bitmap,
-        val createdAtMillis: Long,
-        val bytes: Long,
-    )
-
-    private val entries = LinkedHashMap<String, Entry>(0, 0.75f, true)
-    private var totalBytes = 0L
-
-    @Synchronized
-    fun getCached(key: String): Bitmap? {
-        val entry = entries[key] ?: return null
-        if (SystemClock.elapsedRealtime() - entry.createdAtMillis > ttlMillis) {
-            removeEntry(key)
-            return null
-        }
-        return entry.bitmap
-    }
-
-    @Synchronized
-    fun putCached(key: String, bitmap: Bitmap) {
-        removeEntry(key)
-        val bytes = bitmap.allocationByteCount.toLong()
-        entries[key] = Entry(
-            bitmap = bitmap,
-            createdAtMillis = SystemClock.elapsedRealtime(),
-            bytes = bytes,
-        )
-        totalBytes += bytes
-        while (totalBytes > maxBytes && entries.isNotEmpty()) {
-            removeOldestCacheEntry()
-        }
-    }
-
-    @Synchronized
-    fun removeOldestCacheEntry() {
-        val oldestKey = entries.entries.firstOrNull()?.key ?: return
-        removeEntry(oldestKey)
-    }
-
-    private fun removeEntry(key: String) {
-        entries.remove(key)?.let { removed -> totalBytes -= removed.bytes }
-    }
-}
-
-private suspend fun extractMountedVideoFrame(source: MountedVideoThumbnailSource): Bitmap? =
-    withContext(mountedVideoFrameDispatcher) {
-        runCatching {
-            MediaMetadataRetriever().use { retriever ->
-                retriever.setDataSource(source.uri, source.headers)
-                retriever.scaledFrameAtStart()
-            }
-        }.getOrNull()
-    }
-
-private fun MediaMetadataRetriever.scaledFrameAtStart(): Bitmap? =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-        getScaledFrameAtTime(
-            0L,
-            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-            MountedVideoFrameWidth,
-            MountedVideoFrameHeight,
-        )
-    } else {
-        getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-            ?.let { Bitmap.createScaledBitmap(it, MountedVideoFrameWidth, MountedVideoFrameHeight, true) }
-    }
-
-private fun mountedVideoFrameCacheKey(source: ClientStorageSource?, movie: MovieDto): String? {
-    val resolvedSource = source ?: return null
-    if (!movie.isMountedLibraryItem()) return null
-    val version = movie.fileSize ?: movie.size ?: 0L
-    return listOf(
-        resolvedSource.type.name,
-        resolvedSource.id,
-        movie.path,
-        version.toString(),
-    ).joinToString("|")
-}
-
-private fun mountedVideoThumbnailSource(
-    container: AppContainer,
-    source: ClientStorageSource?,
-    movie: MovieDto,
-): MountedVideoThumbnailSource? {
-    if (!movie.isMountedLibraryItem()) return null
-    val resolvedSource = source ?: return null
-    return when (resolvedSource.type) {
-        ClientStorageType.SMB -> {
-            val playbackSource = container.smbRangeProxy.playbackSource(source = resolvedSource, path = movie.path)
-            MountedVideoThumbnailSource(
-                uri = playbackSource.uri,
-                headers = playbackSource.headers,
-                onClose = playbackSource.onClose,
-            )
-        }
-        ClientStorageType.WebDAV -> {
-            val playbackSource = PlaybackSource.webDav(source = resolvedSource, path = movie.path)
-            MountedVideoThumbnailSource(
-                uri = playbackSource.uri,
-                headers = playbackSource.headers,
-            )
-        }
-    }
-}
+private const val MountedPosterVideoFrameWidth = 120
+private const val MountedPosterVideoFrameHeight = 180
+private const val MountedLandscapeVideoFrameWidth = 128
+private const val MountedLandscapeVideoFrameHeight = 72
 
 private fun mediaRootPath(sourceId: String): String = "smb/$sourceId"
 

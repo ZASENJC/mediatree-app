@@ -38,6 +38,32 @@ class SmbRangeProxyTest {
         assertTrue(proxySource.contains("isClientDisconnect"))
     }
 
+    @Test
+    fun proxyReusesHandlesCachesSmallRangesAndLogsTimings() {
+        val appRoot = File(System.getProperty("user.dir") ?: ".")
+        val proxySource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/data/SmbRangeProxy.kt")
+            .readText()
+
+        assertTrue(proxySource.contains("ProxyRequestLease"))
+        assertTrue(proxySource.contains("RangeReadCache"))
+        assertTrue(proxySource.contains("SmbRangeCacheMaxBytes"))
+        assertTrue(proxySource.contains("SmbRangeCachedReadMaxBytes"))
+        assertTrue(proxySource.contains("lease.acquireFile(smbClient)"))
+        assertTrue(proxySource.contains("fun read("))
+        assertTrue(proxySource.contains("lease.read(smbClient"))
+        assertTrue(proxySource.contains("requests.remove(token)?.close()"))
+        assertTrue(proxySource.contains("cache.get(range)"))
+        assertTrue(proxySource.contains("cache.put(range, cachedBytes)"))
+        assertTrue(proxySource.contains("openMs="))
+        assertTrue(proxySource.contains("firstReadMs="))
+        assertTrue(proxySource.contains("streamMs="))
+        assertTrue(proxySource.contains("totalMs="))
+        assertTrue(proxySource.contains("range=${'$'}{range.start}-${'$'}{range.endInclusive}"))
+        assertTrue(proxySource.contains("pathHash=${'$'}{request.path.memorySafeHash()}"))
+        assertTrue(!proxySource.contains("path=${'$'}{request.path}"))
+    }
+
     private fun smbSource(): ClientStorageSource = ClientStorageSource(
         id = "smb-1",
         type = ClientStorageType.SMB,

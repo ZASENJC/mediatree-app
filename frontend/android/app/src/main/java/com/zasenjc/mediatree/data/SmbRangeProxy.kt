@@ -10,11 +10,15 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.util.LinkedHashMap
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
 
 private const val SmbRangeProxyLogTag = "SmbRangeProxy"
+private const val SmbRangeCacheMaxBytes = 2 * 1024 * 1024
+private const val SmbRangeCachedReadMaxBytes = 512 * 1024
+private const val SmbRangeStreamBufferBytes = 64 * 1024
 
 data class ByteRange(
     val start: Long,
@@ -30,7 +34,73 @@ class SmbRangeProxy(
     private data class ProxyRequest(
         val source: ClientStorageSource,
         val path: String,
-    )
+    ) {
+        val lease = ProxyRequestLease(source, path)
+        val cache = RangeReadCache(maxBytes = SmbRangeCacheMaxBytes)
+
+        fun close() {
+            lease.close()
+            cache.clear()
+        }
+    }
+
+    private class ProxyRequestLease(
+        private val source: ClientStorageSource,
+        private val path: String,
+    ) {
+        private var file: SmbReadableFile? = null
+        private var closed = false
+
+        @Synchronized
+        fun acquireFile(smbClient: SmbClient): SmbReadableFile {
+            check(!closed) { "SMB proxy request is closed" }
+            file?.let { return it }
+            return smbClient.open(source, path).also { opened -> file = opened }
+        }
+
+        @Synchronized
+        fun read(
+            smbClient: SmbClient,
+            offset: Long,
+            buffer: ByteArray,
+            bufferOffset: Int,
+            length: Int,
+        ): Int =
+            acquireFile(smbClient).read(offset, buffer, bufferOffset, length)
+
+        @Synchronized
+        fun close() {
+            closed = true
+            file?.close()
+            file = null
+        }
+    }
+
+    private class RangeReadCache(private val maxBytes: Int) {
+        private val entries = LinkedHashMap<ByteRange, ByteArray>(0, 0.75f, true)
+        private var totalBytes = 0
+
+        @Synchronized
+        fun get(range: ByteRange): ByteArray? = entries[range]
+
+        @Synchronized
+        fun put(range: ByteRange, bytes: ByteArray) {
+            if (bytes.size > maxBytes) return
+            entries.remove(range)?.let { removed -> totalBytes -= removed.size }
+            entries[range] = bytes
+            totalBytes += bytes.size
+            while (totalBytes > maxBytes && entries.isNotEmpty()) {
+                val oldestKey = entries.entries.first().key
+                entries.remove(oldestKey)?.let { removed -> totalBytes -= removed.size }
+            }
+        }
+
+        @Synchronized
+        fun clear() {
+            entries.clear()
+            totalBytes = 0
+        }
+    }
 
     private val requests = ConcurrentHashMap<String, ProxyRequest>()
     @Volatile private var serverSocket: ServerSocket? = null
@@ -44,7 +114,7 @@ class SmbRangeProxy(
         return LocalProxyPlaybackSource(
             uri = uri,
             origin = SmbClient.buildSmbUrl(source, path),
-            onClose = { requests.remove(token) },
+            onClose = { requests.remove(token)?.close() },
         )
     }
 
@@ -91,38 +161,78 @@ class SmbRangeProxy(
             socket.getOutputStream().writeStatus(404, "Not Found")
             return
         }
-        smbClient.open(request.source, request.path).use { file ->
-            val range = parseRange(headers.entries.firstOrNull { it.key.equals("Range", ignoreCase = true) }?.value, file.sizeBytes)
-            if (range == null) {
-                socket.getOutputStream().writeRangeNotSatisfiable(file.sizeBytes)
-                return
-            }
-            val status = if (range.start == 0L && range.endInclusive == file.sizeBytes - 1) "200 OK" else "206 Partial Content"
-            val out = socket.getOutputStream()
-            out.writeAscii("HTTP/1.1 $status\r\n")
-            out.writeAscii("Accept-Ranges: bytes\r\n")
-            out.writeAscii("Content-Type: application/octet-stream\r\n")
-            out.writeAscii("Content-Length: ${range.length}\r\n")
-            if (status.startsWith("206")) {
-                out.writeAscii("Content-Range: bytes ${range.start}-${range.endInclusive}/${file.sizeBytes}\r\n")
-            }
-            out.writeAscii("Connection: close\r\n\r\n")
-            streamFile(file, range, out)
+        val timing = SmbRangeRequestTiming()
+        val totalStart = System.nanoTime()
+        val openStart = System.nanoTime()
+        val file = request.lease.acquireFile(smbClient)
+        timing.openMs = elapsedMs(openStart)
+        val range = parseRange(headers.entries.firstOrNull { it.key.equals("Range", ignoreCase = true) }?.value, file.sizeBytes)
+        if (range == null) {
+            socket.getOutputStream().writeRangeNotSatisfiable(file.sizeBytes)
+            return
         }
+        val cachedBytes = request.cache.get(range)
+        val status = if (range.start == 0L && range.endInclusive == file.sizeBytes - 1) "200 OK" else "206 Partial Content"
+        val out = socket.getOutputStream()
+        out.writeAscii("HTTP/1.1 $status\r\n")
+        out.writeAscii("Accept-Ranges: bytes\r\n")
+        out.writeAscii("Content-Type: application/octet-stream\r\n")
+        out.writeAscii("Content-Length: ${range.length}\r\n")
+        if (status.startsWith("206")) {
+            out.writeAscii("Content-Range: bytes ${range.start}-${range.endInclusive}/${file.sizeBytes}\r\n")
+        }
+        out.writeAscii("Connection: close\r\n\r\n")
+        val streamStart = System.nanoTime()
+        val bytesWritten = if (cachedBytes != null) {
+            timing.cacheHit = true
+            out.write(cachedBytes)
+            cachedBytes.size.toLong()
+        } else {
+            streamFile(request.lease, smbClient, range, out, request.cache, timing)
+        }
+        timing.streamMs = elapsedMs(streamStart)
+        timing.totalMs = elapsedMs(totalStart)
+        Log.d(
+            SmbRangeProxyLogTag,
+            "range=${range.start}-${range.endInclusive} bytes=$bytesWritten cacheHit=${timing.cacheHit} " +
+                "openMs=${timing.openMs} firstReadMs=${timing.firstReadMs} streamMs=${timing.streamMs} totalMs=${timing.totalMs} " +
+                "sourceHash=${request.source.id.memorySafeHash()} pathHash=${request.path.memorySafeHash()}",
+        )
     }
 
-    private fun streamFile(file: SmbReadableFile, range: ByteRange, out: OutputStream) {
-        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    private fun streamFile(
+        lease: ProxyRequestLease,
+        smbClient: SmbClient,
+        range: ByteRange,
+        out: OutputStream,
+        cache: RangeReadCache,
+        timing: SmbRangeRequestTiming,
+    ): Long {
+        val buffer = ByteArray(SmbRangeStreamBufferBytes)
+        val cachedBytes = if (range.length <= SmbRangeCachedReadMaxBytes) ByteArray(range.length.toInt()) else null
+        var cachedOffset = 0
         var offset = range.start
         var remaining = range.length
+        var totalRead = 0L
         while (remaining > 0) {
             val toRead = minOf(buffer.size.toLong(), remaining).toInt()
-            val read = file.read(offset, buffer, 0, toRead)
+            val readStart = System.nanoTime()
+            val read = lease.read(smbClient, offset, buffer, 0, toRead)
+            if (timing.firstReadMs < 0L) timing.firstReadMs = elapsedMs(readStart)
             if (read <= 0) break
             out.write(buffer, 0, read)
+            cachedBytes?.let { target ->
+                System.arraycopy(buffer, 0, target, cachedOffset, read)
+                cachedOffset += read
+            }
             offset += read
             remaining -= read
+            totalRead += read
         }
+        if (cachedBytes != null && cachedOffset == cachedBytes.size) {
+            cache.put(range, cachedBytes)
+        }
+        return totalRead
     }
 
     companion object {
@@ -150,6 +260,17 @@ class SmbRangeProxy(
         }
     }
 }
+
+private data class SmbRangeRequestTiming(
+    var openMs: Long = 0L,
+    var firstReadMs: Long = -1L,
+    var streamMs: Long = 0L,
+    var totalMs: Long = 0L,
+    var cacheHit: Boolean = false,
+)
+
+private fun elapsedMs(startNanos: Long): Long =
+    (System.nanoTime() - startNanos) / 1_000_000L
 
 private fun Throwable.isClientDisconnect(): Boolean = this is IOException
 

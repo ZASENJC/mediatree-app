@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -461,6 +462,16 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             _state.update { it.copy(message = "存储源已删除", error = null) }
         }
     }
+
+    fun clearMountedVideoThumbnailCache() {
+        viewModelScope.launch {
+            kotlin.runCatching {
+                container.mountedVideoThumbnailCache.clear()
+            }
+                .onSuccess { _state.update { it.copy(message = "缩略图缓存已清理", error = null) } }
+                .onFailure { throwable -> _state.update { it.copy(error = throwable.message) } }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -597,6 +608,17 @@ fun SettingsScreen(
                         text = state.message,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 4.dp),
+                    )
+                }
+            }
+            item {
+                SettingsSectionCard(title = "缓存", icon = Icons.Default.Cached) {
+                    DesignSettingsRow(
+                        title = "视频缩略图缓存",
+                        subtitle = "清理 SMB / WebDAV 浏览页生成的缩略图",
+                        icon = Icons.Default.Cached,
+                        trailing = { Icon(Icons.Default.Delete, contentDescription = null) },
+                        onClick = vm::clearMountedVideoThumbnailCache,
                     )
                 }
             }

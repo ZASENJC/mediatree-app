@@ -6,7 +6,6 @@ import androidx.compose.ui.platform.LocalContext
 import android.content.ContextWrapper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -211,9 +210,10 @@ fun DesignFilterChip(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
 ) {
+    val shape = RoundedCornerShape(18.dp)
     Surface(
-        modifier = modifier.heightIn(min = 36.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
+        modifier = modifier.heightIn(min = 36.dp).shapeAwareClickable(shape = shape, onClick = onClick),
+        shape = shape,
         color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
         contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
         tonalElevation = if (selected) 4.dp else 0.dp,
@@ -241,11 +241,12 @@ fun DesignSettingsRow(
     trailing: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
+    val shape = RoundedCornerShape(16.dp)
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        shape = RoundedCornerShape(16.dp),
+            .then(if (onClick != null) Modifier.shapeAwareClickable(shape = shape, onClick = onClick) else Modifier),
+        shape = shape,
         color = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 0.dp,
