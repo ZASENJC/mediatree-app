@@ -15,6 +15,8 @@ class AppContainer(context: Context) {
     val clientPlaybackProgressRepository = ClientPlaybackProgressRepository(clientPlaybackProgressStore)
     val remotePlaybackMemoryStore = AndroidRemotePlaybackMemoryStore(context)
     val remotePlaybackMemoryRepository = RemotePlaybackMemoryRepository(remotePlaybackMemoryStore)
+    val homeSnapshotStore = AndroidHomeSnapshotStore(context)
+    val homeSnapshotRepository = HomeSnapshotRepository(homeSnapshotStore)
     val webDavClient = WebDavClient()
     val smbClient = SmbClient()
     val smbRangeProxy = SmbRangeProxy(smbClient)

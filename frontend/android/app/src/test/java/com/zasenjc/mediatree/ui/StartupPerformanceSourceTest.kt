@@ -75,7 +75,58 @@ class StartupPerformanceSourceTest {
 
         assertFalse(mediaAsyncImage.contains("Brush.linearGradient"))
         assertTrue(mediaAsyncImage.contains("val imageRequest = remember(context, imageUrl)"))
+        assertTrue(mediaAsyncImage.contains("private const val AveragePosterImageWidthPx"))
+        assertTrue(mediaAsyncImage.contains("private const val AveragePosterImageHeightPx"))
+        assertTrue(mediaAsyncImage.contains(".size(AveragePosterImageWidthPx, AveragePosterImageHeightPx)"))
         assertTrue(mediaAsyncImage.contains("model = imageRequest"))
+    }
+
+    @Test
+    fun homeLibraryGridRendersInBatchesAsScrollReachesMoreItems() {
+        val homeScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
+            .readText()
+
+        assertTrue(homeScreen.contains("private const val HomeLibraryInitialRenderCount"))
+        assertTrue(homeScreen.contains("private const val HomeLibraryRenderBatchSize"))
+        assertTrue(homeScreen.contains("var visibleLibraryItemCount by remember(state.libraryItems)"))
+        assertTrue(homeScreen.contains("val visibleLibraryItems = remember(state.libraryItems, visibleLibraryItemCount)"))
+        assertTrue(homeScreen.contains("state.libraryItems.take(visibleLibraryItemCount)"))
+        assertTrue(homeScreen.contains("items(visibleLibraryItems, key = { it.path }, contentType = { \"media-poster\" })"))
+        assertTrue(homeScreen.contains("gridState.layoutInfo.visibleItemsInfo"))
+        assertTrue(homeScreen.contains("visibleLibraryItemCount = (visibleLibraryItemCount + HomeLibraryRenderBatchSize)"))
+        assertFalse(homeScreen.contains("items(state.libraryItems, key = { it.path }, contentType = { \"media-poster\" })"))
+    }
+
+    @Test
+    fun remoteHomeLoadsCachedSnapshotBeforeStagedRefresh() {
+        val appContainer = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/data/AppContainer.kt")
+            .readText()
+        val homeSnapshotStore = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/data/HomeSnapshotStore.kt")
+            .readText()
+        val homeScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
+            .readText()
+
+        assertTrue(appContainer.contains("val homeSnapshotStore = AndroidHomeSnapshotStore(context)"))
+        assertTrue(appContainer.contains("val homeSnapshotRepository = HomeSnapshotRepository(homeSnapshotStore)"))
+        assertTrue(homeSnapshotStore.contains("data class HomeSnapshot"))
+        assertTrue(homeSnapshotStore.contains("interface HomeSnapshotStore"))
+        assertTrue(homeSnapshotStore.contains("class HomeSnapshotRepository"))
+        assertTrue(homeSnapshotStore.contains("fun ProviderType.supportsRemoteHomeSnapshot()"))
+
+        assertTrue(homeScreen.contains("container.homeSnapshotRepository.load("))
+        assertTrue(homeScreen.contains("cachedSnapshot?.let { snapshot ->"))
+        assertTrue(homeScreen.contains("snapshot.toHomeUiState("))
+        assertTrue(homeScreen.contains("refreshing = true"))
+        assertTrue(homeScreen.contains("refreshHomeLibraryStage("))
+        assertTrue(homeScreen.contains("refreshHomeRecentStage("))
+        assertTrue(homeScreen.contains("container.homeSnapshotRepository.save("))
+        assertTrue(homeScreen.contains("if (!providerType.supportsRemoteHomeSnapshot()) return null"))
+        assertFalse(homeScreen.contains("val items = provider.folders(mediaRoot = lib)\\n                    .tree"))
+        assertFalse(homeScreen.contains("val providerRecent = provider.recentWatched(limit = 20, mediaRoot = lib).movies"))
     }
 
     @Test

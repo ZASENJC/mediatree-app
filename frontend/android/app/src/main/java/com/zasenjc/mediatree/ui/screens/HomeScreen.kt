@@ -79,6 +79,7 @@ import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.ClientStorageType
 import com.zasenjc.mediatree.data.ClientPlaybackProgress
 import com.zasenjc.mediatree.data.HomeLayoutPreference
+import com.zasenjc.mediatree.data.HomeSnapshot
 import com.zasenjc.mediatree.data.FolderNodeDto
 import com.zasenjc.mediatree.data.MediaRootDto
 import com.zasenjc.mediatree.data.MovieDto
@@ -90,6 +91,7 @@ import com.zasenjc.mediatree.data.smbLibraryPath
 import com.zasenjc.mediatree.data.smbLibrarySourceId
 import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
+import com.zasenjc.mediatree.data.supportsRemoteHomeSnapshot
 import com.zasenjc.mediatree.data.toMovieDto
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.data.webDavLibraryPath
@@ -108,9 +110,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Color
+
+private const val HomeLibraryInitialRenderCount = 24
+private const val HomeLibraryRenderBatchSize = 24
+private const val HomeLibraryRenderAheadCount = 8
 
 private val sortOptions = listOf(
     "release_date_desc" to "发行时间",
@@ -157,41 +166,132 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     loadWebDavLibrary(webDavSourceId, sort)
                     return@launch
                 }
-                val roots = if (activeLibrary.isBlank()) {
-                    provider.mediaRoots().items
-                } else {
-                    emptyList()
-                }
-                if (activeLibrary.isBlank()) {
-                    roots.firstOrNull { !it.locked }?.let { container.sessionStore.setActiveLibrary(it.path) }
-                }
-                val lib = activeLibrary.ifBlank { roots.firstOrNull { !it.locked }?.path.orEmpty() }
-                val items = provider.folders(mediaRoot = lib)
-                    .tree
-                    .filter { it.movieCount > 0 }
-                    .sortedForHome(sort)
-                val providerRecent = provider.recentWatched(limit = 20, mediaRoot = lib).movies
-                val localRecent = container.remotePlaybackMemoryRepository.listContinueWatching(
-                    providerType = providerType,
-                    profileId = profileId,
-                    mediaRoot = lib,
-                    limit = 20,
-                )
-                val recent = mergeContinueWatchingWithMemory(providerRecent, localRecent, limit = 20)
-                _state.update {
-                    it.copy(
-                        loading = false,
-                        refreshing = false,
-                        roots = roots,
-                        recent = recent,
-                        libraryItems = items,
-                        sortMode = sort,
-                    )
-                }
+                loadRemoteHome(providerType, profileId, activeLibrary, sort)
             } catch (e: Throwable) {
                 _state.update { it.copy(loading = false, refreshing = false, error = e) }
             }
         }
+    }
+
+    private suspend fun loadRemoteHome(
+        providerType: ProviderType,
+        profileId: String,
+        activeLibrary: String,
+        sort: String,
+    ) {
+        val cachedSnapshot = cachedRemoteHomeSnapshot(
+            providerType = providerType,
+            profileId = profileId,
+            mediaRoot = activeLibrary,
+            sortMode = sort,
+        )
+        cachedSnapshot?.let { snapshot ->
+            _state.update {
+                snapshot.toHomeUiState(
+                    fallback = it,
+                    loading = false,
+                    refreshing = true,
+                    sortMode = sort,
+                )
+            }
+        }
+
+        val current = refreshHomeLibraryStage(providerType, activeLibrary, sort, cachedSnapshot)
+        val recent = refreshHomeRecentStage(providerType, profileId, current.mediaRoot)
+        _state.update {
+            it.copy(
+                loading = false,
+                refreshing = false,
+                roots = current.roots,
+                recent = recent,
+                libraryItems = current.libraryItems,
+                sortMode = sort,
+            )
+        }
+        container.homeSnapshotRepository.save(
+            providerType = providerType,
+            profileId = profileId,
+            mediaRoot = current.mediaRoot,
+            sortMode = sort,
+            roots = current.roots,
+            recent = recent,
+            libraryItems = current.libraryItems,
+        )
+    }
+
+    private suspend fun refreshHomeLibraryStage(
+        providerType: ProviderType,
+        activeLibrary: String,
+        sort: String,
+        cachedSnapshot: HomeSnapshot?,
+    ): HomeLibraryStage {
+        val provider = container.mediaProviderFor(providerType)
+        val roots = if (activeLibrary.isBlank()) {
+            provider.mediaRoots().items
+        } else {
+            cachedSnapshot?.roots.orEmpty()
+        }
+        if (activeLibrary.isBlank()) {
+            roots.firstOrNull { !it.locked }?.let { container.sessionStore.setActiveLibrary(it.path) }
+        }
+        val lib = activeLibrary.ifBlank {
+            roots.firstOrNull { !it.locked }?.path
+                ?: cachedSnapshot?.mediaRoot
+                ?: ""
+        }
+        val items = provider.folders(mediaRoot = lib)
+            .tree
+            .filter { it.movieCount > 0 }
+            .sortedForHome(sort)
+        _state.update {
+            it.copy(
+                loading = false,
+                refreshing = true,
+                roots = roots,
+                libraryItems = items,
+                sortMode = sort,
+            )
+        }
+        return HomeLibraryStage(mediaRoot = lib, roots = roots, libraryItems = items)
+    }
+
+    private suspend fun refreshHomeRecentStage(
+        providerType: ProviderType,
+        profileId: String,
+        mediaRoot: String,
+    ): List<MovieDto> {
+        val provider = container.mediaProviderFor(providerType)
+        val providerRecent = provider.recentWatched(limit = 20, mediaRoot = mediaRoot).movies
+        val localRecent = container.remotePlaybackMemoryRepository.listContinueWatching(
+            providerType = providerType,
+            profileId = profileId,
+            mediaRoot = mediaRoot,
+            limit = 20,
+        )
+        val recent = mergeContinueWatchingWithMemory(providerRecent, localRecent, limit = 20)
+        _state.update {
+            it.copy(
+                loading = false,
+                refreshing = true,
+                recent = recent,
+            )
+        }
+        return recent
+    }
+
+    private suspend fun cachedRemoteHomeSnapshot(
+        providerType: ProviderType,
+        profileId: String,
+        mediaRoot: String,
+        sortMode: String,
+    ): HomeSnapshot? {
+        if (!providerType.supportsRemoteHomeSnapshot()) return null
+        return container.homeSnapshotRepository.load(
+            providerType = providerType,
+            profileId = profileId,
+            mediaRoot = mediaRoot,
+            sortMode = sortMode,
+        )
     }
 
     private suspend fun loadSmbLibrary(sourceId: String, sort: String) {
@@ -337,6 +437,12 @@ fun HomeScreen(
     var showSearch by remember { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
+    var visibleLibraryItemCount by remember(state.libraryItems) {
+        mutableStateOf(state.libraryItems.size.coerceAtMost(HomeLibraryInitialRenderCount))
+    }
+    val visibleLibraryItems = remember(state.libraryItems, visibleLibraryItemCount) {
+        state.libraryItems.take(visibleLibraryItemCount)
+    }
 
     if (active) {
         SyncChromeWithGridScroll(gridState, onChromeVisibleChange)
@@ -357,6 +463,21 @@ fun HomeScreen(
     LaunchedEffect(active, state.error) {
         if (!active) return@LaunchedEffect
         state.error?.let(onError)
+    }
+
+    LaunchedEffect(active, state.libraryItems.size) {
+        if (!active) return@LaunchedEffect
+        snapshotFlow { gridState.layoutInfo.visibleItemsInfo }
+            .map { visibleItems -> visibleItems.maxOfOrNull { it.index } ?: 0 }
+            .distinctUntilChanged()
+            .collect { lastVisibleIndex ->
+                if (visibleLibraryItemCount >= state.libraryItems.size) return@collect
+                val loadMoreThreshold = visibleLibraryItemCount - HomeLibraryRenderAheadCount
+                if (lastVisibleIndex >= loadMoreThreshold) {
+                    visibleLibraryItemCount = (visibleLibraryItemCount + HomeLibraryRenderBatchSize)
+                        .coerceAtMost(state.libraryItems.size)
+                }
+            }
     }
 
     val provider = remember(session.activeProviderType, container) {
@@ -409,7 +530,7 @@ fun HomeScreen(
                                 EmptyMediaState("暂无媒体")
                             }
                         } else {
-                            items(state.libraryItems, key = { it.path }, contentType = { "media-poster" }) { item ->
+                            items(visibleLibraryItems, key = { it.path }, contentType = { "media-poster" }) { item ->
                                 HomeMediaPosterCard(
                                     item = item,
                                     imageUrl = UrlUtils.resolveApiUrl(
@@ -944,6 +1065,28 @@ private fun List<FolderNodeDto>.sortedForHome(sort: String): List<FolderNodeDto>
             .thenBy { it.homeTitle() },
     )
 }
+
+private data class HomeLibraryStage(
+    val mediaRoot: String,
+    val roots: List<MediaRootDto>,
+    val libraryItems: List<FolderNodeDto>,
+)
+
+private fun HomeSnapshot.toHomeUiState(
+    fallback: HomeViewModel.UiState,
+    loading: Boolean,
+    refreshing: Boolean,
+    sortMode: String,
+): HomeViewModel.UiState =
+    fallback.copy(
+        loading = loading,
+        refreshing = refreshing,
+        roots = roots,
+        recent = recent,
+        libraryItems = libraryItems,
+        sortMode = sortMode,
+        error = null,
+    )
 
 private suspend fun searchMountedLibrary(
     sourceId: String,

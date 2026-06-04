@@ -22,6 +22,9 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 
+private const val AveragePosterImageWidthPx = 360
+private const val AveragePosterImageHeightPx = 540
+
 @Composable
 fun MediaAsyncImage(
     imageUrl: String?,
@@ -47,6 +50,7 @@ fun MediaAsyncImage(
             val imageRequest = remember(context, imageUrl) {
                 ImageRequest.Builder(context)
                     .data(imageUrl)
+                    .size(AveragePosterImageWidthPx, AveragePosterImageHeightPx)
                     .crossfade(false)
                     .memoryCacheKey(imageUrl)
                     .diskCacheKey(imageUrl)
