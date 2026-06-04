@@ -1,7 +1,9 @@
 package com.zasenjc.mediatree.ui
 
 import com.zasenjc.mediatree.data.ApiException
+import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
+import com.zasenjc.mediatree.data.ServerProfile
 import com.zasenjc.mediatree.ui.navigation.topDestinations
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,6 +31,19 @@ class AppConnectionStateTest {
     }
 
     @Test
+    fun jellyfinAndEmbyRequireTokenAndUserIdBeforeLoadingContent() {
+        val jellyfinSavedOnly = mediaBrowserSession(ProviderType.Jellyfin, token = "", userId = "")
+        val embyTokenOnly = mediaBrowserSession(ProviderType.Emby, token = "token", userId = "")
+        val jellyfinLoggedIn = mediaBrowserSession(ProviderType.Jellyfin, token = "token", userId = "user")
+
+        assertFalse(shouldLoadRemoteContent(jellyfinSavedOnly))
+        assertFalse(shouldLoadRemoteContent(embyTokenOnly))
+        assertTrue(shouldLoadRemoteContent(jellyfinLoggedIn))
+        assertEquals(topDestinations.indexOfFirst { it.route == "settings" }, initialTopDestinationPage(jellyfinSavedOnly))
+        assertEquals(0, initialTopDestinationPage(jellyfinLoggedIn))
+    }
+
+    @Test
     fun unauthorizedErrorRoutesToSettingsAndKeepsServerUrl() {
         val result = handleConnectionError(
             session = Session(serverUrl = "http://server", token = "expired"),
@@ -51,5 +66,16 @@ class AppConnectionStateTest {
         assertFalse(result.clearToken)
         assertEquals(null, result.navigateRoute)
         assertEquals("token", result.session.token)
+    }
+
+    private fun mediaBrowserSession(type: ProviderType, token: String, userId: String): Session {
+        val profile = ServerProfile(
+            id = type.name.lowercase(),
+            type = type,
+            serverUrl = "http://server",
+            token = token,
+            userId = userId,
+        )
+        return Session(profiles = listOf(profile), activeProfileId = profile.id)
     }
 }

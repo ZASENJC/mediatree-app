@@ -44,4 +44,4 @@ The app uses the backend API for auth, library browsing, metadata, subtitles, st
 
 ## Player
 
-Playback is implemented with AndroidX Media3 ExoPlayer. Native playback libraries are bundled under `app/src/main/jniLibs/<abi>/` and should stay limited to client playback dependencies.
+Playback is implemented with the mpv native bridge. Native playback libraries are bundled under `app/src/main/jniLibs/<abi>/` and should stay limited to client playback dependencies.

@@ -230,6 +230,22 @@ class BrowseDirectorySemanticsSourceTest {
     }
 
     @Test
+    fun remoteLoadMoreAdvancesPageOnlyAfterRequestSucceeds() {
+        val loadMoreBlock = browseSource
+            .substringAfter("fun loadMore")
+            .substringBefore("@OptIn(ExperimentalMaterial3Api::class)")
+        val launchStart = loadMoreBlock.indexOf("viewModelScope.launch")
+        val successUpdate = loadMoreBlock.indexOf("it.copy(", loadMoreBlock.indexOf("val mergedMovies"))
+        val pageUpdate = loadMoreBlock.indexOf("page = next")
+        val catchIndex = loadMoreBlock.indexOf("catch")
+
+        assertFalse(loadMoreBlock.substringBefore("viewModelScope.launch").contains("page = next"))
+        assertTrue(pageUpdate > successUpdate)
+        assertTrue(pageUpdate < catchIndex)
+        assertTrue(launchStart >= 0)
+    }
+
+    @Test
     fun mountedFolderMetaAvoidsUnloadedChildCounts() {
         val folderMetaBlock = browseSource
             .substringAfter("private fun FolderNodeDto.folderMeta(): String =")

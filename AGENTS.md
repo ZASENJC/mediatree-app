@@ -12,8 +12,9 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Push Workflow
 
-- Before each push, sync `AGENTS.md`, `CHANGELOG.md`, `CHANGELOG_zh-CN.md`, `README.md`, and `README_zh-CN.md` to reflect the current app state.
+- Before each push, sync `AGENTS.md`, `CHANGELOG.md`, `CHANGELOG_zh-CN.md`, `README.md`, and `README_zh-CN.md` to reflect the current app state. Treat this as a mandatory pre-push gate, not an optional documentation pass.
 - Include documentation updates in the same commit; do not commit them separately.
+- README files should present MediaTree App as an independent Android media product, use the repository logo at `docs/assets/mediatree-logo.png`, keep screenshot placeholders current, include a prominent APK download entry, and describe only app-side capabilities that exist in the current Android code.
 - Version rule: use `0.0.00` three-level format without `v` prefix where this repo controls release versions. Increment sequentially and do not skip major/minor version numbers.
 - Android app versions live in `frontend/android/app/build.gradle` (`versionCode` and `versionName`). Keep release notes synced with the app version that is actually built.
 
@@ -62,7 +63,7 @@ This project expects Python 3.12 if backend tests are run.
 - `frontend/android/app/src/main/java/com/zasenjc/mediatree/MainActivity.kt` — Compose entrypoint and deep-link handling.
 - `frontend/android/app/src/main/java/com/zasenjc/mediatree/data/` — API client, DTOs, session persistence, and ViewModel factory helpers.
 - `frontend/android/app/src/main/java/com/zasenjc/mediatree/ui/` — Compose shell, theme, components, navigation, and screens.
-- `frontend/android/app/src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt` — Media3 ExoPlayer playback layer, subtitle selection, gestures, progress callbacks.
+- `frontend/android/app/src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt` — mpv playback UI layer, subtitle selection, gestures, progress callbacks.
 - `frontend/android/app/src/main/java/com/zasenjc/mediatree/util/UrlUtils.kt` — server URL normalization and API URL helpers.
 - `frontend/android/app/src/main/jniLibs/` — bundled native playback libraries. Keep ABI contents intentional and documented.
 

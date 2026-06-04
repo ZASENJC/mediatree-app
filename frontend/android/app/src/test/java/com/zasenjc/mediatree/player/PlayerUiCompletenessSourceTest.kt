@@ -283,6 +283,30 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
+    fun playerSubtitleMenuSelectionWritesBackToScreenState() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+        val playerSignature = player
+            .substringAfter("fun MediaTreePlayer(")
+            .substringBefore(") {")
+        val subtitleChangeBlock = player
+            .substringAfter("onSubtitleChange = { option ->")
+            .substringBefore("onSeekPreview =")
+        val playerInvocation = detailScreen
+            .substringAfter("MediaTreePlayer(")
+            .substringBefore("onPlaybackPositionChange")
+
+        assertTrue(playerSignature.contains("onSubtitleSelected: (Int) -> Unit"))
+        assertTrue(subtitleChangeBlock.contains("onSubtitleSelected(-1)"))
+        assertTrue(subtitleChangeBlock.contains("onSubtitleSelected(option.index)"))
+        assertTrue(playerInvocation.contains("onSubtitleSelected = vm::selectSubtitle"))
+    }
+
+    @Test
     fun detailPagePortraitInfoStartsTwelveDpBelowPlayer() {
         val detailScreen = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")

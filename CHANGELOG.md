@@ -6,7 +6,7 @@ All notable changes to MediaTree are documented here.
 
 ---
 
-## Unreleased
+## 0.1.00 (2026-06-04) — First Android App Release
 
 ### Android UI
 
@@ -15,13 +15,18 @@ All notable changes to MediaTree are documented here.
 - Reworked the bottom navigation and primary top bars as translucent overlays that fade and slide away while scrolling media lists
 - Added settings sections for backend connection, library display, scan trigger, and local SMB server draft input
 - Normalized Android `versionName` to `0.1.00`
+- Prepared release APK builds with R8 code shrinking, resource shrinking, `arm64-v8a` ABI filtering, signed release configuration, and SHA-256 checksums
+- Disabled Android user-data backup for stored server tokens and SMB/WebDAV secrets
+- Removed leftover Capacitor template tests from the native Android project
 
 ### Android App
 
-- Added the native Android project under `frontend/android/`, including Compose navigation, Media3 playback, API client models, session storage, native playback libraries, and Gradle wrapper
+- Added the native Android project under `frontend/android/`, including Compose navigation, mpv playback, API client models, session storage, native playback libraries, and Gradle wrapper
 
 ### App Scope
 
+- Replaced the README branding with a rounded MediaTree logo asset and rewrote the README as a concise user-facing app page with APK download links, source compatibility, and screenshot placeholders
+- Strengthened the pre-push rule to keep `AGENTS.md`, `CHANGELOG.md`, `CHANGELOG_zh-CN.md`, `README.md`, and `README_zh-CN.md` synced with the current app state
 - Removed backend, Docker/deployment, legacy React/Vite frontend, and server wiki files from Git tracking so the repository now tracks app code only
 - Moved local backend/reference, generated data, old web frontend, and local agent/config files under ignored `_reference/` directories
 - Added ignore rules that keep local backend/reference files available without reintroducing them to the app Git tree

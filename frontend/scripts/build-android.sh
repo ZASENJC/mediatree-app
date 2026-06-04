@@ -6,6 +6,8 @@ ANDROID_DIR="$SCRIPT_DIR/../android"
 
 if [ -z "${JAVA_HOME:-}" ]; then
   for candidate in \
+    "/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+    "/Volumes/STU/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
     /opt/homebrew/opt/openjdk \
     /opt/homebrew/opt/openjdk@25 \
     /opt/homebrew/opt/openjdk@21 \
@@ -45,9 +47,23 @@ fi
 
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
 
+VARIANT="${1:-debug}"
+case "$VARIANT" in
+  debug)
+    GRADLE_TASK=assembleDebug
+    ;;
+  release)
+    GRADLE_TASK=assembleRelease
+    ;;
+  *)
+    echo "Usage: $0 [debug|release]" >&2
+    exit 1
+    ;;
+esac
+
 if [ ! -f "$ANDROID_DIR/local.properties" ]; then
   printf 'sdk.dir=%s\n' "$ANDROID_HOME" > "$ANDROID_DIR/local.properties"
 fi
 
 cd "$ANDROID_DIR"
-exec ./gradlew assembleDebug
+exec ./gradlew "$GRADLE_TASK"

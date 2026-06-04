@@ -6,7 +6,7 @@
 
 ---
 
-## 未发布
+## 0.1.00 (2026-06-04) — Android App 首个正式版
 
 ### Android UI
 
@@ -15,13 +15,18 @@
 - 将底部导航和主要顶栏改为半透明 overlay，浏览媒体列表时随滚动渐隐并轻微滑出
 - 设置页新增后端连接、媒体库显示、扫描触发和本地 SMB 服务器草稿输入区块
 - 将 Android `versionName` 规范为 `0.1.00`
+- 正式版 APK 构建启用 R8 代码压缩、资源裁剪、`arm64-v8a` ABI 过滤、签名配置和 SHA-256 校验和
+- 关闭 Android 用户数据备份，避免已保存的服务器 token 与 SMB/WebDAV secret 进入系统备份
+- 移除原生 Android 工程中残留的 Capacitor 模板测试
 
 ### Android App
 
-- 新增 `frontend/android/` 原生 Android 工程，包含 Compose navigation、Media3 播放、API 模型、Session 存储、native playback libraries 和 Gradle wrapper
+- 新增 `frontend/android/` 原生 Android 工程，包含 Compose navigation、mpv 播放、API 模型、Session 存储、native playback libraries 和 Gradle wrapper
 
 ### App 定位
 
+- 将 README 品牌图替换为圆角 MediaTree logo 资源，并把 README 重写为面向用户的精简 app 页面，保留 APK 下载入口、来源兼容性和截图占位
+- 强化 push 前同步规则，要求 `AGENTS.md`、`CHANGELOG.md`、`CHANGELOG_zh-CN.md`、`README.md` 和 `README_zh-CN.md` 必须反映当前 app 状态
 - 将后端、Docker/部署、旧 React/Vite 前端和服务端 wiki 文件移出 Git 跟踪，使仓库只跟踪 app 代码
 - 将本地后端/参考、生成数据、旧 Web 前端和本地 agent/config 文件移动到被忽略的 `_reference/` 目录
 - 新增忽略规则，允许本地继续保留后端/参考文件，同时避免重新进入 app Git 树

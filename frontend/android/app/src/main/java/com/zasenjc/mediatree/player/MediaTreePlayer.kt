@@ -121,6 +121,7 @@ fun MediaTreePlayer(
     onPlaybackComplete: (position: Double, duration: Double) -> Unit = { _, _ -> },
     onPlaybackPositionChange: (position: Double, duration: Double) -> Unit = { _, _ -> },
     onPlaybackPositionSnapshot: ((() -> PlaybackPositionSnapshot?) -> Unit)? = null,
+    onSubtitleSelected: (Int) -> Unit = {},
     showFullscreenButton: Boolean = false,
     isFullscreen: Boolean = false,
     showAspectRatioControls: Boolean = false,
@@ -456,9 +457,11 @@ fun MediaTreePlayer(
                 onSubtitleChange = { option ->
                     if (option == null) {
                         controller.clearSubtitle()
+                        onSubtitleSelected(-1)
                         hudMessage = "字幕关闭"
                     } else {
                         playbackSource.subtitleUri(option.index)?.takeIf { it.isNotBlank() }?.let(controller::selectSubtitle)
+                        onSubtitleSelected(option.index)
                         hudMessage = option.subtitleLabel()
                     }
                     showOverlay = true

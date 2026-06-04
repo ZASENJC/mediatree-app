@@ -19,3 +19,18 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# libplayer.so calls the mpv bridge methods by their JVM names. Keep the object
+# and callback names stable when R8 is enabled for release builds.
+-keep class is.xyz.mpv.MPVLib { *; }
+
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# Optional metadata and authentication paths referenced by transitive libraries.
+# The app uses password-based SMB auth and AndroidX Security Crypto; these
+# classes are not part of the Android runtime and are not needed at runtime.
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.el.**
+-dontwarn org.ietf.jgss.**

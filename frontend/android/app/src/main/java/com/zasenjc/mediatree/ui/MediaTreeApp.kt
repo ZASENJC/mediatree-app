@@ -57,6 +57,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.zasenjc.mediatree.data.ApiException
 import com.zasenjc.mediatree.data.AppContainer
+import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MediaTreePageBackground
@@ -209,9 +210,9 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         navigateTopDestination("browse")
     }
 
-    LaunchedEffect(initialMovieId, session.serverUrl) {
+    LaunchedEffect(initialMovieId, session.serverUrl, session.activeProviderType, session.token, session.activeUserId) {
         if (initialMovieId != null) {
-            if (shouldLoadRemoteContent(session)) {
+            if (session.canLoadRemoteContent()) {
                 navController.navigate("detail/$initialMovieId") {
                     launchSingleTop = true
                 }
@@ -564,11 +565,18 @@ data class ConnectionErrorResult(
 )
 
 fun initialTopDestinationPage(session: Session): Int {
-    if (session.serverUrl.isNotBlank()) return 0
+    if (session.canLoadRemoteContent()) return 0
     return topDestinations.indexOfFirst { it.route == "settings" }.coerceAtLeast(0)
 }
 
-fun shouldLoadRemoteContent(session: Session): Boolean = session.serverUrl.isNotBlank()
+fun shouldLoadRemoteContent(session: Session): Boolean = session.canLoadRemoteContent()
+
+fun Session.canLoadRemoteContent(): Boolean = when (activeProviderType) {
+    ProviderType.MediaTree -> serverUrl.isNotBlank()
+    ProviderType.Jellyfin, ProviderType.Emby ->
+        serverUrl.isNotBlank() && token.isNotBlank() && activeUserId.isNotBlank()
+    ProviderType.WebDAV, ProviderType.SMB -> false
+}
 
 fun handleConnectionError(session: Session, throwable: Throwable): ConnectionErrorResult {
     if (throwable is ApiException && throwable.statusCode == 401) {

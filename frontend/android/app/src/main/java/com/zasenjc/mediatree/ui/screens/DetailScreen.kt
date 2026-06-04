@@ -356,7 +356,7 @@ fun DetailScreen(
         container.registerProviderItemId(session.activeProviderType, movieId, providerItemId)
     }
 
-    LaunchedEffect(activeMovieId, session.serverUrl, session.activeProviderType, session.activeLibrary) {
+    LaunchedEffect(activeMovieId, session.serverUrl, session.activeProviderType, session.token, session.activeUserId, session.activeLibrary) {
         playbackPositionSnapshot = null
         if (shouldLoadRemoteContent(session)) {
             vm.load(session.activeProviderType, session.activeProfileId, activeMovieId, session.activeLibrary)
@@ -473,6 +473,7 @@ fun DetailScreen(
                     playbackSource = playbackSource,
                     startPosition = playbackResumePositions[activeMovieId] ?: state.resume,
                     selectedSubtitle = state.selectedSubtitle,
+                    onSubtitleSelected = vm::selectSubtitle,
                     onPlaybackPositionChange = { pos, dur ->
                         val snapshot = PlaybackPositionSnapshot(positionSeconds = pos, durationSeconds = dur)
                         if (pos.isFinite() && pos > 0.0) {

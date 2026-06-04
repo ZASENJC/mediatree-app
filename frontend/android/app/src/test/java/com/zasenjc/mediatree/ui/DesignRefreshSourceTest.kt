@@ -8,7 +8,7 @@ class DesignRefreshSourceTest {
     private val appRoot = File(System.getProperty("user.dir") ?: ".")
 
     @Test
-    fun themeUsesDesignReferenceBlueTokensAndMistSurfaces() {
+    fun themeUsesGreenPlumTokensAndThemeBackgroundSurfaces() {
         val theme = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/theme/Theme.kt")
             .readText()
@@ -16,10 +16,10 @@ class DesignRefreshSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/ui/components/SharedComponents.kt")
             .readText()
 
-        assertTrue(theme.contains("Pantone2905"))
-        assertTrue(theme.contains("Pantone283"))
-        assertTrue(theme.contains("Color(0xFF2F7DF6)"))
-        assertTrue(theme.contains("Color(0xFFF4F9FF)"))
+        assertTrue(theme.contains("GreenPlumPrimary"))
+        assertTrue(theme.contains("GreenPlumAccent"))
+        assertTrue(theme.contains("Color(0xFFA8C98B)"))
+        assertTrue(theme.contains("Color(0xFFF8FBF1)"))
         assertTrue(shared.contains("fun MediaTreePageBackground"))
         assertTrue(shared.contains("MaterialTheme.colorScheme.background"))
     }

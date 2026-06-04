@@ -28,9 +28,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.filled.PlayArrow
@@ -398,7 +398,6 @@ private class BrowseViewModel(private val container: AppContainer) : ViewModel()
         if (mediaRoot.smbLibrarySourceId() != null || mediaRoot.webDavLibrarySourceId() != null) return
         val s = _state.value
         val next = s.page + 1
-        _state.update { it.copy(page = next) }
         viewModelScope.launch {
             try {
                 val response = container.mediaProviderFor(providerType).movies(
@@ -411,7 +410,7 @@ private class BrowseViewModel(private val container: AppContainer) : ViewModel()
                 )
                 _state.update {
                     val mergedMovies = (it.movies + response.movies).sortedMoviesForBrowse(s.sortMode)
-                    it.copy(movies = mergedMovies, total = response.total)
+                    it.copy(page = next, movies = mergedMovies, total = response.total)
                 }
             } catch (e: Throwable) {
                 _state.update { it.copy(error = e) }
@@ -968,7 +967,7 @@ private fun IconMovieRow(
                     title = movie.browseTitle(),
                     subtitle = movie.iconMovieMeta(),
                     icon = {
-                        Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(34.dp))
+                        Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, modifier = Modifier.size(34.dp))
                     },
                     onClick = { onOpen(movie) },
                     modifier = Modifier.weight(1f),
@@ -1144,7 +1143,7 @@ private fun MountedVideoThumbnail(
         }
         if (bitmap == null) {
             Icon(
-                imageVector = Icons.Default.InsertDriveFile,
+                imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f),
                 modifier = Modifier.fillMaxSize(0.34f),
@@ -1275,7 +1274,7 @@ private fun CompactMovieRow(
                     showPlayIcon = false,
                 )
             } else {
-                Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, modifier = Modifier.size(20.dp))
             }
         },
         framedIcon = !movie.isMountedLibraryItem(),

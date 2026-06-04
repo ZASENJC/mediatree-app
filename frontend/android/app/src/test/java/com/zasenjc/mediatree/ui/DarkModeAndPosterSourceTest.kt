@@ -31,8 +31,8 @@ class DarkModeAndPosterSourceTest {
             .substringAfter("private val MediaTreeDarkScheme")
             .substringBefore("private val MediaTreeTypography")
 
-        assertTrue(darkScheme.contains("background = Color(0xFF060A12)"))
-        assertTrue(darkScheme.contains("surface = Color(0xFF101825)"))
+        assertTrue(darkScheme.contains("background = Color(0xFF10140D)"))
+        assertTrue(darkScheme.contains("surface = Color(0xFF181D14)"))
         assertFalse(darkScheme.contains("Color(0xFFF4F9FF)"))
         assertFalse(darkScheme.contains("Color(0xFFFAFDFF)"))
         assertFalse(darkScheme.contains("Color(0xFFF8FBFF)"))
