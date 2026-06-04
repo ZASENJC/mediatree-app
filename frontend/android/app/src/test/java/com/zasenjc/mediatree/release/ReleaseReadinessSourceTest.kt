@@ -19,6 +19,7 @@ class ReleaseReadinessSourceTest {
         assertTrue(buildGradle.contains("hasReleaseKeystore"))
         assertTrue(buildGradle.contains("ANDROID_KEYSTORE_PASSWORD"))
         assertTrue(buildGradle.contains("ANDROID_KEY_ALIAS"))
+        assertFalse(buildGradle.contains("takeIf"))
     }
 
     @Test

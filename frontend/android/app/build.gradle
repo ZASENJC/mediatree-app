@@ -16,7 +16,10 @@ android {
                 storeFile file(releaseKeystorePath)
                 storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
                 keyAlias System.getenv("ANDROID_KEY_ALIAS")
-                keyPassword System.getenv("ANDROID_KEY_PASSWORD")?.takeIf { !it.isBlank() } ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                def releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                keyPassword releaseKeyPassword != null && !releaseKeyPassword.isBlank()
+                    ? releaseKeyPassword
+                    : System.getenv("ANDROID_KEYSTORE_PASSWORD")
             }
         }
     }
