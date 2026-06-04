@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
+const val BackendSetupRequiredMessage = "请先在设置页中配置后端服务"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppTopBar(title: String, subtitle: String = "", action: (@Composable () -> Unit)? = null) {
@@ -111,6 +113,31 @@ fun ErrorPane(message: String, onRetry: (() -> Unit)? = null, modifier: Modifier
         ) {
             Text(message, color = MaterialTheme.colorScheme.error)
             if (onRetry != null) Button(onClick = onRetry) { Text("重试") }
+        }
+    }
+}
+
+@Composable
+fun BackendSetupRequiredState(
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    message: String = BackendSetupRequiredMessage,
+) {
+    Box(
+        modifier = modifier.fillMaxSize().padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(42.dp),
+            )
+            Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

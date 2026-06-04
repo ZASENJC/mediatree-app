@@ -55,6 +55,8 @@ import com.zasenjc.mediatree.data.webDavLibrarySourceId
 import com.zasenjc.mediatree.data.smbLibrarySourceId
 import com.zasenjc.mediatree.data.smbLibraryPath
 import com.zasenjc.mediatree.data.viewModelFactory
+import com.zasenjc.mediatree.ui.components.BackendSetupRequiredMessage
+import com.zasenjc.mediatree.ui.components.BackendSetupRequiredState
 import com.zasenjc.mediatree.ui.components.EpisodeLandscapeCard
 import com.zasenjc.mediatree.ui.components.DesignFilterChip
 import com.zasenjc.mediatree.ui.components.DesignTopAppBar
@@ -224,7 +226,7 @@ fun FavoritesScreen(
     Scaffold(containerColor = Color.Transparent) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             if (!session.canLoadFavoritesContent()) {
-                FavoriteEmptyState("请先在设置页连接 MediaTree 服务器")
+                BackendSetupRequiredState(icon = Icons.Filled.Bookmarks, message = BackendSetupRequiredMessage)
             } else if (state.loading && state.movies.isEmpty()) {
                 LoadingPane(Modifier.fillMaxSize())
             } else {

@@ -83,6 +83,8 @@ import com.zasenjc.mediatree.data.webDavLibraryPath
 import com.zasenjc.mediatree.data.webDavLibrarySourceId
 import com.zasenjc.mediatree.data.smbLibrarySourceId
 import com.zasenjc.mediatree.data.viewModelFactory
+import com.zasenjc.mediatree.ui.components.BackendSetupRequiredMessage
+import com.zasenjc.mediatree.ui.components.BackendSetupRequiredState
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MediaAsyncImage
 import com.zasenjc.mediatree.ui.components.MoviePosterCard
@@ -549,7 +551,10 @@ fun BrowseScreen(
             when {
                 !shouldLoadRemoteContent(session) &&
                     session.activeLibrary.smbLibrarySourceId() == null &&
-                    session.activeLibrary.webDavLibrarySourceId() == null -> EmptyBrowseState("请先在设置页连接 MediaTree 服务器")
+                    session.activeLibrary.webDavLibrarySourceId() == null -> BackendSetupRequiredState(
+                        icon = Icons.Filled.Folder,
+                        message = BackendSetupRequiredMessage,
+                    )
                 state.loading && !hasContentSnapshot -> LoadingPane(Modifier.fillMaxSize())
                 else -> {
                     AnimatedContent(

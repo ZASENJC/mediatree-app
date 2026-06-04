@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
@@ -95,6 +96,8 @@ import com.zasenjc.mediatree.data.toMovieDto
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.data.webDavLibraryPath
 import com.zasenjc.mediatree.data.webDavLibrarySourceId
+import com.zasenjc.mediatree.ui.components.BackendSetupRequiredMessage
+import com.zasenjc.mediatree.ui.components.BackendSetupRequiredState
 import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MediaAsyncImage
@@ -500,7 +503,7 @@ fun HomeScreen(
                 if (
                     !session.canLoadHomeContent()
                 ) {
-                    EmptyMediaState("请先在设置页连接 MediaTree 服务器")
+                    BackendSetupRequiredState(icon = Icons.Filled.Home, message = BackendSetupRequiredMessage)
                 } else if (state.loading) {
                     LoadingPane(Modifier.fillMaxSize())
                 } else {
