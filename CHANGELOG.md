@@ -16,6 +16,7 @@ All notable changes to MediaTree are documented here.
 - Added settings sections for backend connection, library display, scan trigger, and local SMB server draft input
 - Normalized Android `versionName` to `0.1.00`
 - Prepared release APK builds with R8 code shrinking, resource shrinking, `arm64-v8a` ABI filtering, signed release configuration, SHA-256 checksums, and `MediaTree-App-0.1.00.apk` artifact naming
+- Added Telegram release notifications for published APKs: files under the Bot API cloud upload limit are sent directly, while larger APKs fall back to GitHub Release links
 - Disabled Android user-data backup for stored server tokens and SMB/WebDAV secrets
 - Removed leftover Capacitor template tests from the native Android project
 

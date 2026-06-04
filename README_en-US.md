@@ -24,6 +24,8 @@
 
 Open the APK on your Android device and install it. If Android blocks the installation, allow your browser or file manager to install apps from unknown sources, then try again.
 
+Releases are also mirrored to the maintainer-configured Telegram channel. APKs within the Telegram Bot API cloud upload limit are sent as files; larger APKs fall back to GitHub Release download links.
+
 ## Why Use It
 
 - Connect to `MediaTree`, `Jellyfin`, `Emby`, `SMB`, and `WebDAV` from one app

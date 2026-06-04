@@ -17,6 +17,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 - README files should present MediaTree App as an independent Android media product, use the repository logo at `docs/assets/mediatree-logo.png`, keep screenshot placeholders current, include a prominent APK download entry, and describe only app-side capabilities that exist in the current Android code.
 - Version rule: use `0.0.00` three-level format without `v` prefix where this repo controls release versions. Increment sequentially and do not skip major/minor version numbers.
 - Android app versions live in `frontend/android/app/build.gradle` (`versionCode` and `versionName`). Keep release notes synced with the app version that is actually built.
+- Telegram release notifications must use GitHub Actions secrets (`TG_BOT_TOKEN` and `TG_CHAT_ID`). Do not hardcode bot tokens, chat IDs, or credentials in tracked files.
 
 ## Interaction Language Rules
 
