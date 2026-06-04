@@ -15,7 +15,7 @@ All notable changes to MediaTree are documented here.
 - Reworked the bottom navigation and primary top bars as translucent overlays that fade and slide away while scrolling media lists
 - Added settings sections for backend connection, library display, scan trigger, and local SMB server draft input
 - Normalized Android `versionName` to `0.1.00`
-- Prepared release APK builds with R8 code shrinking, resource shrinking, `arm64-v8a` ABI filtering, signed release configuration, and SHA-256 checksums
+- Prepared release APK builds with R8 code shrinking, resource shrinking, `arm64-v8a` ABI filtering, signed release configuration, SHA-256 checksums, and `MediaTree-App-0.1.00.apk` artifact naming
 - Disabled Android user-data backup for stored server tokens and SMB/WebDAV secrets
 - Removed leftover Capacitor template tests from the native Android project
 

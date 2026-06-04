@@ -15,7 +15,7 @@
 - 将底部导航和主要顶栏改为半透明 overlay，浏览媒体列表时随滚动渐隐并轻微滑出
 - 设置页新增后端连接、媒体库显示、扫描触发和本地 SMB 服务器草稿输入区块
 - 将 Android `versionName` 规范为 `0.1.00`
-- 正式版 APK 构建启用 R8 代码压缩、资源裁剪、`arm64-v8a` ABI 过滤、签名配置和 SHA-256 校验和
+- 正式版 APK 构建启用 R8 代码压缩、资源裁剪、`arm64-v8a` ABI 过滤、签名配置、SHA-256 校验和，并使用 `MediaTree-App-0.1.00.apk` 产物命名
 - 关闭 Android 用户数据备份，避免已保存的服务器 token 与 SMB/WebDAV secret 进入系统备份
 - 移除原生 Android 工程中残留的 Capacitor 模板测试
 
