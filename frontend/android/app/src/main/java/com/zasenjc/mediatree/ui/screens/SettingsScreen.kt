@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +61,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zasenjc.mediatree.BuildConfig
 import com.zasenjc.mediatree.data.ApiException
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageAuthType
@@ -69,6 +71,8 @@ import com.zasenjc.mediatree.data.FullscreenModePreference
 import com.zasenjc.mediatree.data.HomeLayoutPreference
 import com.zasenjc.mediatree.data.MediaRootDto
 import com.zasenjc.mediatree.data.ProviderType
+import com.zasenjc.mediatree.data.ReleaseUpdateChecker
+import com.zasenjc.mediatree.data.ReleaseUpdateState
 import com.zasenjc.mediatree.data.ServerProfile
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.ThemeModePreference
@@ -484,6 +488,8 @@ fun SettingsScreen(
 ) {
     val vm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
+    val releaseUpdateState by container.releaseUpdateChecker.state.collectAsStateWithLifecycle()
+    val uriHandler = LocalUriHandler.current
     var editingConnection by remember { mutableStateOf<ConnectionEditorTarget?>(null) }
 
     LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.resolvedProfiles) {
@@ -537,18 +543,6 @@ fun SettingsScreen(
                         ),
                         selected = state.themeModePreference,
                         onSelect = vm::setThemeModePreference,
-                    )
-                    PreferenceExpandableRow(
-                        title = "播放全屏模式",
-                        selectedLabel = state.fullscreenModePreference.labelText(),
-                        icon = Icons.Default.PlayArrow,
-                        options = listOf(
-                            FullscreenModePreference.Portrait to "竖向",
-                            FullscreenModePreference.Landscape to "横向",
-                            FullscreenModePreference.Auto to "自适应",
-                        ),
-                        selected = state.fullscreenModePreference,
-                        onSelect = vm::setFullscreenModePreference,
                     )
                 }
             }
@@ -623,11 +617,17 @@ fun SettingsScreen(
             }
             item {
                 SettingsSectionCard(title = "播放", icon = Icons.Default.PlayArrow) {
-                    DesignSettingsRow(
-                        title = "默认画面",
-                        subtitle = "原生系统",
+                    PreferenceExpandableRow(
+                        title = "播放全屏模式",
+                        selectedLabel = state.fullscreenModePreference.labelText(),
                         icon = Icons.Default.PlayArrow,
-                        trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                        options = listOf(
+                            FullscreenModePreference.Portrait to "竖向",
+                            FullscreenModePreference.Landscape to "横向",
+                            FullscreenModePreference.Auto to "自适应",
+                        ),
+                        selected = state.fullscreenModePreference,
+                        onSelect = vm::setFullscreenModePreference,
                     )
                     DesignSettingsRow(
                         title = "字幕语言",
@@ -639,16 +639,22 @@ fun SettingsScreen(
             }
             item {
                 SettingsSectionCard(title = "关于", icon = Icons.Default.Info) {
+                    val update = releaseUpdateState as? ReleaseUpdateState.Available
                     DesignSettingsRow(
                         title = "版本",
-                        subtitle = "0.1.00",
+                        subtitle = releaseUpdateState.versionSubtitle(BuildConfig.VERSION_NAME),
                         icon = Icons.Default.Info,
+                        trailing = {
+                            if (update != null) Icon(Icons.Default.ChevronRight, contentDescription = null)
+                        },
+                        onClick = update?.let { { uriHandler.openUri(update.downloadUrl) } },
                     )
                     DesignSettingsRow(
                         title = "关于 mediatree",
                         subtitle = "Android client",
                         icon = Icons.Default.Info,
                         trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                        onClick = { uriHandler.openUri(ReleaseUpdateChecker.REPOSITORY_URL) },
                     )
                 }
             }
@@ -1089,27 +1095,6 @@ private fun <T> PreferenceExpandableRow(
     }
 }
 
-@Composable
-private fun ThemeModeSelector(
-    selected: ThemeModePreference,
-    onSelect: (ThemeModePreference) -> Unit,
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        listOf(
-            ThemeModePreference.System to "跟随系统",
-            ThemeModePreference.Light to "浅色模式",
-            ThemeModePreference.Dark to "深色模式",
-        ).forEach { (preference, label) ->
-            DesignFilterChip(
-                selected = selected == preference,
-                onClick = { onSelect(preference) },
-                label = label,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
 private fun HomeLayoutPreference.labelText(): String = when (this) {
     HomeLayoutPreference.MediaFeed -> "媒体流"
     HomeLayoutPreference.DirectoryFirst -> "目录优先"
@@ -1125,6 +1110,13 @@ private fun FullscreenModePreference.labelText(): String = when (this) {
     FullscreenModePreference.Portrait -> "竖向"
     FullscreenModePreference.Landscape -> "横向"
     FullscreenModePreference.Auto -> "自适应"
+}
+
+private fun ReleaseUpdateState.versionSubtitle(fallbackVersion: String): String = when (this) {
+    is ReleaseUpdateState.Available -> "$currentVersion · 可更新到 $latestVersion"
+    is ReleaseUpdateState.Checking -> "${currentVersion.ifBlank { fallbackVersion }} · 检查更新中"
+    is ReleaseUpdateState.Current -> "$currentVersion · 已是最新"
+    is ReleaseUpdateState.Failed -> "${currentVersion.ifBlank { fallbackVersion }} · 检查失败"
 }
 
 @Composable

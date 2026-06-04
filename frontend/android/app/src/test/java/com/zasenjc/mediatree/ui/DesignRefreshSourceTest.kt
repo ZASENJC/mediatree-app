@@ -74,7 +74,7 @@ class DesignRefreshSourceTest {
             .readText()
 
         assertTrue(settings.contains("DesignSettingsRow"))
-        assertTrue(settings.contains("ThemeModeSelector"))
+        assertTrue(settings.contains("PreferenceExpandableRow"))
         assertTrue(detail.contains("LandscapeDetailScaffold"))
         assertTrue(detail.contains("PortraitPlayerCard"))
         assertTrue(detail.contains("DetailTabStrip"))

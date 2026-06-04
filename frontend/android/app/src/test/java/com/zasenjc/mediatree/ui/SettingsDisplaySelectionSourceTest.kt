@@ -26,7 +26,7 @@ class SettingsDisplaySelectionSourceTest {
     }
 
     @Test
-    fun displayPreferenceUsesExpandableSettingRowsForThemeAndFullscreen() {
+    fun displayPreferenceUsesExpandableSettingRowsForLayoutAndThemeOnly() {
         val block = settingsSource
             .substringAfter("SettingsSectionCard(title = \"显示偏好\"")
             .substringBefore("ConnectionsSection(")
@@ -35,12 +35,9 @@ class SettingsDisplaySelectionSourceTest {
         assertTrue(block.contains("PreferenceExpandableRow("))
         assertTrue(block.contains("title = \"首页布局\""))
         assertTrue(block.contains("title = \"主题模式\""))
-        assertTrue(block.contains("title = \"播放全屏模式\""))
         assertTrue(block.contains("selectedLabel = state.themeModePreference.labelText()"))
-        assertTrue(block.contains("selectedLabel = state.fullscreenModePreference.labelText()"))
-        assertTrue(block.contains("FullscreenModePreference.Portrait"))
-        assertTrue(block.contains("FullscreenModePreference.Landscape"))
-        assertTrue(block.contains("FullscreenModePreference.Auto"))
+        assertFalse(block.contains("title = \"播放全屏模式\""))
+        assertFalse(block.contains("selectedLabel = state.fullscreenModePreference.labelText()"))
         assertFalse(block.contains("Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth())"))
     }
 
@@ -119,7 +116,7 @@ class SettingsDisplaySelectionSourceTest {
     }
 
     @Test
-    fun playbackSettingsDoNotRenderThemeRow() {
+    fun playbackSettingsMoveFullscreenModeAndRemoveDefaultSurface() {
         val block = settingsSource
             .substringAfter("SettingsSectionCard(title = \"播放\"")
             .substringBefore("SettingsSectionCard(title = \"关于\"")
@@ -127,6 +124,29 @@ class SettingsDisplaySelectionSourceTest {
         assertFalse(block.contains("title = \"主题\""))
         assertFalse(block.contains("Icons.Default.Palette"))
         assertFalse(block.contains("themeModePreference.labelText()"))
-        assertFalse(block.contains("播放全屏模式"))
+        assertFalse(block.contains("title = \"默认画面\""))
+        assertFalse(block.contains("subtitle = \"原生系统\""))
+        assertTrue(block.contains("title = \"播放全屏模式\""))
+        assertTrue(block.contains("selectedLabel = state.fullscreenModePreference.labelText()"))
+        assertTrue(block.contains("FullscreenModePreference.Portrait"))
+        assertTrue(block.contains("FullscreenModePreference.Landscape"))
+        assertTrue(block.contains("FullscreenModePreference.Auto"))
+    }
+
+    @Test
+    fun aboutSectionUsesGithubUpdateStateAndRepositoryLinks() {
+        val block = settingsSource
+            .substringAfter("SettingsSectionCard(title = \"关于\"")
+            .substringBefore("}\n        }\n    }\n    editingConnection")
+
+        assertTrue(settingsSource.contains("ReleaseUpdateState"))
+        assertTrue(settingsSource.contains("container.releaseUpdateChecker.state.collectAsStateWithLifecycle()"))
+        assertTrue(settingsSource.contains("BuildConfig.VERSION_NAME"))
+        assertTrue(settingsSource.contains("ReleaseUpdateChecker.REPOSITORY_URL"))
+        assertTrue(block.contains("title = \"版本\""))
+        assertTrue(block.contains("releaseUpdateState"))
+        assertTrue(block.contains("openUri(update.downloadUrl)"))
+        assertTrue(block.contains("title = \"关于 mediatree\""))
+        assertTrue(block.contains("openUri(ReleaseUpdateChecker.REPOSITORY_URL)"))
     }
 }

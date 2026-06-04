@@ -44,6 +44,9 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(darkTheme) {
                 applySystemBars(darkTheme)
             }
+            LaunchedEffect(container) {
+                container.releaseUpdateChecker.checkForUpdates(BuildConfig.VERSION_NAME)
+            }
             MediaTreeTheme(darkTheme = darkTheme) {
                 MediaTreeApp(container = container, deepLinkData = deepLinkData)
             }

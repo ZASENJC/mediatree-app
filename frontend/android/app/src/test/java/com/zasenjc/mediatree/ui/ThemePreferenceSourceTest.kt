@@ -56,7 +56,8 @@ class ThemePreferenceSourceTest {
 
         assertTrue(source.contains("themeModePreference"))
         assertTrue(source.contains("setThemeModePreference"))
-        assertTrue(source.contains("ThemeModeSelector"))
+        assertTrue(source.contains("title = \"主题模式\""))
+        assertTrue(source.contains("selectedLabel = state.themeModePreference.labelText()"))
         assertTrue(source.contains("跟随系统"))
         assertTrue(source.contains("浅色模式"))
         assertTrue(source.contains("深色模式"))

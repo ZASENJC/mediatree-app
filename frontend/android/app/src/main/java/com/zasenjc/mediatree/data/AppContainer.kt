@@ -21,6 +21,7 @@ class AppContainer(context: Context) {
     val smbClient = SmbClient()
     val smbRangeProxy = SmbRangeProxy(smbClient)
     val mountedVideoThumbnailCache = MountedVideoThumbnailCache(context, this)
+    val releaseUpdateChecker = ReleaseUpdateChecker()
     private val mediaTreeApi = MediaTreeApi(sessionStore)
     val mediaTreeProvider: MediaProvider = MediaTreeProvider(mediaTreeApi)
     val jellyfinProvider: MediaProvider = JellyfinProvider(sessionStore)
