@@ -24,7 +24,7 @@ enum class FullscreenModePreference(val value: String) {
     Auto("auto"),
 }
 
-const val DEFAULT_THEME_COLOR = "#DDEFD1"
+const val DEFAULT_THEME_COLOR = "#B7F07A"
 
 private val Context.uiPreferencesDataStore by preferencesDataStore("mediatree_ui_preferences")
 
@@ -42,7 +42,7 @@ class UiPreferencesStore(context: Context) {
         when (prefs[THEME_MODE]) {
             ThemeModePreference.Light.value -> ThemeModePreference.Light
             ThemeModePreference.Dark.value -> ThemeModePreference.Dark
-            else -> ThemeModePreference.Light
+            else -> ThemeModePreference.System
         }
     }
 

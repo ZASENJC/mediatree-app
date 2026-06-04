@@ -66,6 +66,17 @@ class DarkModeAndPosterSourceTest {
     }
 
     @Test
+    fun settingsRowIconBackgroundUsesLightTintForContrast() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/components/SharedComponents.kt")
+            .readText()
+        val settingsRow = source.substringAfter("fun DesignSettingsRow").substringBefore("@Composable\nfun DesignSectionCard")
+
+        assertTrue(settingsRow.contains("color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)"))
+        assertFalse(settingsRow.contains("primaryContainer.copy(alpha = 0.8f)"))
+    }
+
+    @Test
     fun settingsRowsDoNotRenderInnerWhiteBackingFrames() {
         val source = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/components/SharedComponents.kt")

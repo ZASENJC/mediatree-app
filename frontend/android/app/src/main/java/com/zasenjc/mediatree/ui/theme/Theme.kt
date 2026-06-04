@@ -1,10 +1,8 @@
 package com.zasenjc.mediatree.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import com.zasenjc.mediatree.data.DEFAULT_THEME_COLOR
-import com.zasenjc.mediatree.data.sanitizeThemeColor
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -17,23 +15,27 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zasenjc.mediatree.data.DEFAULT_THEME_COLOR
+import com.zasenjc.mediatree.data.sanitizeThemeColor
 
-private val GreenPlumPrimary = Color(0xFFA8C98B)
-private val GreenPlumAccent = Color(0xFF9DBC83)
-private val GreenPlumBackground = Color(0xFFF8FBF1)
+private val DefaultThemePrimary = Color(0xFFB7F07A)
+private val DefaultThemeDark = Color(0xFF91D84B)
+private val DefaultThemeLight = Color(0xFFE8FFD0)
+private val DefaultThemeBackground = Color(0xFFFCFFF7)
+private val DefaultThemeAccent = Color(0xFF76C62D)
 private val GreenPlumSurface = Color(0xFFFEFFF9)
 private val PlumInk = Color(0xFF26351E)
 private val PlumSage = Color(0xFF65735E)
-private val PlumOutline = Color(0xFFDCE8D1)
+private val PlumOutline = Color(0xFFDCEFD5)
 private val WarmAmber = Color(0xFFC78A2C)
 private val ErrorRed = Color(0xFFFF4949)
 
 private val MediaTreeLightScheme = lightColorScheme(
-    primary = GreenPlumPrimary,
+    primary = DefaultThemePrimary,
     onPrimary = Color(0xFF1D3016),
-    primaryContainer = Color(0xFFE8F2D9),
+    primaryContainer = DefaultThemeLight,
     onPrimaryContainer = Color(0xFF182B10),
-    secondary = GreenPlumAccent,
+    secondary = DefaultThemeAccent,
     onSecondary = Color(0xFF1C2F16),
     secondaryContainer = Color(0xFFEAF3DF),
     onSecondaryContainer = Color(0xFF1B2B14),
@@ -41,7 +43,7 @@ private val MediaTreeLightScheme = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFFFE8C8),
     onTertiaryContainer = Color(0xFF2C1A00),
-    background = GreenPlumBackground,
+    background = DefaultThemeBackground,
     onBackground = PlumInk,
     surface = GreenPlumSurface,
     onSurface = PlumInk,
@@ -59,11 +61,11 @@ private val MediaTreeLightScheme = lightColorScheme(
 )
 
 private val MediaTreeDarkScheme = darkColorScheme(
-    primary = Color(0xFFBDD9A1),
+    primary = DefaultThemePrimary,
     onPrimary = Color(0xFF223617),
-    primaryContainer = Color(0xFF526D3C),
+    primaryContainer = DefaultThemeDark,
     onPrimaryContainer = Color(0xFFE8F2D9),
-    secondary = Color(0xFFB7D39E),
+    secondary = DefaultThemeAccent,
     onSecondary = Color(0xFF243619),
     secondaryContainer = Color(0xFF4D6740),
     onSecondaryContainer = Color(0xFFEAF3DF),
@@ -170,8 +172,10 @@ fun MediaTreeTheme(
 }
 
 private fun themedColorScheme(darkTheme: Boolean, themeColorHex: String): ColorScheme {
-    val seed = parseThemeColor(themeColorHex)
     val base = if (darkTheme) MediaTreeDarkScheme else MediaTreeLightScheme
+    val sanitized = sanitizeThemeColor(themeColorHex)
+    if (sanitized == DEFAULT_THEME_COLOR) return base
+    val seed = parseThemeColor(sanitized)
     return base.copy(
         primary = if (darkTheme) seed.lighten(0.24f) else seed,
         onPrimary = seed.readableOnColor(),

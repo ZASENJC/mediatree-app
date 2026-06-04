@@ -40,9 +40,25 @@ class SettingsDisplaySelectionSourceTest {
         assertTrue(block.contains("title = \"主题色\""))
         assertTrue(block.contains("themeColorPreference = state.themeColorPreference"))
         assertTrue(block.contains("onThemeColorChange = vm::setThemeColorPreference"))
+        assertTrue(settingsSource.contains("supportingText = { Text(\"支持 RRGGBB\") }"))
         assertFalse(block.contains("title = \"播放全屏模式\""))
         assertFalse(block.contains("selectedLabel = state.fullscreenModePreference.labelText()"))
         assertFalse(block.contains("Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth())"))
+    }
+
+    @Test
+    fun themeColorPresetsUseMd3RecommendationsAndExcludeRemovedDefault() {
+        val source = settingsSource
+        val block = source
+            .substringAfter("private val themeColorPresets = listOf(")
+            .substringBefore(")")
+
+        assertTrue(block.contains("DEFAULT_THEME_COLOR"))
+        assertTrue(block.contains("#6750A4"))
+        assertTrue(block.contains("#006C4C"))
+        assertTrue(block.contains("#006A6A"))
+        assertTrue(block.contains("#825500"))
+        assertFalse(block.contains("#DDEFD1"))
     }
 
     @Test

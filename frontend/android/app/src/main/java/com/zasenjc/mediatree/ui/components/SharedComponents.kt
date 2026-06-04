@@ -259,7 +259,7 @@ fun DesignSettingsRow(
         ) {
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
                 contentColor = MaterialTheme.colorScheme.primary,
             ) {
                 Icon(icon, contentDescription = null, modifier = Modifier.padding(7.dp).size(18.dp))

@@ -131,11 +131,11 @@ private fun ClientStorageType.connectionIcon(): ImageVector = when (this) {
 
 private val themeColorPresets = listOf(
     DEFAULT_THEME_COLOR,
-    "#5E9C76",
-    "#4F8EDB",
-    "#8E6AD8",
-    "#D16B86",
-    "#C78A2C",
+    "#6750A4",
+    "#006C4C",
+    "#006A6A",
+    "#825500",
+    "#B3261E",
 )
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
@@ -169,7 +169,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         val smbUsername: String = "",
         val smbPassword: String = "",
         val homeLayoutPreference: HomeLayoutPreference = HomeLayoutPreference.MediaFeed,
-        val themeModePreference: ThemeModePreference = ThemeModePreference.Light,
+        val themeModePreference: ThemeModePreference = ThemeModePreference.System,
         val themeColorPreference: String = DEFAULT_THEME_COLOR,
         val fullscreenModePreference: FullscreenModePreference = FullscreenModePreference.Landscape,
     )
@@ -1180,6 +1180,7 @@ private fun ThemeColorPreferenceRow(
                         if (isValidThemeColor(value)) onThemeColorChange(sanitizeThemeColor(value))
                     },
                     label = { Text("#RRGGBB") },
+                    supportingText = { Text("支持 RRGGBB") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = customColor.isNotBlank() && !isValidThemeColor(customColor),

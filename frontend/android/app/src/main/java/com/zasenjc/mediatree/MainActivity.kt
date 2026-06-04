@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val container = remember { AppContainer(this) }
             val themeMode by container.uiPreferencesStore.themeModeFlow.collectAsStateWithLifecycle(
-                initialValue = ThemeModePreference.Light,
+                initialValue = ThemeModePreference.System,
             )
             val themeColor by container.uiPreferencesStore.themeColorFlow.collectAsStateWithLifecycle(
                 initialValue = com.zasenjc.mediatree.data.DEFAULT_THEME_COLOR,
