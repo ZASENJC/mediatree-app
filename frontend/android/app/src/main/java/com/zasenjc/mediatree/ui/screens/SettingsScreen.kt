@@ -1180,7 +1180,6 @@ private fun ThemeColorPreferenceRow(
                         if (isValidThemeColor(value)) onThemeColorChange(sanitizeThemeColor(value))
                     },
                     label = { Text("#RRGGBB") },
-                    supportingText = { Text("支持 RRGGBB") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = customColor.isNotBlank() && !isValidThemeColor(customColor),
