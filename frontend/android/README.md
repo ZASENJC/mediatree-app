@@ -21,9 +21,14 @@ Or directly from this Android project:
 If needed, configure Android tooling first:
 
 ```bash
-export JAVA_HOME=/opt/homebrew/opt/openjdk
 export ANDROID_HOME=$HOME/Library/Android/sdk
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
+```
+
+The project build entrypoints prefer Android Studio 自带 JBR 21 automatically. If you need to set Java manually, point `JAVA_HOME` at Android Studio's bundled runtime or another JDK 21 install:
+
+```bash
+export JAVA_HOME="/Volumes/STU/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ```
 
 ## Install

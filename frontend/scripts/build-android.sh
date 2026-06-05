@@ -4,26 +4,17 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ANDROID_DIR="$SCRIPT_DIR/../android"
 
-if [ -z "${JAVA_HOME:-}" ]; then
-  for candidate in \
-    "/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
-    "/Volumes/STU/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
-    /opt/homebrew/opt/openjdk \
-    /opt/homebrew/opt/openjdk@25 \
-    /opt/homebrew/opt/openjdk@21 \
-    /usr/local/opt/openjdk \
-    /usr/local/opt/openjdk@25 \
-    /usr/local/opt/openjdk@21
-  do
-    if [ -x "$candidate/bin/java" ]; then
-      export JAVA_HOME="$candidate"
-      break
-    fi
-  done
+if [ -f "$SCRIPT_DIR/android-java-home.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$SCRIPT_DIR/android-java-home.sh"
+  JAVA_HOME=$(resolve_android_java_home || true)
+  if [ -n "$JAVA_HOME" ]; then
+    export JAVA_HOME
+  fi
 fi
 
 if [ -z "${JAVA_HOME:-}" ]; then
-  echo "JAVA_HOME is required. Install JDK 21+ or set JAVA_HOME before building Android." >&2
+  echo "JAVA_HOME is required. Install Android Studio JBR 21 or OpenJDK 21 before building Android." >&2
   exit 1
 fi
 

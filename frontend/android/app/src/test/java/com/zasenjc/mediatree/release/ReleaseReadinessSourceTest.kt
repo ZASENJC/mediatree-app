@@ -66,6 +66,27 @@ class ReleaseReadinessSourceTest {
     }
 
     @Test
+    fun androidBuildEntrypointsPreferBundledJbrOverHomebrewOpenJdk() {
+        val script = appRoot.resolve("../../scripts/build-android.sh").readText()
+        val javaHomeScript = appRoot.resolve("../../scripts/android-java-home.sh").readText()
+        val wrapper = appRoot.resolve("../../android/gradlew").readText()
+        val readme = appRoot.resolve("../../android/README.md").readText()
+
+        assertTrue(script.contains("resolve_android_java_home"))
+        assertTrue(script.contains("android-java-home.sh"))
+
+        assertTrue(javaHomeScript.contains("Android Studio.app/Contents/jbr/Contents/Home"))
+        assertTrue(javaHomeScript.contains("openjdk@21"))
+        assertFalse(javaHomeScript.contains("/opt/homebrew/opt/openjdk \\"))
+
+        assertTrue(wrapper.contains("resolve_android_java_home"))
+        assertTrue(wrapper.contains("android-java-home.sh"))
+
+        assertTrue(readme.contains("Android Studio 自带 JBR 21"))
+        assertFalse(readme.contains("export JAVA_HOME=/opt/homebrew/opt/openjdk"))
+    }
+
+    @Test
     fun changelogsExposeCurrentAndroidVersionSectionForReleaseNotes() {
         val english = appRoot.resolve("../../../CHANGELOG.md").readText()
         val chinese = appRoot.resolve("../../../CHANGELOG_zh-CN.md").readText()

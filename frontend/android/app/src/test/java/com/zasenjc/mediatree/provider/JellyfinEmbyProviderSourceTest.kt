@@ -52,6 +52,16 @@ class JellyfinEmbyProviderSourceTest {
     }
 
     @Test
+    fun sessionStoreCreatesNewJellyfinProfilesWhenAddingInsteadOfEditing() {
+        val source = dataRoot.resolve("SessionStore.kt").readText()
+
+        assertTrue(source.contains("type == ProviderType.MediaTree -> current.activeProfile?.takeIf { it.type == ProviderType.MediaTree }"))
+        assertTrue(source.contains("profileId != null"))
+        assertTrue(source.contains("providerProfile(type, normalized, current.resolvedProfiles)"))
+        assertFalse(source.contains("?: current.activeProfile?.takeIf { it.type == type }"))
+    }
+
+    @Test
     fun appContainerCanResolveProvidersByType() {
         val source = dataRoot.resolve("AppContainer.kt").readText()
 

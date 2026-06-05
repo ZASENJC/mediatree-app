@@ -40,6 +40,8 @@ cd frontend/android && ./gradlew assembleDebug
 cd frontend/android && ./gradlew testDebugUnitTest
 ```
 
+The project build entrypoints auto-select a compatible Java runtime, preferring Android Studio's bundled JBR 21 via `frontend/scripts/android-java-home.sh`. Do not point routine builds at Homebrew `openjdk` when it resolves to JDK 26; that path can fail Android `jlink`/JAR image transforms.
+
 The debug APK is generated at:
 
 ```text
@@ -98,7 +100,7 @@ Prefer app-side compatibility for response shape differences. If an API mismatch
 - `BrowseScreen.kt` — folder browsing, movie lists, breadcrumbs, search, sort, and scroll-aware overlay chrome.
 - `FavoritesScreen.kt` — favorite-tagged media with mixed episode/poster grid and scroll-aware overlay chrome.
 - `DetailScreen.kt` — player, subtitle selector, metadata, favorite/watched actions, cast, episodes, stills, and staff.
-- `SettingsScreen.kt` — backend connection profiles, per-profile logout, SMB/WebDAV sources, active library selection, and release update checks.
+- `SettingsScreen.kt` — backend connection profiles, multiple Jellyfin/Emby backends, per-profile logout, SMB/WebDAV sources, active library selection, and release update checks.
 - `LoginScreen.kt` — server URL and credential login flow.
 
 ## Packaging Boundaries

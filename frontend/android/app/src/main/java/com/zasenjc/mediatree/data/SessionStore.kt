@@ -76,11 +76,12 @@ class SessionStore(context: Context) {
     ) {
         val current = sessionFlow.first()
         val normalized = UrlUtils.normalizeServerUrl(serverUrl)
-        val existing = profileId
-            ?.let { id -> current.resolvedProfiles.firstOrNull { it.id == id } }
-            ?.takeIf { it.type == type }
-            ?: current.activeProfile?.takeIf { it.type == type }
-        val profile = (existing ?: providerProfile(type, normalized)).copy(
+        val existing = when {
+            profileId != null -> current.resolvedProfiles.firstOrNull { it.id == profileId }?.takeIf { it.type == type }
+            type == ProviderType.MediaTree -> current.activeProfile?.takeIf { it.type == ProviderType.MediaTree }
+            else -> null
+        }
+        val profile = (existing ?: providerProfile(type, normalized, current.resolvedProfiles)).copy(
             type = type,
             name = name.ifBlank { existing?.name.orEmpty() }.ifBlank { type.name },
             serverUrl = normalized,
@@ -209,17 +210,30 @@ class SessionStore(context: Context) {
 private fun List<ServerProfile>.withoutStoredSecrets(): List<ServerProfile> =
     map { it.copy(token = "") }
 
-private fun providerProfile(type: ProviderType, serverUrl: String): ServerProfile =
+private fun providerProfile(
+    type: ProviderType,
+    serverUrl: String,
+    existingProfiles: List<ServerProfile>,
+): ServerProfile =
     if (type == ProviderType.MediaTree) {
         mediaTreeProfile(serverUrl)
     } else {
+        val baseId = "${type.name.lowercase()}-${UrlUtils.normalizeServerUrl(serverUrl)}"
         ServerProfile(
-            id = "${type.name.lowercase()}-${UrlUtils.normalizeServerUrl(serverUrl)}",
+            id = baseId.uniqueProfileId(existingProfiles),
             type = type,
             name = type.name,
             serverUrl = serverUrl,
         )
     }
+
+private fun String.uniqueProfileId(existingProfiles: List<ServerProfile>): String {
+    val existingIds = existingProfiles.map { it.id }.toSet()
+    if (this !in existingIds) return this
+    var index = 2
+    while ("$this-$index" in existingIds) index += 1
+    return "$this-$index"
+}
 
 private fun tokenKey(profileId: String): String = "auth_token_${profileId}"
 

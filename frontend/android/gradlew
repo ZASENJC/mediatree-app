@@ -116,6 +116,14 @@ esac
 
 CLASSPATH="\\\"\\\""
 
+if [ -f "$APP_HOME/../scripts/android-java-home.sh" ]; then
+    # shellcheck disable=SC1091
+    . "$APP_HOME/../scripts/android-java-home.sh"
+    JAVA_HOME=$(resolve_android_java_home || true)
+    if [ -n "$JAVA_HOME" ]; then
+        export JAVA_HOME
+    fi
+fi
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then

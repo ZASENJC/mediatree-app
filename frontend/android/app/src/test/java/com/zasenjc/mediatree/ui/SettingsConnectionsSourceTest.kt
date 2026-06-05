@@ -52,6 +52,20 @@ class SettingsConnectionsSourceTest {
     }
 
     @Test
+    fun serverConnectionAddCreatesBlankProfileEditorAndEditPassesExistingProfile() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
+            .readText()
+
+        val connectionsBlock = source
+            .substringAfter("private fun ConnectionsSection(")
+            .substringBefore("@Composable\nprivate fun ConnectionEditorDialog")
+
+        assertTrue(connectionsBlock.contains("onAdd(ConnectionEditorTarget.Server(type = type))"))
+        assertTrue(connectionsBlock.contains("onEdit(ConnectionEditorTarget.Server(type = profile.type, profile = profile))"))
+    }
+
+    @Test
     fun backendProfilesAreSavedOnlyAfterLoginSucceeds() {
         val source = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")

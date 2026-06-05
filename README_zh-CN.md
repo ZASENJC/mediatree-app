@@ -26,17 +26,12 @@
 
 部署配合 [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) 后端使用时，可获得对媒体库、元数据、播放、进度和收藏等功能的最佳适配。
 
-## 群组 / 频道
-
-- Telegram 群组：[加入讨论](https://t.me/mediatree_group)
-- Telegram 更新通知频道：[订阅更新](https://t.me/mediatreex)
-
 ## 为什么用它
 
 - 一个 app 连接 `MediaTree`、`Jellyfin`、`Emby`、`SMB` 和 `WebDAV`
 - 海报优先的媒体库浏览，支持最近观看、文件夹、收藏和详情页
 - 原生播放，支持字幕、进度记忆、手势和横屏模式
-- 登录后保存不同媒体服务的连接配置，未验证后端不会加载媒体库
+- 登录后保存多个媒体服务连接配置，未验证后端不会加载媒体库
 - 适合手机和平板的 Material 3 界面
 
 ## 展示截图
@@ -45,13 +40,18 @@
 |---|---|---|---|---|
 | ![home](https://img.qunq.de/file/1780586139237_Screenshot_2026-06-04-23-11-40-076_com.zasenjc.mediatree-edit.png) | ![browse](https://img.qunq.de/file/1780586435134_Screenshot_2026-06-04-23-20-22-202_com.zasenjc.mediatree-edit.png) | ![player](https://img.qunq.de/file/1780586129865_Screenshot_2026-06-04-23-12-14-940_com.zasenjc.mediatree-edit.png) | ![settings](https://img.qunq.de/file/1780586136918_Screenshot_2026-06-04-23-14-33-243_com.zasenjc.mediatree-edit.png) | ![favorites](https://img.qunq.de/file/1780586132880_Screenshot_2026-06-04-23-14-09-157_com.zasenjc.mediatree-edit.png) |
 
+## 群组 / 频道
+
+- Telegram 群组：[加入讨论](https://t.me/mediatree_group)
+- Telegram 更新通知频道：[订阅更新](https://t.me/mediatreex)
+
 ## 支持来源
 
 | 来源 | 支持内容 |
 |---|---|
 | [`MediaTree`](https://github.com/ZASENJC/mediatree) | 服务端媒体库、元数据、播放、进度、收藏 |
-| `Jellyfin` | MediaBrowser 兼容登录、媒体库、元数据、播放流、进度、收藏 |
-| `Emby` | Emby 兼容登录、媒体库、元数据、播放流、进度、收藏 |
+| `Jellyfin` | MediaBrowser 兼容登录、多后端配置、媒体库、元数据、播放流、进度、收藏 |
+| `Emby` | Emby 兼容登录、多后端配置、媒体库、元数据、播放流、进度、收藏 |
 | `SMB` | 存储源设置和浏览 |
 | `WebDAV` | 存储源设置和浏览 |
 

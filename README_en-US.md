@@ -36,7 +36,7 @@ Deploying with the [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) b
 - Connect to `MediaTree`, `Jellyfin`, `Emby`, `SMB`, and `WebDAV` from one app
 - Poster-first library browsing with recent watching, folders, favorites, and detail pages
 - Native playback with subtitles, progress memory, gestures, and landscape mode
-- Save connection profiles after login, so unverified backends do not load libraries
+- Save multiple media-service connection profiles after login, so unverified backends do not load libraries
 - Material 3 interface designed for phones and tablets
 
 ## Screenshots
@@ -50,8 +50,8 @@ Deploying with the [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) b
 | Source | Support |
 |---|---|
 | `MediaTree` | Server-side media library, metadata, playback, progress, favorites |
-| `Jellyfin` | MediaBrowser-compatible login, library, metadata, playback stream, progress, favorites |
-| `Emby` | Emby-compatible login, library, metadata, playback stream, progress, favorites |
+| `Jellyfin` | MediaBrowser-compatible login, multiple backend profiles, library, metadata, playback stream, progress, favorites |
+| `Emby` | Emby-compatible login, multiple backend profiles, library, metadata, playback stream, progress, favorites |
 | `SMB` | Storage source setup and browsing |
 | `WebDAV` | Storage source setup and browsing |
 

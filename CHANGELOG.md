@@ -18,11 +18,16 @@ All notable changes to MediaTree are documented here.
 
 ### Connections
 
+- Added support for multiple Jellyfin/Emby backend profiles from Settings; adding a new backend no longer overwrites the active Jellyfin/Emby profile
 - Backend profiles are now saved only after login succeeds; saved-but-unauthenticated server URLs no longer load remote content
 - Added per-profile backend logout in the server connection editor instead of a global "logout all" action
 - Removed the manual backend scan button from Settings; MediaTree scans are triggered from home refresh or backend library selection
 - Routed Settings success messages through the shared snackbar channel instead of inline status rows
 - Reused `BuildConfig.VERSION_NAME` for MediaBrowser authorization headers so Jellyfin/Emby requests report the built app version
+
+### Build
+
+- Android build entrypoints now prefer Android Studio's bundled JBR 21 and avoid the Homebrew OpenJDK 26 `jlink`/JAR transform failure path
 
 ---
 
