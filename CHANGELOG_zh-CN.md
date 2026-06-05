@@ -6,6 +6,16 @@
 
 ---
 
+## 0.1.02 (2026-06-06) — 多后端与构建稳定性
+
+### Android App
+
+- 将 Android `versionCode` 更新为 `3`，`versionName` 更新为 `0.1.02`
+- 设置页支持添加多个 Jellyfin/Emby 后端配置；新增后端不再覆盖当前活跃的 Jellyfin/Emby 配置
+- Android 构建入口现在优先使用 Android Studio 自带 JBR 21，避开 Homebrew OpenJDK 26 的 `jlink`/JAR transform 失败路径
+
+---
+
 ## 0.1.01 (2026-06-05) — 设置与登录体验打磨
 
 ### Android UI
@@ -18,16 +28,11 @@
 
 ### 连接管理
 
-- 设置页支持添加多个 Jellyfin/Emby 后端配置；新增后端不再覆盖当前活跃的 Jellyfin/Emby 配置
 - 后端配置只在登录成功后保存；仅填写但未验证的服务器地址不再加载远程媒体库
 - 服务器连接编辑器新增单个后端配置登出，替代全局“退出所有后端登录”
 - 设置页移除手动后端扫描按钮；MediaTree 扫描改由首页刷新或切换后端媒体库触发
 - 设置页成功消息改走共享 snackbar 通道，不再渲染内联状态行
 - MediaBrowser authorization header 改用 `BuildConfig.VERSION_NAME`，让 Jellyfin/Emby 请求报告实际构建版本
-
-### 构建
-
-- Android 构建入口现在优先使用 Android Studio 自带 JBR 21，避开 Homebrew OpenJDK 26 的 `jlink`/JAR transform 失败路径
 
 ---
 
