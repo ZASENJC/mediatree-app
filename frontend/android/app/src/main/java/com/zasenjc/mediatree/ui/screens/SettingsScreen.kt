@@ -55,6 +55,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
@@ -648,12 +649,19 @@ fun SettingsScreen(
             item {
                 SettingsSectionCard(title = "关于", icon = Icons.Default.Info) {
                     val update = releaseUpdateState as? ReleaseUpdateState.Available
+                    val updateAvailable = releaseUpdateState is ReleaseUpdateState.Available
                     DesignSettingsRow(
                         title = "版本",
                         subtitle = releaseUpdateState.versionSubtitle(BuildConfig.VERSION_NAME),
                         icon = Icons.Default.Info,
                         trailing = {
-                            if (update != null) Icon(Icons.Default.ChevronRight, contentDescription = null)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (updateAvailable) UpdateAvailableDot()
+                                if (update != null) Icon(Icons.Default.ChevronRight, contentDescription = null)
+                            }
                         },
                         onClick = update?.let { { uriHandler.openUri(update.downloadUrl) } },
                     )
@@ -1217,6 +1225,15 @@ private fun FullscreenModePreference.labelText(): String = when (this) {
     FullscreenModePreference.Portrait -> "竖向"
     FullscreenModePreference.Landscape -> "横向"
     FullscreenModePreference.Auto -> "自适应"
+}
+
+@Composable
+fun UpdateAvailableDot(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(8.dp)
+            .background(MaterialTheme.colorScheme.error, CircleShape),
+    )
 }
 
 private fun ReleaseUpdateState.versionSubtitle(fallbackVersion: String): String = when (this) {

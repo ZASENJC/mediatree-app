@@ -13,6 +13,11 @@ class SettingsDisplaySelectionSourceTest {
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
             .readText()
 
+    private val appShellSource: String
+        get() = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/MediaTreeApp.kt")
+            .readText()
+
     @Test
     fun displayPreferenceDoesNotRenderExplanatoryCopy() {
         val block = settingsSource
@@ -199,5 +204,24 @@ class SettingsDisplaySelectionSourceTest {
         assertTrue(block.contains("openUri(update.downloadUrl)"))
         assertTrue(block.contains("title = \"关于 mediatree\""))
         assertTrue(block.contains("openUri(ReleaseUpdateChecker.REPOSITORY_URL)"))
+    }
+
+    @Test
+    fun updateAvailableShowsRedDotsInVersionRowAndSettingsBottomTab() {
+        val aboutBlock = settingsSource
+            .substringAfter("SettingsSectionCard(title = \"关于\"")
+            .substringBefore("}\n        }\n    }\n    editingConnection")
+        val bottomBarBlock = appShellSource
+            .substringAfter("private fun DesignBottomNavigationBar")
+            .substringBefore("private fun detailMovieIdFromUri")
+
+        assertTrue(settingsSource.contains("fun UpdateAvailableDot("))
+        assertTrue(aboutBlock.contains("val updateAvailable = releaseUpdateState is ReleaseUpdateState.Available"))
+        assertTrue(aboutBlock.contains("if (updateAvailable) UpdateAvailableDot("))
+        assertTrue(appShellSource.contains("val settingsBadgeVisible = releaseUpdateState is ReleaseUpdateState.Available"))
+        assertTrue(appShellSource.contains("container.releaseUpdateChecker.state.collectAsStateWithLifecycle()"))
+        assertTrue(appShellSource.contains("settingsBadgeVisible = settingsBadgeVisible"))
+        assertTrue(bottomBarBlock.contains("showUpdateBadge = settingsBadgeVisible && item.route == \"settings\""))
+        assertTrue(bottomBarBlock.contains("if (showUpdateBadge) UpdateAvailableDot("))
     }
 }

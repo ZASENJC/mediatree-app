@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -58,6 +59,7 @@ import androidx.navigation.navArgument
 import com.zasenjc.mediatree.data.ApiException
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ProviderType
+import com.zasenjc.mediatree.data.ReleaseUpdateState
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.MediaTreePageBackground
@@ -77,6 +79,7 @@ import com.zasenjc.mediatree.ui.screens.HomeScreen
 import com.zasenjc.mediatree.ui.screens.SettingsScreen
 import com.zasenjc.mediatree.ui.screens.SmbBrowseScreen
 import com.zasenjc.mediatree.ui.screens.SmbPlayerScreen
+import com.zasenjc.mediatree.ui.screens.UpdateAvailableDot
 import com.zasenjc.mediatree.ui.screens.WebDavBrowseScreen
 import com.zasenjc.mediatree.ui.screens.WebDavPlayerScreen
 import kotlinx.coroutines.launch
@@ -140,6 +143,8 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     var browseRecursiveVideos by remember { mutableStateOf(false) }
     val browseScrollPositions = remember { mutableMapOf<String, BrowseScrollPosition>() }
     var chromeVisible by remember { mutableStateOf(true) }
+    val releaseUpdateState by container.releaseUpdateChecker.state.collectAsStateWithLifecycle()
+    val settingsBadgeVisible = releaseUpdateState is ReleaseUpdateState.Available
     val bottomChromeVisible = chromeVisible &&
         !currentRoute.startsWith("detail") &&
         !currentRoute.endsWith("Player/{sourceId}?path={path}")
@@ -428,6 +433,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
             DesignBottomNavigationBar(
                 currentPage = pagerState.currentPage,
                 pageOffsetFraction = pagerState.currentPageOffsetFraction,
+                settingsBadgeVisible = settingsBadgeVisible,
                 onNavigate = ::navigateTopDestination,
             )
         }
@@ -440,6 +446,7 @@ private val SnackbarBottomChromePadding = 96.dp
 private fun DesignBottomNavigationBar(
     currentPage: Int,
     pageOffsetFraction: Float,
+    settingsBadgeVisible: Boolean,
     onNavigate: (String) -> Unit,
 ) {
     Surface(
@@ -464,6 +471,7 @@ private fun DesignBottomNavigationBar(
                 BottomNavItem(
                     item = item,
                     selectedAmount = selectedAmount,
+                    showUpdateBadge = settingsBadgeVisible && item.route == "settings",
                     onClick = { onNavigate(item.route) },
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
@@ -476,6 +484,7 @@ private fun DesignBottomNavigationBar(
 private fun BottomNavItem(
     item: TopDestination,
     selectedAmount: Float,
+    showUpdateBadge: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -516,6 +525,7 @@ private fun BottomNavItem(
             label = item.label,
             selectedIcon = item.selectedIcon,
             unselectedIcon = item.unselectedIcon,
+            showUpdateBadge = showUpdateBadge,
         )
     }
 }
@@ -526,6 +536,7 @@ private fun BottomNavItemContent(
     label: String,
     selectedIcon: androidx.compose.ui.graphics.vector.ImageVector,
     unselectedIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    showUpdateBadge: Boolean,
 ) {
     val selectedColor = MaterialTheme.colorScheme.onPrimary
     val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -548,6 +559,7 @@ private fun BottomNavItemContent(
                 tint = selectedColor.copy(alpha = selectedAmount),
                 modifier = Modifier.fillMaxSize(),
             )
+            if (showUpdateBadge) UpdateAvailableDot(modifier = Modifier.align(Alignment.TopEnd))
         }
         Text(
             label,
