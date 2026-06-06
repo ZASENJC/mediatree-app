@@ -9,12 +9,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -592,15 +590,17 @@ private fun PlayerGestureLayer(
                 detectTapGestures(
                     onTap = { onTap() },
                     onDoubleTap = { offset -> onDoubleTap(offset.x, size.width) },
-                    onLongPress = { onLongPress() },
                 )
             }
             .pointerInput(playerLocked) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    waitForUpOrCancellation()
-                    onPressEnd()
-                }
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { onLongPress() },
+                    onDragEnd = { onPressEnd() },
+                    onDragCancel = { onPressEnd() },
+                    onDrag = { change, _ ->
+                        change.consume()
+                    },
+                )
             },
     )
 }

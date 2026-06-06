@@ -90,11 +90,11 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(gestureLayer.contains("onLongPress: () -> Unit"))
         assertTrue(gestureLayer.contains("onPressEnd: () -> Unit"))
         assertTrue(gestureLayer.contains("detectTapGestures("))
-        assertTrue(gestureLayer.contains("onLongPress = { onLongPress() }"))
-        assertTrue(gestureLayer.contains("awaitEachGesture"))
-        assertTrue(gestureLayer.contains("awaitFirstDown"))
-        assertTrue(gestureLayer.contains("waitForUpOrCancellation"))
-        assertTrue(gestureLayer.contains("onPressEnd()"))
+        assertTrue(gestureLayer.contains("detectDragGesturesAfterLongPress("))
+        assertTrue(gestureLayer.contains("onDragStart = { onLongPress() }"))
+        assertTrue(gestureLayer.contains("onDragEnd = { onPressEnd() }"))
+        assertTrue(gestureLayer.contains("onDragCancel = { onPressEnd() }"))
+        assertTrue(gestureLayer.contains("change.consume()"))
         assertFalse(player.contains("showOverlay = true\n                    hudMessage = \"2.0x 快速播放\""))
     }
 
