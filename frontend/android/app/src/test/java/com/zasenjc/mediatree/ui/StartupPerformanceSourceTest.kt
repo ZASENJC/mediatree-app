@@ -82,20 +82,18 @@ class StartupPerformanceSourceTest {
     }
 
     @Test
-    fun homeLibraryGridRendersInBatchesAsScrollReachesMoreItems() {
+    fun homeLibraryGridRendersEveryLibraryPosterWithoutManualTruncation() {
         val homeScreen = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
             .readText()
 
-        assertTrue(homeScreen.contains("private const val HomeLibraryInitialRenderCount"))
-        assertTrue(homeScreen.contains("private const val HomeLibraryRenderBatchSize"))
-        assertTrue(homeScreen.contains("var visibleLibraryItemCount by remember(state.libraryItems)"))
-        assertTrue(homeScreen.contains("val visibleLibraryItems = remember(state.libraryItems, visibleLibraryItemCount)"))
-        assertTrue(homeScreen.contains("state.libraryItems.take(visibleLibraryItemCount)"))
-        assertTrue(homeScreen.contains("items(visibleLibraryItems, key = { it.path }, contentType = { \"media-poster\" })"))
-        assertTrue(homeScreen.contains("gridState.layoutInfo.visibleItemsInfo"))
-        assertTrue(homeScreen.contains("visibleLibraryItemCount = (visibleLibraryItemCount + HomeLibraryRenderBatchSize)"))
-        assertFalse(homeScreen.contains("items(state.libraryItems, key = { it.path }, contentType = { \"media-poster\" })"))
+        assertFalse(homeScreen.contains("HomeLibraryInitialRenderCount"))
+        assertFalse(homeScreen.contains("HomeLibraryRenderBatchSize"))
+        assertFalse(homeScreen.contains("visibleLibraryItemCount"))
+        assertFalse(homeScreen.contains("visibleLibraryItems"))
+        assertFalse(homeScreen.contains("state.libraryItems.take("))
+        assertFalse(homeScreen.contains("gridState.layoutInfo.visibleItemsInfo"))
+        assertTrue(homeScreen.contains("items(state.libraryItems, key = { it.path }, contentType = { \"media-poster\" })"))
     }
 
     @Test

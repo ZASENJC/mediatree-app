@@ -25,6 +25,7 @@ enum class FullscreenModePreference(val value: String) {
 }
 
 const val DEFAULT_THEME_COLOR = "#B7F07A"
+const val DefaultHomeSortMode = "release_date_desc"
 
 private val Context.uiPreferencesDataStore by preferencesDataStore("mediatree_ui_preferences")
 
@@ -36,6 +37,10 @@ class UiPreferencesStore(context: Context) {
             HomeLayoutPreference.DirectoryFirst.value -> HomeLayoutPreference.DirectoryFirst
             else -> HomeLayoutPreference.MediaFeed
         }
+    }
+
+    val homeSortModeFlow: Flow<String> = appContext.uiPreferencesDataStore.data.map { prefs ->
+        sanitizeHomeSortMode(prefs[HOME_SORT_MODE].orEmpty())
     }
 
     val themeModeFlow: Flow<ThemeModePreference> = appContext.uiPreferencesDataStore.data.map { prefs ->
@@ -64,6 +69,12 @@ class UiPreferencesStore(context: Context) {
         }
     }
 
+    suspend fun setHomeSortModePreference(value: String) {
+        appContext.uiPreferencesDataStore.edit { prefs ->
+            prefs[HOME_SORT_MODE] = sanitizeHomeSortMode(value)
+        }
+    }
+
     suspend fun setThemeModePreference(preference: ThemeModePreference) {
         appContext.uiPreferencesDataStore.edit { prefs ->
             prefs[THEME_MODE] = preference.value
@@ -84,10 +95,16 @@ class UiPreferencesStore(context: Context) {
 
     companion object {
         private val HOME_LAYOUT = stringPreferencesKey("home_layout")
+        private val HOME_SORT_MODE = stringPreferencesKey("home_sort_mode")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val THEME_COLOR = stringPreferencesKey("theme_color")
         private val FULLSCREEN_MODE = stringPreferencesKey("fullscreen_mode")
     }
+}
+
+fun sanitizeHomeSortMode(value: String): String = when (value) {
+    "release_date_desc", "created_desc", "created_asc", "title_asc" -> value
+    else -> DefaultHomeSortMode
 }
 
 fun sanitizeThemeColor(value: String): String {

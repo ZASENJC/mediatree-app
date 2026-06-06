@@ -78,6 +78,7 @@ import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.ClientStorageType
 import com.zasenjc.mediatree.data.ClientPlaybackProgress
+import com.zasenjc.mediatree.data.DefaultHomeSortMode
 import com.zasenjc.mediatree.data.HomeLayoutPreference
 import com.zasenjc.mediatree.data.HomeSnapshot
 import com.zasenjc.mediatree.data.FolderNodeDto
@@ -117,12 +118,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Color
-
-private const val HomeLibraryInitialRenderCount = 24
-private const val HomeLibraryRenderBatchSize = 24
-private const val HomeLibraryRenderAheadCount = 8
 
 private val sortOptions = listOf(
     "release_date_desc" to "发行时间",
@@ -138,7 +134,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         val roots: List<MediaRootDto> = emptyList(),
         val recent: List<MovieDto> = emptyList(),
         val libraryItems: List<FolderNodeDto> = emptyList(),
-        val sortMode: String = "release_date_desc",
+        val sortMode: String = DefaultHomeSortMode,
         val openingPath: String? = null,
         val error: Throwable? = null,
     )
@@ -450,15 +446,11 @@ fun HomeScreen(
 
     val vm: HomeViewModel = viewModel(factory = viewModelFactory { HomeViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
+    var homeSortMode by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     var showSearch by remember { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
-    var visibleLibraryItemCount by remember(state.libraryItems) {
-        mutableStateOf(state.libraryItems.size.coerceAtMost(HomeLibraryInitialRenderCount))
-    }
-    val visibleLibraryItems = remember(state.libraryItems, visibleLibraryItemCount) {
-        state.libraryItems.take(visibleLibraryItemCount)
-    }
 
     if (active) {
         SyncChromeWithGridScroll(gridState, onChromeVisibleChange)
@@ -469,31 +461,23 @@ fun HomeScreen(
         onChromeVisibleChange(true)
     }
 
-    LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeProfileId, session.activeLibrary) {
+    LaunchedEffect(container) {
+        container.uiPreferencesStore.homeSortModeFlow.collect { sortMode ->
+            homeSortMode = sortMode
+        }
+    }
+
+    LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeProfileId, session.activeLibrary, homeSortMode) {
         if (!active) return@LaunchedEffect
+        val resolvedHomeSortMode = homeSortMode ?: return@LaunchedEffect
         if (session.canLoadHomeContent()) {
-            vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary)
+            vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = resolvedHomeSortMode)
         }
     }
 
     LaunchedEffect(active, state.error) {
         if (!active) return@LaunchedEffect
         state.error?.let(onError)
-    }
-
-    LaunchedEffect(active, state.libraryItems.size) {
-        if (!active) return@LaunchedEffect
-        snapshotFlow { gridState.layoutInfo.visibleItemsInfo }
-            .map { visibleItems -> visibleItems.maxOfOrNull { it.index } ?: 0 }
-            .distinctUntilChanged()
-            .collect { lastVisibleIndex ->
-                if (visibleLibraryItemCount >= state.libraryItems.size) return@collect
-                val loadMoreThreshold = visibleLibraryItemCount - HomeLibraryRenderAheadCount
-                if (lastVisibleIndex >= loadMoreThreshold) {
-                    visibleLibraryItemCount = (visibleLibraryItemCount + HomeLibraryRenderBatchSize)
-                        .coerceAtMost(state.libraryItems.size)
-                }
-            }
     }
 
     val provider = remember(session.activeProviderType, container) {
@@ -505,8 +489,9 @@ fun HomeScreen(
             PullToRefreshBox(
                 isRefreshing = state.refreshing,
                 onRefresh = {
+                    val resolvedHomeSortMode = homeSortMode ?: DefaultHomeSortMode
                     if (session.canLoadHomeContent()) {
-                        vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, forceScan = true)
+                        vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = resolvedHomeSortMode, forceScan = true)
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -546,7 +531,7 @@ fun HomeScreen(
                                 EmptyMediaState("暂无媒体")
                             }
                         } else {
-                            items(visibleLibraryItems, key = { it.path }, contentType = { "media-poster" }) { item ->
+                            items(state.libraryItems, key = { it.path }, contentType = { "media-poster" }) { item ->
                                 HomeMediaPosterCard(
                                     item = item,
                                     imageUrl = UrlUtils.resolveApiUrl(
@@ -593,8 +578,10 @@ fun HomeScreen(
                                         text = { Text(label) },
                                         onClick = {
                                             showSort = false
+                                            homeSortMode = key
+                                            scope.launch { container.uiPreferencesStore.setHomeSortModePreference(key) }
                                             if (session.canLoadHomeContent()) {
-                                                vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, key)
+                                                vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = key)
                                             }
                                         },
                                     )

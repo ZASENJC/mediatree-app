@@ -60,7 +60,7 @@ class HomeLayoutSemanticsSourceTest {
 
         assertTrue(source.contains("private fun Session.canLoadHomeContent()"))
         assertTrue(actionsBlock.contains("session.canLoadHomeContent()"))
-        assertTrue(actionsBlock.contains("vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, key)"))
+        assertTrue(actionsBlock.contains("vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = key)"))
         assertFalse(actionsBlock.contains("if (shouldLoadRemoteContent(session))"))
 
         assertTrue(searchBlock.contains("session.activeLibrary.smbLibrarySourceId()"))
@@ -74,6 +74,31 @@ class HomeLayoutSemanticsSourceTest {
         assertFalse(mountedSearchBlock.contains("container.webDavClient.list(source)\n"))
         assertTrue(searchBlock.contains("mountedSearchResults"))
         assertTrue(searchBlock.contains("movie.openRoute()"))
+    }
+
+    @Test
+    fun homeSortSelectionPersistsAsDefaultForFutureLoads() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
+            .readText()
+        val screenBlock = source
+            .substringAfter("fun HomeScreen(")
+            .substringBefore("@Composable\nprivate fun HomeSectionHeader")
+        val sortClickBlock = screenBlock
+            .substringAfter("onClick = {\n                                            showSort = false")
+            .substringBefore("},\n                                    )")
+
+        assertTrue(screenBlock.contains("var homeSortMode by remember { mutableStateOf<String?>(null) }"))
+        assertTrue(screenBlock.contains("LaunchedEffect(container)"))
+        assertTrue(screenBlock.contains("container.uiPreferencesStore.homeSortModeFlow.collect { sortMode ->"))
+        assertTrue(screenBlock.contains("homeSortMode = sortMode"))
+        assertTrue(screenBlock.contains("val resolvedHomeSortMode = homeSortMode ?: return@LaunchedEffect"))
+        assertTrue(screenBlock.contains("vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = resolvedHomeSortMode)"))
+        assertTrue(sortClickBlock.contains("homeSortMode = key"))
+        assertTrue(sortClickBlock.contains("scope.launch { container.uiPreferencesStore.setHomeSortModePreference(key) }"))
+        assertTrue(sortClickBlock.contains("vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = key)"))
+        assertFalse(source.contains("val sortMode: String = \"release_date_desc\""))
+        assertTrue(source.contains("val sortMode: String = DefaultHomeSortMode"))
     }
 
     @Test
@@ -96,7 +121,8 @@ class HomeLayoutSemanticsSourceTest {
         assertTrue(screenBlock.contains("PullToRefreshBox("))
         assertTrue(screenBlock.contains("isRefreshing = state.refreshing"))
         assertTrue(screenBlock.contains("onRefresh = {"))
-        assertTrue(screenBlock.contains("vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, forceScan = true)"))
+        assertTrue(screenBlock.contains("val resolvedHomeSortMode = homeSortMode ?: DefaultHomeSortMode"))
+        assertTrue(screenBlock.contains("vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = resolvedHomeSortMode, forceScan = true)"))
         assertFalse(screenBlock.contains("var showMore"))
         assertFalse(actionsBlock.contains("MoreVert"))
         assertFalse(actionsBlock.contains("Text(\"刷新\")"))

@@ -14,6 +14,8 @@ All notable changes to MediaTree are documented here.
 - Added update badges on the Settings tab and version row when a newer APK is available
 - Made the version row open a fixed-height release-notes dialog with cancel and download actions, showing the latest release notes before leaving the app
 - Improved the player temporary fast-forward gesture so long-press dragging keeps fast-forward active until release
+- Fixed the home library grid so all media-library posters render without app-side truncation
+- Persisted the home sort selection and prevented the default sort from racing against the saved user preference after app restart
 
 ---
 
