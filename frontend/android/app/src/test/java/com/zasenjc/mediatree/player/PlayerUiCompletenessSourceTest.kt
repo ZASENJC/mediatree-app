@@ -387,6 +387,22 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
+    fun detailPageStillsCanOpenImageViewer() {
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+        val thumbnailStart = detailScreen.indexOf("private fun ThumbnailStrip(")
+        val thumbnailEnd = detailScreen.indexOf("@Composable", thumbnailStart + 1)
+        val thumbnailBlock = detailScreen.substring(thumbnailStart, thumbnailEnd)
+
+        assertTrue(thumbnailBlock.contains("selectedThumbnailUrl"))
+        assertTrue(thumbnailBlock.contains("shapeAwareClickable"))
+        assertTrue(thumbnailBlock.contains("StillImageViewer("))
+        assertTrue(detailScreen.contains("private fun StillImageViewer("))
+        assertTrue(detailScreen.contains("contentDescription = \"关闭剧照预览\""))
+    }
+
+    @Test
     fun playerLoadEffectIgnoresSubtitleTrackListChanges() {
         val player = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
