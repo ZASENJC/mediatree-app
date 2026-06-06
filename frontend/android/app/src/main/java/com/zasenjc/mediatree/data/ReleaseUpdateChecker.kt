@@ -17,11 +17,16 @@ sealed interface ReleaseUpdateState {
     val currentVersion: String
 
     data class Checking(override val currentVersion: String) : ReleaseUpdateState
-    data class Current(override val currentVersion: String) : ReleaseUpdateState
+    data class Current(
+        override val currentVersion: String,
+        val downloadUrl: String = "${ReleaseUpdateChecker.REPOSITORY_URL}/releases/latest",
+        val releaseNotes: String = "",
+    ) : ReleaseUpdateState
     data class Available(
         override val currentVersion: String,
         val latestVersion: String,
         val downloadUrl: String,
+        val releaseNotes: String,
     ) : ReleaseUpdateState
     data class Failed(
         override val currentVersion: String,
@@ -38,6 +43,7 @@ class ReleaseUpdateChecker(
     data class LatestRelease(
         val version: String,
         val downloadUrl: String,
+        val releaseNotes: String,
     )
 
     private val _state = MutableStateFlow<ReleaseUpdateState>(ReleaseUpdateState.Checking(""))
@@ -92,6 +98,7 @@ class ReleaseUpdateChecker(
             return LatestRelease(
                 version = version,
                 downloadUrl = apkUrl ?: release.htmlUrl.ifBlank { "$REPOSITORY_URL/releases/latest" },
+                releaseNotes = release.body.trim(),
             )
         }
 
@@ -102,9 +109,14 @@ class ReleaseUpdateChecker(
                     currentVersion = normalizedCurrentVersion,
                     latestVersion = normalizeVersion(latest.version),
                     downloadUrl = latest.downloadUrl,
+                    releaseNotes = latest.releaseNotes,
                 )
             } else {
-                ReleaseUpdateState.Current(normalizedCurrentVersion)
+                ReleaseUpdateState.Current(
+                    currentVersion = normalizedCurrentVersion,
+                    downloadUrl = latest.downloadUrl,
+                    releaseNotes = latest.releaseNotes,
+                )
             }
         }
 
@@ -132,6 +144,7 @@ class ReleaseUpdateChecker(
 private data class GitHubReleaseDto(
     @SerialName("tag_name") val tagName: String = "",
     @SerialName("html_url") val htmlUrl: String = "",
+    val body: String = "",
     val assets: List<GitHubReleaseAssetDto> = emptyList(),
 )
 

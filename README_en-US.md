@@ -37,6 +37,7 @@ Deploying with the [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) b
 - Poster-first library browsing with recent watching, folders, favorites, and detail pages
 - Native playback with subtitles, progress memory, gestures, and landscape mode
 - Save multiple media-service connection profiles after login, so unverified backends do not load libraries
+- Settings surfaces newer APKs with update badges and lets you review release notes before opening the download
 - Material 3 interface designed for phones and tablets
 
 ## Screenshots

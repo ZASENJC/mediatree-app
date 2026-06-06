@@ -26,6 +26,7 @@ class ReleaseUpdateCheckerTest {
             {
               "tag_name": "v0.1.01",
               "html_url": "https://github.com/ZASENJC/mediatree-app/releases/tag/0.1.01",
+              "body": "更新内容\n- 修复设置页",
               "assets": [
                 {
                   "name": "notes.txt",
@@ -43,6 +44,7 @@ class ReleaseUpdateCheckerTest {
 
         assertEquals("0.1.01", latest.version)
         assertEquals("https://example.com/mediatree-app-0.1.01.apk", latest.downloadUrl)
+        assertEquals("更新内容\n- 修复设置页", latest.releaseNotes)
     }
 
     @Test
@@ -76,6 +78,7 @@ class ReleaseUpdateCheckerTest {
             latest = ReleaseUpdateChecker.LatestRelease(
                 version = "0.1.01",
                 downloadUrl = "https://example.com/app.apk",
+                releaseNotes = "新版本更新内容",
             ),
         )
         val current = ReleaseUpdateChecker.updateStateFor(
@@ -83,12 +86,21 @@ class ReleaseUpdateCheckerTest {
             latest = ReleaseUpdateChecker.LatestRelease(
                 version = "0.1.00",
                 downloadUrl = "https://example.com/app.apk",
+                releaseNotes = "当前版本更新内容",
             ),
         )
 
         assertTrue(available is ReleaseUpdateState.Available)
         assertEquals("0.1.01", (available as ReleaseUpdateState.Available).latestVersion)
         assertEquals("https://example.com/app.apk", available.downloadUrl)
-        assertEquals(ReleaseUpdateState.Current("0.1.00"), current)
+        assertEquals("新版本更新内容", available.releaseNotes)
+        assertEquals(
+            ReleaseUpdateState.Current(
+                currentVersion = "0.1.00",
+                downloadUrl = "https://example.com/app.apk",
+                releaseNotes = "当前版本更新内容",
+            ),
+            current,
+        )
     }
 }

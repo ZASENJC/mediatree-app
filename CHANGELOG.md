@@ -12,6 +12,7 @@ All notable changes to MediaTree are documented here.
 
 - Updated Android `versionCode` to `3` and `versionName` to `0.1.02`
 - Added support for multiple Jellyfin/Emby backend profiles from Settings; adding a new backend no longer overwrites the active Jellyfin/Emby profile
+- Added update badges on the Settings tab and version row when a newer APK is available, and made the version row open a fixed-height release-notes dialog with download action
 - Android build entrypoints now prefer Android Studio's bundled JBR 21 and avoid the Homebrew OpenJDK 26 `jlink`/JAR transform failure path
 
 ---

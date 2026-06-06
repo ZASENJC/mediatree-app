@@ -12,6 +12,7 @@
 
 - 将 Android `versionCode` 更新为 `3`，`versionName` 更新为 `0.1.02`
 - 设置页支持添加多个 Jellyfin/Emby 后端配置；新增后端不再覆盖当前活跃的 Jellyfin/Emby 配置
+- 检测到新版 APK 时，设置底栏和版本行显示更新红点；点击版本行会打开固定高度的 release 更新内容弹窗，并提供下载入口
 - Android 构建入口现在优先使用 Android Studio 自带 JBR 21，避开 Homebrew OpenJDK 26 的 `jlink`/JAR transform 失败路径
 
 ---

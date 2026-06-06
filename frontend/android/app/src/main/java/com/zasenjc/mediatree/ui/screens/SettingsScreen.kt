@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -505,6 +508,7 @@ fun SettingsScreen(
     val releaseUpdateState by container.releaseUpdateChecker.state.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
     var editingConnection by remember { mutableStateOf<ConnectionEditorTarget?>(null) }
+    var releaseNotesDialogVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.resolvedProfiles) {
         if (!active) return@LaunchedEffect
@@ -663,7 +667,7 @@ fun SettingsScreen(
                                 if (update != null) Icon(Icons.Default.ChevronRight, contentDescription = null)
                             }
                         },
-                        onClick = update?.let { { uriHandler.openUri(update.downloadUrl) } },
+                        onClick = { releaseNotesDialogVisible = true },
                     )
                     DesignSettingsRow(
                         title = "关于 mediatree",
@@ -696,6 +700,13 @@ fun SettingsScreen(
                 vm.saveSmbSource(id, name, server, sharePath, username, password, enabled)
                 editingConnection = null
             },
+        )
+    }
+    if (releaseNotesDialogVisible) {
+        ReleaseNotesDialog(
+            releaseUpdateState = releaseUpdateState,
+            fallbackVersion = BuildConfig.VERSION_NAME,
+            onDismiss = { releaseNotesDialogVisible = false },
         )
     }
 }
@@ -1228,6 +1239,57 @@ private fun FullscreenModePreference.labelText(): String = when (this) {
 }
 
 @Composable
+private fun ReleaseNotesDialog(
+    releaseUpdateState: ReleaseUpdateState,
+    fallbackVersion: String,
+    onDismiss: () -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    val downloadUrl = releaseUpdateState.downloadUrlForDialog()
+    val releaseNotes = releaseUpdateState.releaseNotesForDialog().ifBlank { "暂无更新内容" }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(releaseUpdateState.releaseDialogTitle(fallbackVersion)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "更新内容",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Text(
+                        text = releaseNotes,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onDismiss()
+                    uriHandler.openUri(downloadUrl)
+                },
+            ) {
+                Text("前往下载")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+@Composable
 fun UpdateAvailableDot(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
@@ -1241,6 +1303,29 @@ private fun ReleaseUpdateState.versionSubtitle(fallbackVersion: String): String 
     is ReleaseUpdateState.Checking -> "${currentVersion.ifBlank { fallbackVersion }} · 检查更新中"
     is ReleaseUpdateState.Current -> "$currentVersion · 已是最新"
     is ReleaseUpdateState.Failed -> "${currentVersion.ifBlank { fallbackVersion }} · 检查失败"
+}
+
+private fun ReleaseUpdateState.releaseDialogTitle(fallbackVersion: String): String = when (this) {
+    is ReleaseUpdateState.Available -> "发现新版本 $latestVersion"
+    is ReleaseUpdateState.Current -> "当前版本 ${currentVersion.ifBlank { fallbackVersion }}"
+    is ReleaseUpdateState.Checking -> "当前版本 ${currentVersion.ifBlank { fallbackVersion }}"
+    is ReleaseUpdateState.Failed -> "当前版本 ${currentVersion.ifBlank { fallbackVersion }}"
+}
+
+private fun ReleaseUpdateState.releaseNotesForDialog(): String = when (this) {
+    is ReleaseUpdateState.Available -> releaseNotes
+    is ReleaseUpdateState.Current -> releaseNotes
+    is ReleaseUpdateState.Checking,
+    is ReleaseUpdateState.Failed,
+    -> ""
+}
+
+private fun ReleaseUpdateState.downloadUrlForDialog(): String = when (this) {
+    is ReleaseUpdateState.Available -> downloadUrl
+    is ReleaseUpdateState.Current -> downloadUrl
+    is ReleaseUpdateState.Checking,
+    is ReleaseUpdateState.Failed,
+    -> "${ReleaseUpdateChecker.REPOSITORY_URL}/releases/latest"
 }
 
 @Composable

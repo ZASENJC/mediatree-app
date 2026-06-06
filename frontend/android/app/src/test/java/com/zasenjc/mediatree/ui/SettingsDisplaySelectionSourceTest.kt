@@ -201,7 +201,7 @@ class SettingsDisplaySelectionSourceTest {
         assertTrue(settingsSource.contains("ReleaseUpdateChecker.REPOSITORY_URL"))
         assertTrue(block.contains("title = \"版本\""))
         assertTrue(block.contains("releaseUpdateState"))
-        assertTrue(block.contains("openUri(update.downloadUrl)"))
+        assertTrue(block.contains("onClick = { releaseNotesDialogVisible = true }"))
         assertTrue(block.contains("title = \"关于 mediatree\""))
         assertTrue(block.contains("openUri(ReleaseUpdateChecker.REPOSITORY_URL)"))
     }
@@ -223,5 +223,30 @@ class SettingsDisplaySelectionSourceTest {
         assertTrue(appShellSource.contains("settingsBadgeVisible = settingsBadgeVisible"))
         assertTrue(bottomBarBlock.contains("showUpdateBadge = settingsBadgeVisible && item.route == \"settings\""))
         assertTrue(bottomBarBlock.contains("if (showUpdateBadge) UpdateAvailableDot("))
+    }
+
+    @Test
+    fun versionRowOpensFixedHeightScrollableReleaseNotesDialog() {
+        val aboutBlock = settingsSource
+            .substringAfter("SettingsSectionCard(title = \"关于\"")
+            .substringBefore("}\n        }\n    }\n    editingConnection")
+        val dialogBlock = settingsSource
+            .substringAfter("private fun ReleaseNotesDialog(")
+            .substringBefore("@Composable\nfun UpdateAvailableDot")
+
+        assertTrue(settingsSource.contains("var releaseNotesDialogVisible by remember"))
+        assertTrue(aboutBlock.contains("onClick = { releaseNotesDialogVisible = true }"))
+        assertFalse(aboutBlock.contains("onClick = update?.let { { uriHandler.openUri(update.downloadUrl) } }"))
+        assertTrue(settingsSource.contains("ReleaseNotesDialog("))
+        assertTrue(dialogBlock.contains("AlertDialog("))
+        assertTrue(dialogBlock.contains(".height(320.dp)"))
+        assertTrue(dialogBlock.contains("verticalScroll(rememberScrollState())"))
+        assertTrue(dialogBlock.contains("releaseUpdateState.releaseNotesForDialog()"))
+        assertTrue(dialogBlock.contains("Text(\"取消\")"))
+        assertTrue(dialogBlock.contains("Text(\"前往下载\")"))
+        assertTrue(dialogBlock.contains("uriHandler.openUri(downloadUrl)"))
+        assertTrue(settingsSource.contains("private fun ReleaseUpdateState.releaseNotesForDialog()"))
+        assertTrue(settingsSource.contains("is ReleaseUpdateState.Available -> releaseNotes"))
+        assertTrue(settingsSource.contains("is ReleaseUpdateState.Current -> releaseNotes"))
     }
 }
