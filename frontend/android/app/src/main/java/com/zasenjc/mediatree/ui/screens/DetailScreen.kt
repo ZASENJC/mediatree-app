@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
@@ -74,6 +76,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -992,6 +996,7 @@ private fun WatchFlag(modifier: Modifier = Modifier) {
 
 @Composable
 private fun ThumbnailStrip(movie: MovieDto, serverUrl: String, fallbackStill: String) {
+    var selectedThumbnailUrl by remember(movie.id) { mutableStateOf<String?>(null) }
     val thumbnails = remember(movie.id, movie.episodeStill, movie.javdbThumbnails, serverUrl, fallbackStill) {
         buildList {
             add(movie.episodeStill?.let { UrlUtils.resolveApiUrl(serverUrl, it) } ?: fallbackStill)
@@ -1004,6 +1009,7 @@ private fun ThumbnailStrip(movie: MovieDto, serverUrl: String, fallbackStill: St
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(thumbnails, key = { it }) { url ->
+                val shape = RoundedCornerShape(12.dp)
                 AsyncImage(
                     model = url,
                     contentDescription = null,
@@ -1011,7 +1017,49 @@ private fun ThumbnailStrip(movie: MovieDto, serverUrl: String, fallbackStill: St
                     modifier = Modifier
                         .width(132.dp)
                         .aspectRatio(16f / 9f)
-                        .clip(RoundedCornerShape(12.dp)),
+                        .shapeAwareClickable(shape = shape) { selectedThumbnailUrl = url },
+                )
+            }
+        }
+    }
+    selectedThumbnailUrl?.let { url ->
+        StillImageViewer(
+            imageUrl = url,
+            onDismiss = { selectedThumbnailUrl = null },
+        )
+    }
+}
+
+@Composable
+private fun StillImageViewer(imageUrl: String, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.92f))
+                .shapeAwareClickable(shape = RoundedCornerShape(0.dp), onClick = onDismiss)
+                .padding(16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = "剧照预览",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(),
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd),
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "关闭剧照预览",
+                    tint = Color.White,
                 )
             }
         }
