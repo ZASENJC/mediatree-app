@@ -6,13 +6,23 @@
 
 ---
 
+## 0.1.03 (2026-06-07) — 更新体验与播放器手势打磨
+
+### Android App
+
+- 将 Android `versionCode` 更新为 `4`，`versionName` 更新为 `0.1.03`
+- 检测到新版 APK 时，设置底栏和版本行显示更新红点
+- 点击版本行会打开固定高度的 release 更新内容弹窗，提供“取消”和“前往下载”操作，离开应用前可先查看最新版更新内容
+- 优化播放器临时快进手势，长按后拖动会持续保持快进状态直到松手
+
+---
+
 ## 0.1.02 (2026-06-06) — 多后端与构建稳定性
 
 ### Android App
 
 - 将 Android `versionCode` 更新为 `3`，`versionName` 更新为 `0.1.02`
 - 设置页支持添加多个 Jellyfin/Emby 后端配置；新增后端不再覆盖当前活跃的 Jellyfin/Emby 配置
-- 检测到新版 APK 时，设置底栏和版本行显示更新红点；点击版本行会打开固定高度的 release 更新内容弹窗，并提供下载入口
 - Android 构建入口现在优先使用 Android Studio 自带 JBR 21，避开 Homebrew OpenJDK 26 的 `jlink`/JAR transform 失败路径
 
 ---

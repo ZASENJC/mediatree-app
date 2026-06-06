@@ -6,13 +6,23 @@ All notable changes to MediaTree are documented here.
 
 ---
 
+## 0.1.03 (2026-06-07) — Update Experience and Player Gesture Polish
+
+### Android App
+
+- Updated Android `versionCode` to `4` and `versionName` to `0.1.03`
+- Added update badges on the Settings tab and version row when a newer APK is available
+- Made the version row open a fixed-height release-notes dialog with cancel and download actions, showing the latest release notes before leaving the app
+- Improved the player temporary fast-forward gesture so long-press dragging keeps fast-forward active until release
+
+---
+
 ## 0.1.02 (2026-06-06) — Multi-Backend and Build Reliability
 
 ### Android App
 
 - Updated Android `versionCode` to `3` and `versionName` to `0.1.02`
 - Added support for multiple Jellyfin/Emby backend profiles from Settings; adding a new backend no longer overwrites the active Jellyfin/Emby profile
-- Added update badges on the Settings tab and version row when a newer APK is available, and made the version row open a fixed-height release-notes dialog with download action
 - Android build entrypoints now prefer Android Studio's bundled JBR 21 and avoid the Homebrew OpenJDK 26 `jlink`/JAR transform failure path
 
 ---
