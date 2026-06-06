@@ -133,6 +133,26 @@ class MpvPlayerControllerTest {
     }
 
     @Test
+    fun playbackSpeedIsClampedForMpv() {
+        val backend = RecordingMpvBackend()
+        val controller = MpvPlayerController(appContext, backend)
+
+        controller.attachSurface(Any())
+        controller.setPlaybackSpeed(2.0)
+        controller.setPlaybackSpeed(10.0)
+        controller.setPlaybackSpeed(0.1)
+
+        assertEquals(
+            listOf(
+                "speed" to 2.0,
+                "speed" to 3.0,
+                "speed" to 0.25,
+            ),
+            backend.doublePropertiesSet,
+        )
+    }
+
+    @Test
     fun detachSurfaceStopsVideoOutputBeforeDroppingSurface() {
         val backend = RecordingMpvBackend()
         val controller = MpvPlayerController(appContext, backend)

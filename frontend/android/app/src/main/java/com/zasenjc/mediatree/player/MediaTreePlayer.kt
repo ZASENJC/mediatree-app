@@ -9,9 +9,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,6 +84,7 @@ private const val HudAutoHideMillis = 1_500L
 private const val LockedButtonAutoHideMillis = 5_000L
 private const val HorizontalSeekSecondsPerScreen = 90.0
 private const val DoubleTapSideZoneFraction = 0.22f
+private const val TemporaryFastForwardSpeed = 2.0
 
 private val PlayerSpeeds = listOf(0.75, 1.0, 1.25, 1.5, 2.0)
 private val AspectRatioOptions = listOf(
@@ -105,6 +109,10 @@ fun playerDoubleTapAction(tapX: Float, width: Int): PlayerDoubleTapAction {
         else -> PlayerDoubleTapAction.TogglePlay
     }
 }
+
+fun temporaryFastForwardSpeed(currentSpeed: Double): Double = TemporaryFastForwardSpeed
+
+fun restoredPlaybackSpeed(speedBeforeHold: Double, currentSpeed: Double): Double = speedBeforeHold
 
 data class PlaybackPositionSnapshot(
     val positionSeconds: Double,
@@ -146,6 +154,7 @@ fun MediaTreePlayer(
     var playerLocked by remember { mutableStateOf(false) }
     var showLockedButton by remember { mutableStateOf(false) }
     var playbackSpeed by remember { mutableDoubleStateOf(1.0) }
+    var temporarySpeedRestoreValue by remember { mutableStateOf<Double?>(null) }
     var selectedAspectRatio by remember { mutableStateOf("no") }
     var selectedAudioTrackId by remember { mutableStateOf("") }
     var audioTracks by remember { mutableStateOf<List<MpvTrackOption>>(emptyList()) }
@@ -185,9 +194,17 @@ fun MediaTreePlayer(
             }
         },
     )
+    val restoreTemporaryFastForward = {
+        val speedBeforeHold = temporarySpeedRestoreValue
+        if (speedBeforeHold != null) {
+            temporarySpeedRestoreValue = null
+            controller.setPlaybackSpeed(restoredPlaybackSpeed(speedBeforeHold = speedBeforeHold, currentSpeed = playbackSpeed))
+        }
+    }
 
     DisposableEffect(controller) {
         onDispose {
+            restoreTemporaryFastForward()
             controller.release()
         }
     }
@@ -331,6 +348,12 @@ fun MediaTreePlayer(
         }
     }
 
+    DisposableEffect(playbackSource.uri, playbackSource.headers, playerLocked) {
+        onDispose {
+            restoreTemporaryFastForward()
+        }
+    }
+
     Box(
         modifier = modifier
             .background(Color.Black),
@@ -393,6 +416,16 @@ fun MediaTreePlayer(
                 }
                 showOverlay = true
             },
+            onLongPress = {
+                if (playerLocked || temporarySpeedRestoreValue != null) return@PlayerGestureLayer
+                val speedBeforeHold = playbackSpeed
+                temporarySpeedRestoreValue = speedBeforeHold
+                controller.setPlaybackSpeed(temporaryFastForwardSpeed(currentSpeed = playbackSpeed))
+                hudMessage = "2.0x 快速播放"
+            },
+            onPressEnd = {
+                restoreTemporaryFastForward()
+            },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -450,6 +483,7 @@ fun MediaTreePlayer(
                 },
                 onSpeedChange = { speed ->
                     playbackSpeed = speed
+                    temporarySpeedRestoreValue = null
                     controller.setPlaybackSpeed(speed)
                     hudMessage = "${speed.formatSpeed()}x"
                     showOverlay = true
@@ -535,6 +569,8 @@ private fun PlayerGestureLayer(
     onVerticalDrag: (x: Float, dragAmount: Float, width: Int, height: Int) -> Unit,
     onTap: () -> Unit,
     onDoubleTap: (tapX: Float, width: Int) -> Unit,
+    onLongPress: () -> Unit,
+    onPressEnd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -556,7 +592,15 @@ private fun PlayerGestureLayer(
                 detectTapGestures(
                     onTap = { onTap() },
                     onDoubleTap = { offset -> onDoubleTap(offset.x, size.width) },
+                    onLongPress = { onLongPress() },
                 )
+            }
+            .pointerInput(playerLocked) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    waitForUpOrCancellation()
+                    onPressEnd()
+                }
             },
     )
 }

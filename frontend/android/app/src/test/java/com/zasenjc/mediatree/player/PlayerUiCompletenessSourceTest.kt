@@ -65,6 +65,40 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
+    fun temporaryFastForwardSpeedRestoresOriginalSpeed() {
+        assertEquals(2.0, temporaryFastForwardSpeed(currentSpeed = 1.0), 0.001)
+        assertEquals(1.25, restoredPlaybackSpeed(speedBeforeHold = 1.25, currentSpeed = 2.0), 0.001)
+        assertEquals(2.0, restoredPlaybackSpeed(speedBeforeHold = 2.0, currentSpeed = 2.0), 0.001)
+        assertEquals(0.75, restoredPlaybackSpeed(speedBeforeHold = 0.75, currentSpeed = 1.5), 0.001)
+    }
+
+    @Test
+    fun playerLongPressUsesTemporaryFastForwardWithReleaseRestore() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+        val gestureLayer = player
+            .substringAfter("private fun PlayerGestureLayer(")
+            .substringBefore("@Composable\nprivate fun PlayerControlsOverlay")
+
+        assertTrue(player.contains("TemporaryFastForwardSpeed = 2.0"))
+        assertTrue(player.contains("temporaryFastForwardSpeed(currentSpeed = playbackSpeed)"))
+        assertTrue(player.contains("restoredPlaybackSpeed(speedBeforeHold = speedBeforeHold, currentSpeed = playbackSpeed)"))
+        assertTrue(player.contains("hudMessage = \"2.0x 快速播放\""))
+        assertTrue(player.contains("temporarySpeedRestoreValue"))
+        assertTrue(player.contains("DisposableEffect(playbackSource.uri, playbackSource.headers, playerLocked)"))
+        assertTrue(gestureLayer.contains("onLongPress: () -> Unit"))
+        assertTrue(gestureLayer.contains("onPressEnd: () -> Unit"))
+        assertTrue(gestureLayer.contains("detectTapGestures("))
+        assertTrue(gestureLayer.contains("onLongPress = { onLongPress() }"))
+        assertTrue(gestureLayer.contains("awaitEachGesture"))
+        assertTrue(gestureLayer.contains("awaitFirstDown"))
+        assertTrue(gestureLayer.contains("waitForUpOrCancellation"))
+        assertTrue(gestureLayer.contains("onPressEnd()"))
+        assertFalse(player.contains("showOverlay = true\n                    hudMessage = \"2.0x 快速播放\""))
+    }
+
+    @Test
     fun fullscreenAndLockBehaviorAreScoped() {
         val player = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
