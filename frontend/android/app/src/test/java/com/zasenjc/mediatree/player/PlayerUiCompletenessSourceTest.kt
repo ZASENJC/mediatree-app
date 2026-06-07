@@ -99,6 +99,25 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
+    fun playerHudMessagesUseTransparentBackgroundAndSmallerText() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+        val hudStart = player.indexOf("if (hudMessage.isNotBlank())")
+        val hudEnd = player.indexOf("playbackError?.let", hudStart)
+        val hudBlock = player.substring(hudStart, hudEnd)
+
+        assertTrue(player.contains("hudMessage = \"亮度:"))
+        assertTrue(player.contains("hudMessage = \"音量:"))
+        assertTrue(player.contains("hudMessage = \"${'$'}{speed.formatSpeed()}x\""))
+        assertTrue(player.contains("hudMessage = formatTime(target)"))
+        assertTrue(hudBlock.contains(".align(Alignment.Center)"))
+        assertTrue(hudBlock.contains("fontSize = 12.sp"))
+        assertFalse(hudBlock.contains("Color.Black.copy(alpha = 0.66f)"))
+        assertFalse(hudBlock.contains("fontSize = 14.sp"))
+    }
+
+    @Test
     fun fullscreenAndLockBehaviorAreScoped() {
         val player = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
