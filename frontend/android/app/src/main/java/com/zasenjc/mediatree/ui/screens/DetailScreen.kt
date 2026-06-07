@@ -32,6 +32,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -997,6 +999,7 @@ private fun WatchFlag(modifier: Modifier = Modifier) {
 @Composable
 private fun ThumbnailStrip(movie: MovieDto, serverUrl: String, fallbackStill: String) {
     var selectedThumbnailUrl by remember(movie.id) { mutableStateOf<String?>(null) }
+    var selectedThumbnailIndex by remember(movie.id) { mutableStateOf(0) }
     val thumbnails = remember(movie.id, movie.episodeStill, movie.javdbThumbnails, serverUrl, fallbackStill) {
         buildList {
             add(movie.episodeStill?.let { UrlUtils.resolveApiUrl(serverUrl, it) } ?: fallbackStill)
@@ -1008,7 +1011,8 @@ private fun ThumbnailStrip(movie: MovieDto, serverUrl: String, fallbackStill: St
     if (thumbnails.isEmpty()) return
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(thumbnails, key = { it }) { url ->
+            items(thumbnails.size, key = { thumbnails[it] }) { index ->
+                val url = thumbnails[index]
                 val shape = RoundedCornerShape(12.dp)
                 AsyncImage(
                     model = url,
@@ -1017,21 +1021,30 @@ private fun ThumbnailStrip(movie: MovieDto, serverUrl: String, fallbackStill: St
                     modifier = Modifier
                         .width(132.dp)
                         .aspectRatio(16f / 9f)
-                        .shapeAwareClickable(shape = shape) { selectedThumbnailUrl = url },
+                        .shapeAwareClickable(shape = shape) {
+                            selectedThumbnailIndex = index
+                            selectedThumbnailUrl = url
+                        },
                 )
             }
         }
     }
     selectedThumbnailUrl?.let { url ->
         StillImageViewer(
-            imageUrl = url,
+            imageUrls = thumbnails,
+            initialPage = selectedThumbnailIndex,
             onDismiss = { selectedThumbnailUrl = null },
         )
     }
 }
 
 @Composable
-private fun StillImageViewer(imageUrl: String, onDismiss: () -> Unit) {
+private fun StillImageViewer(imageUrls: List<String>, initialPage: Int, onDismiss: () -> Unit) {
+    if (imageUrls.isEmpty()) return
+    val pagerState = rememberPagerState(
+        initialPage = initialPage.coerceIn(0, imageUrls.lastIndex),
+        pageCount = { imageUrls.size },
+    )
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -1044,14 +1057,21 @@ private fun StillImageViewer(imageUrl: String, onDismiss: () -> Unit) {
                 .padding(16.dp),
             contentAlignment = Alignment.Center,
         ) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = "剧照预览",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(),
-            )
+            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AsyncImage(
+                        model = imageUrls[page],
+                        contentDescription = "剧照预览",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(),
+                    )
+                }
+            }
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier.align(Alignment.TopEnd),
