@@ -84,7 +84,7 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("TemporaryFastForwardSpeed = 2.0"))
         assertTrue(player.contains("temporaryFastForwardSpeed(currentSpeed = playbackSpeed)"))
         assertTrue(player.contains("restoredPlaybackSpeed(speedBeforeHold = speedBeforeHold, currentSpeed = playbackSpeed)"))
-        assertTrue(player.contains("hudMessage = \"2.0x 快速播放\""))
+        assertTrue(player.contains("hudMessage = \"2.0x\""))
         assertTrue(player.contains("temporarySpeedRestoreValue"))
         assertTrue(player.contains("DisposableEffect(playbackSource.uri, playbackSource.headers, playerLocked)"))
         assertTrue(gestureLayer.contains("onLongPress: () -> Unit"))
@@ -95,11 +95,11 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(gestureLayer.contains("onDragEnd = { onPressEnd() }"))
         assertTrue(gestureLayer.contains("onDragCancel = { onPressEnd() }"))
         assertTrue(gestureLayer.contains("change.consume()"))
-        assertFalse(player.contains("showOverlay = true\n                    hudMessage = \"2.0x 快速播放\""))
+        assertFalse(player.contains("hudMessage = \"2.0x 快速播放\""))
     }
 
     @Test
-    fun playerHudMessagesUseTransparentBackgroundAndSmallerText() {
+    fun playerHudMessagesUseTransparentTopPositionAndShortText() {
         val player = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
             .readText()
@@ -107,12 +107,17 @@ class PlayerUiCompletenessSourceTest {
         val hudEnd = player.indexOf("playbackError?.let", hudStart)
         val hudBlock = player.substring(hudStart, hudEnd)
 
-        assertTrue(player.contains("hudMessage = \"亮度:"))
-        assertTrue(player.contains("hudMessage = \"音量:"))
+        assertTrue(player.contains("hudMessage = \"${'$'}{(attrs.screenBrightness * 100).toInt()}%\""))
+        assertTrue(player.contains("hudMessage = \"${'$'}{(newVol * 100 / maxVol)}%\""))
         assertTrue(player.contains("hudMessage = \"${'$'}{speed.formatSpeed()}x\""))
         assertTrue(player.contains("hudMessage = formatTime(target)"))
-        assertTrue(hudBlock.contains(".align(Alignment.Center)"))
+        assertTrue(hudBlock.contains(".align(Alignment.TopCenter)"))
+        assertTrue(hudBlock.contains(".padding(top = 52.dp)"))
         assertTrue(hudBlock.contains("fontSize = 12.sp"))
+        assertFalse(player.contains("hudMessage = \"亮度:"))
+        assertFalse(player.contains("hudMessage = \"音量:"))
+        assertFalse(player.contains("快速播放"))
+        assertFalse(hudBlock.contains(".align(Alignment.Center)"))
         assertFalse(hudBlock.contains("Color.Black.copy(alpha = 0.66f)"))
         assertFalse(hudBlock.contains("fontSize = 14.sp"))
     }
