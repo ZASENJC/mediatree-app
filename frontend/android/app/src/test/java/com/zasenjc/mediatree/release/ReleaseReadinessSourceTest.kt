@@ -51,6 +51,8 @@ class ReleaseReadinessSourceTest {
         assertTrue(workflow.contains("assembleRelease"))
         assertTrue(workflow.contains("app-release.apk"))
         assertTrue(workflow.contains("sha256sum"))
+        assertTrue(workflow.contains("release-notes:start"))
+        assertTrue(workflow.contains("release-notes:end"))
         assertFalse(workflow.contains("assembleDebug"))
         assertFalse(workflow.contains("app-debug.apk"))
         assertFalse(workflow.contains("--force"))
@@ -97,5 +99,29 @@ class ReleaseReadinessSourceTest {
         assertTrue(chinese.contains("将 Android `versionCode` 更新为 `6`，`versionName` 更新为 `0.1.05`"))
         assertFalse(english.substringBefore("## 0.1.05").contains("Updated Android `versionCode`"))
         assertFalse(chinese.substringBefore("## 0.1.05").contains("将 Android `versionCode` 更新为"))
+    }
+
+    @Test
+    fun releaseNotesBlockStaysUserFacingAndFunctionalOnly() {
+        val english = appRoot.resolve("../../../CHANGELOG.md").readText()
+        val chinese = appRoot.resolve("../../../CHANGELOG_zh-CN.md").readText()
+        val englishReleaseNotes = releaseNotesBlock(english, "0.1.05")
+        val chineseReleaseNotes = releaseNotesBlock(chinese, "0.1.05")
+
+        assertTrue(englishReleaseNotes.contains("Detail stills"))
+        assertTrue(englishReleaseNotes.contains("Fullscreen playback"))
+        assertTrue(chineseReleaseNotes.contains("详情页剧照"))
+        assertTrue(chineseReleaseNotes.contains("全屏播放"))
+        assertFalse(englishReleaseNotes.contains("versionCode"))
+        assertFalse(englishReleaseNotes.contains(".codex"))
+        assertFalse(chineseReleaseNotes.contains("versionCode"))
+        assertFalse(chineseReleaseNotes.contains(".codex"))
+    }
+
+    private fun releaseNotesBlock(changelog: String, version: String): String {
+        val versionSection = changelog.substringAfter("## $version").substringBefore("\n## ")
+        return versionSection
+            .substringAfter("<!-- release-notes:start -->")
+            .substringBefore("<!-- release-notes:end -->")
     }
 }

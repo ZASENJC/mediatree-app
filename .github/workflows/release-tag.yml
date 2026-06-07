@@ -77,14 +77,23 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CONTENT=$(awk -v ver="$VERSION" '
-            BEGIN { found=0; buf="" }
+            BEGIN { found=0; in_notes=0; saw_notes=0; fallback="" }
             /^## / {
               if (found) exit
               if ($0 ~ ver) { found=1; next }
             }
-            found { buf = buf $0 "\n" }
-            END { print buf }
-          ' CHANGELOG_zh-CN.md | head -n -1)
+            found {
+              if ($0 ~ /^<!-- release-notes:start -->/) { in_notes=1; saw_notes=1; next }
+              if ($0 ~ /^<!-- release-notes:end -->/) { in_notes=0; next }
+              if (in_notes) { print; next }
+              if (!saw_notes) { fallback = fallback $0 "\n" }
+            }
+            END {
+              if (!saw_notes) {
+                printf "%s", fallback
+              }
+            }
+          ' CHANGELOG_zh-CN.md)
           echo "$CONTENT" > /tmp/release_body.md
 
       - name: Update GitHub Release

@@ -8,6 +8,12 @@ All notable changes to MediaTree are documented here.
 
 ## 0.1.05 (2026-06-08) — Still Viewer and Fullscreen Player Controls
 
+<!-- release-notes:start -->
+- Detail stills can now be opened in the image viewer and switched with left/right swipes
+- Player volume, brightness, speed, and seek prompts are lighter and shown near the top of the video
+- Fullscreen playback now has a rotation button for quickly switching portrait and landscape
+<!-- release-notes:end -->
+
 ### Android App
 
 - Updated Android `versionCode` to `6` and `versionName` to `0.1.05`
