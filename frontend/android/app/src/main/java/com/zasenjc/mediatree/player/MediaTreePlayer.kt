@@ -547,10 +547,9 @@ fun MediaTreePlayer(
                 hudMessage,
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .background(Color.Black.copy(alpha = 0.66f), RoundedCornerShape(8.dp))
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 color = Color.White,
-                fontSize = 14.sp,
+                fontSize = 12.sp,
             )
         }
 
