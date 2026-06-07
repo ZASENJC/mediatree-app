@@ -91,11 +91,11 @@ class ReleaseReadinessSourceTest {
         val english = appRoot.resolve("../../../CHANGELOG.md").readText()
         val chinese = appRoot.resolve("../../../CHANGELOG_zh-CN.md").readText()
 
-        assertTrue(english.contains("## 0.1.03"))
-        assertTrue(chinese.contains("## 0.1.03"))
-        assertTrue(english.contains("Updated Android `versionCode` to `4` and `versionName` to `0.1.03`"))
-        assertTrue(chinese.contains("将 Android `versionCode` 更新为 `4`，`versionName` 更新为 `0.1.03`"))
-        assertFalse(english.substringBefore("## 0.1.03").contains("Updated Android `versionCode`"))
-        assertFalse(chinese.substringBefore("## 0.1.03").contains("将 Android `versionCode` 更新为"))
+        assertTrue(english.contains("## 0.1.05"))
+        assertTrue(chinese.contains("## 0.1.05"))
+        assertTrue(english.contains("Updated Android `versionCode` to `6` and `versionName` to `0.1.05`"))
+        assertTrue(chinese.contains("将 Android `versionCode` 更新为 `6`，`versionName` 更新为 `0.1.05`"))
+        assertFalse(english.substringBefore("## 0.1.05").contains("Updated Android `versionCode`"))
+        assertFalse(chinese.substringBefore("## 0.1.05").contains("将 Android `versionCode` 更新为"))
     }
 }

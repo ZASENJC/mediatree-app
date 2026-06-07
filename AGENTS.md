@@ -27,6 +27,13 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Commands
 
+## Repo-Local Codex/ECC Tooling
+
+- `.agents/skills/` contains repo-local ECC skills that Codex can load for this project.
+- `.codex/config.toml` enables `features.multi_agent`; role files live under `.codex/agents/`.
+- Keep the configured agent roles read-only unless the user explicitly asks to change the multi-agent execution boundary.
+- Current project-local roles are `explorer`, `reviewer`, `docs-researcher`, `planner`, `kotlin-reviewer`, and `security-reviewer`.
+
 ### Android App
 
 ```bash

@@ -6,6 +6,19 @@ All notable changes to MediaTree are documented here.
 
 ---
 
+## 0.1.05 (2026-06-08) — Still Viewer and Fullscreen Player Controls
+
+### Android App
+
+- Updated Android `versionCode` to `6` and `versionName` to `0.1.05`
+- Added tap-to-open image viewing for detail-page stills, with left/right swiping between still images
+- Made player volume, brightness, speed, and seek HUD prompts transparent, smaller, and positioned near the top of the video
+- Shortened player HUD labels, including direct speed labels such as `2.0x`
+- Added a rotation action beside the fullscreen button so fullscreen playback can quickly switch between portrait and landscape
+- Added repo-local `.agents/skills` and `.codex/agents` configuration so Codex can use read-only multi-agent roles for review and planning in this repository
+
+---
+
 ## 0.1.04 (2026-06-07) — Home Library Sorting and Grid Fixes
 
 ### Android App

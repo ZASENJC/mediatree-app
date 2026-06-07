@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.04.apk"><img src="https://img.shields.io/badge/Download-APK-2f6fed?style=for-the-badge&logo=android&logoColor=white" alt="Download APK"></a>
+  <a href="https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.05.apk"><img src="https://img.shields.io/badge/Download-APK-2f6fed?style=for-the-badge&logo=android&logoColor=white" alt="Download APK"></a>
   <a href="https://github.com/ZASENJC/mediatree-app/releases/latest"><img src="https://img.shields.io/badge/Latest-Release-2f855a?style=for-the-badge" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Android-native-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Native Android">
 </p>
@@ -20,7 +20,7 @@
 
 ## Download
 
-**[Download the latest APK](https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.04.apk)**
+**[Download the latest APK](https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.05.apk)**
 
 Open the APK on your Android device and install it. If Android blocks the installation, allow your browser or file manager to install apps from unknown sources, then try again.
 
