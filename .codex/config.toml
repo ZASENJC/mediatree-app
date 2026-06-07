@@ -1,0 +1,6 @@
+[features]
+multi_agent = true
+
+# Codex 0.135 automatically loads project-local role files from .codex/agents/.
+# Do not also declare [agents.<name>].path entries here; that produces duplicate
+# malformed-role warnings for the same config layer.
