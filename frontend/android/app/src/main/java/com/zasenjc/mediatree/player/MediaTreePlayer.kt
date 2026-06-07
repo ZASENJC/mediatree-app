@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.SyncProblem
@@ -130,8 +131,10 @@ fun MediaTreePlayer(
     onSubtitleSelected: (Int) -> Unit = {},
     showFullscreenButton: Boolean = false,
     isFullscreen: Boolean = false,
+    showOrientationToggle: Boolean = false,
     showAspectRatioControls: Boolean = false,
     onFullscreenRequest: () -> Unit = {},
+    onToggleFullscreenOrientation: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -464,6 +467,7 @@ fun MediaTreePlayer(
                 selectedAspectRatio = selectedAspectRatio,
                 showFullscreenButton = showFullscreenButton,
                 isFullscreen = isFullscreen,
+                showOrientationToggle = showOrientationToggle,
                 showAspectRatioControls = showAspectRatioControls,
                 onToggleLock = {
                     playerLocked = true
@@ -529,6 +533,7 @@ fun MediaTreePlayer(
                     showOverlay = true
                 },
                 onFullscreenRequest = onFullscreenRequest,
+                onToggleFullscreenOrientation = onToggleFullscreenOrientation,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -620,6 +625,7 @@ private fun PlayerControlsOverlay(
     selectedAspectRatio: String,
     showFullscreenButton: Boolean,
     isFullscreen: Boolean,
+    showOrientationToggle: Boolean,
     showAspectRatioControls: Boolean,
     onToggleLock: () -> Unit,
     onTogglePlay: () -> Unit,
@@ -631,6 +637,7 @@ private fun PlayerControlsOverlay(
     onAudioTrackChange: (MpvTrackOption) -> Unit,
     onAspectRatioChange: (PlayerMenuOption) -> Unit,
     onFullscreenRequest: () -> Unit,
+    onToggleFullscreenOrientation: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.background(Color.Black.copy(alpha = 0.22f))) {
@@ -686,6 +693,9 @@ private fun PlayerControlsOverlay(
                         AspectRatioMenu(selectedAspectRatio = selectedAspectRatio, onAspectRatioChange = onAspectRatioChange)
                     }
                     Spacer(Modifier.weight(1f))
+                    if (showOrientationToggle && isFullscreen) {
+                        FullscreenOrientationToggle(onToggleFullscreenOrientation = onToggleFullscreenOrientation)
+                    }
                     if (showFullscreenButton || isFullscreen) {
                         FullscreenControl(isFullscreen = isFullscreen, onFullscreenRequest = onFullscreenRequest)
                     }
@@ -796,6 +806,21 @@ private fun LockButton(playerLocked: Boolean, onToggleLock: () -> Unit) {
             contentDescription = if (playerLocked) "解锁播放器" else "锁定播放器",
             tint = Color.White,
             modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun FullscreenOrientationToggle(onToggleFullscreenOrientation: () -> Unit) {
+    IconButton(
+        onClick = onToggleFullscreenOrientation,
+        modifier = Modifier.size(40.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.ScreenRotation,
+            contentDescription = "切换横竖屏",
+            tint = Color.White,
+            modifier = Modifier.size(21.dp),
         )
     }
 }

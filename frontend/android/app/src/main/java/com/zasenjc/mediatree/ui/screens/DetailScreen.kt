@@ -494,6 +494,7 @@ fun DetailScreen(
                     onPlaybackComplete = { pos, dur -> vm.onPlaybackComplete(session.activeProviderType, session.activeProfileId, activeMovieId, pos, dur) },
                     isFullscreen = playerFullscreen,
                     showFullscreenButton = true,
+                    showOrientationToggle = playerFullscreen,
                     showAspectRatioControls = playerFullscreen,
                     onFullscreenRequest = {
                         capturePlaybackPosition()
@@ -503,6 +504,14 @@ fun DetailScreen(
                         } else {
                             fullscreenRequested = true
                             requestFullscreenOrientation(activity, fullscreenModePreference)
+                        }
+                    },
+                    onToggleFullscreenOrientation = {
+                        fullscreenRequested = true
+                        activity?.requestedOrientation = if (isLandscape) {
+                            ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                        } else {
+                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                         }
                     },
                     modifier = playerModifier,
