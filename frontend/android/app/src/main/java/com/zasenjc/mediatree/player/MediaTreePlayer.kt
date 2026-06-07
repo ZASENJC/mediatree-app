@@ -374,7 +374,7 @@ fun MediaTreePlayer(
                         val attrs = act.window.attributes
                         attrs.screenBrightness = (attrs.screenBrightness - ratio).coerceIn(0.01f, 1f)
                         act.window.attributes = attrs
-                        hudMessage = "亮度: ${(attrs.screenBrightness * 100).toInt()}%"
+                        hudMessage = "${(attrs.screenBrightness * 100).toInt()}%"
                     }
                 } else {
                     val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -382,7 +382,7 @@ fun MediaTreePlayer(
                     val currentVol = audio?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 7
                     val newVol = (currentVol - (ratio * maxVol).toInt()).coerceIn(0, maxVol)
                     audio?.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
-                    hudMessage = "音量: ${(newVol * 100 / maxVol)}%"
+                    hudMessage = "${(newVol * 100 / maxVol)}%"
                 }
             },
             onTap = { showOverlay = !showOverlay },
@@ -419,7 +419,7 @@ fun MediaTreePlayer(
                 val speedBeforeHold = playbackSpeed
                 temporarySpeedRestoreValue = speedBeforeHold
                 controller.setPlaybackSpeed(temporaryFastForwardSpeed(currentSpeed = playbackSpeed))
-                hudMessage = "2.0x 快速播放"
+                hudMessage = "2.0x"
             },
             onPressEnd = {
                 restoreTemporaryFastForward()
@@ -546,7 +546,8 @@ fun MediaTreePlayer(
             Text(
                 hudMessage,
                 modifier = Modifier
-                    .align(Alignment.Center)
+                    .align(Alignment.TopCenter)
+                    .padding(top = 52.dp)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 color = Color.White,
                 fontSize = 12.sp,
