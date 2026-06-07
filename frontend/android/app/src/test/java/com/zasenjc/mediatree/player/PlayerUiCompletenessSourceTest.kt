@@ -403,6 +403,28 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
+    fun detailPageStillViewerSupportsHorizontalSwiping() {
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+        val viewerStart = detailScreen.indexOf("private fun StillImageViewer(")
+        val viewerEnd = detailScreen.indexOf("@Composable", viewerStart + 1)
+            .takeIf { it > viewerStart }
+            ?: detailScreen.indexOf("private fun CrewSection(", viewerStart)
+        val viewerBlock = detailScreen.substring(viewerStart, viewerEnd)
+
+        assertTrue(detailScreen.contains("import androidx.compose.foundation.pager.HorizontalPager"))
+        assertTrue(detailScreen.contains("import androidx.compose.foundation.pager.rememberPagerState"))
+        assertTrue(detailScreen.contains("selectedThumbnailIndex"))
+        assertTrue(detailScreen.contains("imageUrls = thumbnails"))
+        assertTrue(detailScreen.contains("initialPage = selectedThumbnailIndex"))
+        assertTrue(viewerBlock.contains("val pagerState = rememberPagerState("))
+        assertTrue(viewerBlock.contains("pageCount = { imageUrls.size }"))
+        assertTrue(viewerBlock.contains("HorizontalPager("))
+        assertTrue(viewerBlock.contains("imageUrls[page]"))
+    }
+
+    @Test
     fun playerLoadEffectIgnoresSubtitleTrackListChanges() {
         val player = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
