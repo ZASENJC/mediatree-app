@@ -134,22 +134,28 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("LockedButtonAutoHideMillis = 5_000L"))
         assertTrue(player.contains("showLockedButton"))
         assertTrue(player.contains("onFullscreenRequest"))
+        assertTrue(player.contains("onToggleFullscreenOrientation"))
         assertTrue(player.contains("showFullscreenButton"))
         assertTrue(player.contains("isFullscreen"))
+        assertTrue(player.contains("showOrientationToggle"))
         assertTrue(player.contains("showAspectRatioControls"))
         assertTrue(player.contains("if (showAspectRatioControls)"))
         assertTrue(player.contains("FullscreenControl("))
+        assertTrue(player.contains("FullscreenOrientationToggle("))
         assertTrue(player.contains("AspectRatioMenu("))
         assertFalse(player.contains("private fun FullscreenButton"))
         assertTrue(detailScreen.contains("playbackResumePositions"))
         assertTrue(detailScreen.contains("lastKnownPlaybackPositions"))
         assertTrue(detailScreen.contains("onPlaybackPositionChange"))
         assertTrue(detailScreen.contains("ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT"))
+        assertTrue(detailScreen.contains("ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE"))
         assertTrue(detailScreen.contains("onChromeVisibleChange"))
         assertTrue(detailScreen.contains("onChromeVisibleChange(!playerFullscreen)"))
         assertTrue(detailScreen.contains("onDispose { onChromeVisibleChange(true) }"))
         assertTrue(detailScreen.contains("isFullscreen = playerFullscreen"))
+        assertTrue(detailScreen.contains("showOrientationToggle = playerFullscreen"))
         assertTrue(detailScreen.contains("showAspectRatioControls = playerFullscreen"))
+        assertTrue(detailScreen.contains("onToggleFullscreenOrientation = {"))
     }
 
     @Test
@@ -162,13 +168,16 @@ class PlayerUiCompletenessSourceTest {
         val subtitleIndex = player.indexOf("SubtitleTrackMenu(")
         val audioIndex = player.indexOf("AudioTrackMenu(")
         val aspectIndex = player.indexOf("AspectRatioMenu(selectedAspectRatio = selectedAspectRatio")
+        val orientationIndex = player.indexOf("FullscreenOrientationToggle(onToggleFullscreenOrientation")
         val fullscreenIndex = player.indexOf("FullscreenControl(isFullscreen = isFullscreen")
 
         assertTrue(speedIndex >= 0)
         assertTrue(subtitleIndex > speedIndex)
         assertTrue(audioIndex > subtitleIndex)
         assertTrue(aspectIndex > audioIndex)
-        assertTrue(fullscreenIndex > aspectIndex)
+        assertTrue(orientationIndex > aspectIndex)
+        assertTrue(fullscreenIndex > orientationIndex)
+        assertTrue(player.contains("if (showOrientationToggle && isFullscreen)"))
         assertTrue(player.contains("Spacer(Modifier.weight(1f))"))
     }
 
@@ -185,6 +194,7 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("contentDescription = \"字幕\""))
         assertTrue(player.contains("contentDescription = \"音轨\""))
         assertTrue(player.contains("contentDescription = \"画面比例\""))
+        assertTrue(player.contains("contentDescription = \"切换横竖屏\""))
         assertTrue(player.contains("contentDescription = if (isFullscreen) \"退出全屏\" else \"全屏\""))
     }
 
