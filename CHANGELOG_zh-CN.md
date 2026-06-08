@@ -6,14 +6,19 @@
 
 ---
 
-## Unreleased
+## 0.1.06 (2026-06-09) — 挂载图片浏览
 
-### Android App
+<!-- release-notes:start -->
 
 - 挂载的 SMB 和 WebDAV 文件夹浏览现在可以识别图片文件
 - SMB/WebDAV 图片可打开进入全屏图片查看，查看时会隐藏底部导航
 - 图片查看支持同目录左右滑动切换、放大缩小和平移查看
 - 挂载图片缩略图现在与挂载视频条目使用同一套懒加载缩略图逻辑
+<!-- release-notes:end -->
+
+### Android App
+
+- 将 Android `versionCode` 更新为 `7`，`versionName` 更新为 `0.1.06`
 
 ---
 

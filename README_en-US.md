@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.05.apk"><img src="https://img.shields.io/badge/Download-APK-2f6fed?style=for-the-badge&logo=android&logoColor=white" alt="Download APK"></a>
+  <a href="https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.06.apk"><img src="https://img.shields.io/badge/Download-APK-2f6fed?style=for-the-badge&logo=android&logoColor=white" alt="Download APK"></a>
   <a href="https://github.com/ZASENJC/mediatree-app/releases/latest"><img src="https://img.shields.io/badge/Latest-Release-2f855a?style=for-the-badge" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Android-native-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Native Android">
 </p>
@@ -20,7 +20,7 @@
 
 ## Download
 
-**[Download the latest APK](https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.05.apk)**
+**[Download the latest APK](https://github.com/ZASENJC/mediatree-app/releases/latest/download/MediaTree-App-0.1.06.apk)**
 
 Open the APK on your Android device and install it. If Android blocks the installation, allow your browser or file manager to install apps from unknown sources, then try again.
 
@@ -35,6 +35,7 @@ Deploying with the [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) b
 
 - Connect to `MediaTree`, `Jellyfin`, `Emby`, `SMB`, and `WebDAV` from one app
 - Poster-first library browsing with recent watching, folders, favorites, and detail pages
+- SMB/WebDAV mounted folders support video and image browsing, with image thumbnails, swiping, and zooming
 - Native playback with subtitles, progress memory, gestures, and landscape mode
 - Save multiple media-service connection profiles after login, so unverified backends do not load libraries
 - Settings surfaces newer APKs with update badges and lets you review release notes before opening the download
@@ -53,8 +54,8 @@ Deploying with the [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) b
 | `MediaTree` | Server-side media library, metadata, playback, progress, favorites |
 | `Jellyfin` | MediaBrowser-compatible login, multiple backend profiles, library, metadata, playback stream, progress, favorites |
 | `Emby` | Emby-compatible login, multiple backend profiles, library, metadata, playback stream, progress, favorites |
-| `SMB` | Storage source setup and browsing |
-| `WebDAV` | Storage source setup and browsing |
+| `SMB` | Storage source setup, video/image browsing, thumbnails, image viewing |
+| `WebDAV` | Storage source setup, video/image browsing, thumbnails, image viewing |
 
 ## License
 
