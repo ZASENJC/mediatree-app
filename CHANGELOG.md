@@ -6,6 +6,17 @@ All notable changes to MediaTree are documented here.
 
 ---
 
+## Unreleased
+
+### Android App
+
+- Mounted SMB and WebDAV folders now recognize image files while browsing
+- Mounted SMB/WebDAV images open in a fullscreen image viewer with bottom navigation hidden
+- The image viewer supports same-folder left/right swiping, zooming, and panning
+- Mounted image thumbnails now use the same lazy thumbnail loading behavior as mounted video items
+
+---
+
 ## 0.1.05 (2026-06-08) — Still Viewer and Fullscreen Player Controls
 
 <!-- release-notes:start -->

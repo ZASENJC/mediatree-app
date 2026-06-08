@@ -105,9 +105,10 @@ Prefer app-side compatibility for response shape differences. If an API mismatch
 ### App screens
 
 - `HomeScreen.kt` — MD3 home feed, recent watching, poster grid, search, sort, and scroll-aware overlay chrome.
-- `BrowseScreen.kt` — folder browsing, movie lists, breadcrumbs, search, sort, and scroll-aware overlay chrome.
+- `BrowseScreen.kt` — folder browsing, movie/image lists, mounted SMB/WebDAV media thumbnails, breadcrumbs, search, sort, and scroll-aware overlay chrome.
 - `FavoritesScreen.kt` — favorite-tagged media with mixed episode/poster grid and scroll-aware overlay chrome.
 - `DetailScreen.kt` — player, subtitle selector, metadata, favorite/watched actions, cast, episodes, stills, and staff.
+- `ImageViewerScreen.kt` — fullscreen image viewing for detail stills and mounted images, with hidden bottom chrome, same-folder swiping, zoom, and pan.
 - `SettingsScreen.kt` — backend connection profiles, multiple Jellyfin/Emby backends, per-profile logout, SMB/WebDAV sources, active library selection, and release update checks.
 - `LoginScreen.kt` — server URL and credential login flow.
 
@@ -125,6 +126,7 @@ Prefer app-side compatibility for response shape differences. If an API mismatch
 - Login/session behavior: `SessionStore.kt`, `LoginScreen.kt`, `MediaTreeApp.kt`
 - Server URL handling: `UrlUtils.kt`
 - Player/subtitles/progress: `MediaTreePlayer.kt`, `DetailScreen.kt`
+- Image viewing and mounted image browsing: `ImageViewerScreen.kt`, `BrowseScreen.kt`, `MediaFileTypes.kt`
 - App navigation: `MediaTreeApp.kt`, `TopDestinations.kt`
 - Visual design: `Theme.kt`, `SharedComponents.kt`, screen files under `ui/screens/`
 - Android release/build settings: `frontend/android/app/build.gradle`
