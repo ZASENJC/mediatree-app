@@ -285,6 +285,9 @@ class BrowseDirectorySemanticsSourceTest {
         val thumbnailBlock = browseSource
             .substringAfter("private fun MountedVideoThumbnail")
             .substringBefore("@Composable\nprivate fun BrowserListRow")
+        val mediaThumbnailBlock = browseSource
+            .substringAfter("private fun MountedMediaThumbnail(")
+            .substringBefore("@Composable\nprivate fun MountedImageThumbnail")
         val iconMovieRowBlock = browseSource
             .substringAfter("private fun IconMovieRow")
             .substringBefore("@Composable\nprivate fun IconTile")
@@ -298,12 +301,13 @@ class BrowseDirectorySemanticsSourceTest {
         assertTrue(screenBlock.contains("movie.isMountedLibraryItem()"))
         assertTrue(screenBlock.contains("MountedVideoPosterCard("))
         assertTrue(screenBlock.contains("CompactMovieRow("))
-        assertTrue(iconMovieRowBlock.contains("MountedVideoThumbnail("))
+        assertTrue(iconMovieRowBlock.contains("MountedVideoIconTile("))
+        assertTrue(mediaThumbnailBlock.contains("MountedVideoThumbnail("))
         assertTrue(mountedIconTileBlock.contains("showPlayIcon = false"))
         assertTrue(mountedIconTileBlock.contains("maxLines = 1"))
         assertFalse(mountedIconTileBlock.contains("movie.iconMovieMeta()"))
         assertFalse(mountedIconTileBlock.contains("ElevatedCard("))
-        assertTrue(compactMovieRowBlock.contains("MountedVideoThumbnail("))
+        assertTrue(compactMovieRowBlock.contains("MountedMediaThumbnail("))
         assertTrue(compactMovieRowBlock.contains("framedIcon = !movie.isMountedLibraryItem()"))
         assertTrue(browseSource.contains("private fun MountedVideoThumbnail"))
         assertTrue(thumbnailCacheSource.contains("MediaMetadataRetriever"))
@@ -335,6 +339,33 @@ class BrowseDirectorySemanticsSourceTest {
         assertTrue(thumbnailCacheSource.contains("container.smbRangeProxy.playbackSource"))
         assertTrue(thumbnailCacheSource.contains("PlaybackSource.webDav"))
         assertFalse(browseSource.contains("modifier = Modifier.align(Alignment.BottomStart).padding(6.dp)"))
+    }
+
+    @Test
+    fun mountedImagesUseRealThumbnailsWithViewportScheduling() {
+        val screenBlock = browseSource
+            .substringAfter("fun BrowseScreen(")
+            .substringBefore("@Composable\nprivate fun DesignFolderRow")
+        val mediaThumbnailBlock = browseSource
+            .substringAfter("private fun MountedMediaThumbnail(")
+            .substringBefore("@Composable\nprivate fun MountedImageThumbnail")
+        val imageThumbnailBlock = browseSource
+            .substringAfter("private fun MountedImageThumbnail(")
+            .substringBefore("@Composable\nprivate fun MountedVideoThumbnail")
+
+        assertTrue(screenBlock.contains("val mountedImageThumbnailSourceLoader"))
+        assertTrue(mediaThumbnailBlock.contains("movie.isMountedImageItem()"))
+        assertTrue(mediaThumbnailBlock.contains("MountedImageThumbnail("))
+        assertTrue(imageThumbnailBlock.contains("thumbnailViewportScheduler.awaitVisible(keyToWait)"))
+        assertTrue(imageThumbnailBlock.contains("delay(MountedThumbnailVisibleDebounceMillis)"))
+        assertTrue(imageThumbnailBlock.contains("thumbnailSourceLoader(source, movie)"))
+        assertTrue(imageThumbnailBlock.contains("ImageRequest.Builder(context)"))
+        assertTrue(imageThumbnailBlock.contains(".size(spec.width, spec.height)"))
+        assertTrue(imageThumbnailBlock.contains("sourceInfo.headers.forEach { (name, value) -> addHeader(name, value) }"))
+        assertTrue(imageThumbnailBlock.contains("AsyncImage("))
+        assertTrue(imageThumbnailBlock.contains("imageSource?.onClose?.invoke()"))
+        assertTrue(browseSource.contains("container.smbRangeProxy.playbackSource(source = resolvedSource, path = movie.path)"))
+        assertTrue(browseSource.contains("WebDavClient.buildResourceUrl(resolvedSource, movie.path)"))
     }
 
     @Test

@@ -65,7 +65,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -73,12 +75,14 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageSource
+import com.zasenjc.mediatree.data.ClientStorageType
 import com.zasenjc.mediatree.data.FolderNodeDto
 import com.zasenjc.mediatree.data.MountedVideoThumbnailRequest
 import com.zasenjc.mediatree.data.MountedVideoThumbnailSpec
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
+import com.zasenjc.mediatree.data.WebDavClient
 import com.zasenjc.mediatree.data.mountedThumbnailKey
 import com.zasenjc.mediatree.data.webDavLibraryPath
 import com.zasenjc.mediatree.data.webDavLibrarySourceId
@@ -99,6 +103,8 @@ import com.zasenjc.mediatree.ui.components.topChromeExitTransition
 import com.zasenjc.mediatree.ui.motion.md3DefaultContentTransform
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -129,6 +135,13 @@ private data class BrowseViewMode(
 )
 
 private typealias MountedVideoThumbnailLoader = suspend (ClientStorageSource?, MovieDto, MountedVideoThumbnailSpec) -> Bitmap?
+private typealias MountedImageThumbnailSourceLoader = (ClientStorageSource?, MovieDto) -> MountedImageThumbnailSource?
+
+private data class MountedImageThumbnailSource(
+    val uri: String,
+    val headers: Map<String, String>,
+    val onClose: (() -> Unit)? = null,
+)
 
 private val MountedPosterVideoThumbnailSpec = MountedVideoThumbnailSpec(
     width = MountedPosterVideoFrameWidth,
@@ -455,6 +468,25 @@ private class BrowseViewModel(private val container: AppContainer) : ViewModel()
             MountedVideoThumbnailRequest(source = source, movie = movie, spec = spec),
         )
     }
+
+    fun mountedImageThumbnailSource(source: ClientStorageSource?, movie: MovieDto): MountedImageThumbnailSource? {
+        val resolvedSource = source ?: return null
+        if (!movie.isMountedImageItem()) return null
+        return when (resolvedSource.type) {
+            ClientStorageType.SMB -> {
+                val playbackSource = container.smbRangeProxy.playbackSource(source = resolvedSource, path = movie.path)
+                MountedImageThumbnailSource(
+                    uri = playbackSource.uri,
+                    headers = playbackSource.headers,
+                    onClose = playbackSource.onClose,
+                )
+            }
+            ClientStorageType.WebDAV -> MountedImageThumbnailSource(
+                uri = WebDavClient.buildResourceUrl(resolvedSource, movie.path),
+                headers = WebDavClient.authorizationHeaders(resolvedSource),
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
@@ -479,6 +511,7 @@ fun BrowseScreen(
     val scope = rememberCoroutineScope()
     var searchJob by remember { mutableStateOf<Job?>(null) }
     val mountedVideoThumbnailLoader: MountedVideoThumbnailLoader = remember(vm) { vm::loadMountedVideoFrame }
+    val mountedImageThumbnailSourceLoader: MountedImageThumbnailSourceLoader = remember(vm) { vm::mountedImageThumbnailSource }
     var contentSnapshot by remember { mutableStateOf(BrowseContentSnapshot()) }
     var hasContentSnapshot by remember { mutableStateOf(false) }
 
@@ -707,6 +740,7 @@ fun BrowseScreen(
                                                 row.forEach { movie ->
                                                     if (movie.isMountedLibraryItem()) {
                                                         MountedVideoPosterCard(
+                                                            imageThumbnailSourceLoader = mountedImageThumbnailSourceLoader,
                                                             thumbnailLoader = mountedVideoThumbnailLoader,
                                                             thumbnailViewportScheduler = thumbnailViewportScheduler,
                                                             viewportKey = row.mountedThumbnailRowKey(snapshot.mountedSource, MountedPosterVideoThumbnailSpec),
@@ -735,6 +769,7 @@ fun BrowseScreen(
                                             contentType = { "movie-icon-row" },
                                         ) { row ->
                                             IconMovieRow(
+                                                imageThumbnailSourceLoader = mountedImageThumbnailSourceLoader,
                                                 thumbnailLoader = mountedVideoThumbnailLoader,
                                                 thumbnailViewportScheduler = thumbnailViewportScheduler,
                                                 source = snapshot.mountedSource,
@@ -750,6 +785,7 @@ fun BrowseScreen(
                                             contentType = { "movie-compact" },
                                         ) { movie ->
                                             CompactMovieRow(
+                                                imageThumbnailSourceLoader = mountedImageThumbnailSourceLoader,
                                                 thumbnailLoader = mountedVideoThumbnailLoader,
                                                 thumbnailViewportScheduler = thumbnailViewportScheduler,
                                                 source = snapshot.mountedSource,
@@ -765,6 +801,7 @@ fun BrowseScreen(
                                             contentType = { "movie-compact" },
                                         ) { movie ->
                                             CompactMovieRow(
+                                                imageThumbnailSourceLoader = mountedImageThumbnailSourceLoader,
                                                 thumbnailLoader = mountedVideoThumbnailLoader,
                                                 thumbnailViewportScheduler = thumbnailViewportScheduler,
                                                 source = snapshot.mountedSource,
@@ -961,6 +998,7 @@ private fun IconFolderRow(row: List<FolderNodeDto>, onOpen: (FolderNodeDto) -> U
 
 @Composable
 private fun IconMovieRow(
+    imageThumbnailSourceLoader: MountedImageThumbnailSourceLoader,
     thumbnailLoader: MountedVideoThumbnailLoader,
     thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
     source: ClientStorageSource?,
@@ -971,6 +1009,7 @@ private fun IconMovieRow(
         row.forEach { movie ->
             if (movie.isMountedLibraryItem()) {
                 MountedVideoIconTile(
+                    imageThumbnailSourceLoader = imageThumbnailSourceLoader,
                     thumbnailLoader = thumbnailLoader,
                     thumbnailViewportScheduler = thumbnailViewportScheduler,
                     viewportKey = row.mountedThumbnailRowKey(source, MountedLandscapeVideoThumbnailSpec),
@@ -997,6 +1036,7 @@ private fun IconMovieRow(
 
 @Composable
 private fun MountedVideoIconTile(
+    imageThumbnailSourceLoader: MountedImageThumbnailSourceLoader,
     thumbnailLoader: MountedVideoThumbnailLoader,
     thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
     viewportKey: String,
@@ -1011,7 +1051,8 @@ private fun MountedVideoIconTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        MountedVideoThumbnail(
+        MountedMediaThumbnail(
+            imageThumbnailSourceLoader = imageThumbnailSourceLoader,
             thumbnailLoader = thumbnailLoader,
             thumbnailViewportScheduler = thumbnailViewportScheduler,
             viewportKey = viewportKey,
@@ -1075,6 +1116,7 @@ private fun IconTile(
 
 @Composable
 private fun MountedVideoPosterCard(
+    imageThumbnailSourceLoader: MountedImageThumbnailSourceLoader,
     thumbnailLoader: MountedVideoThumbnailLoader,
     thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
     viewportKey: String,
@@ -1085,7 +1127,8 @@ private fun MountedVideoPosterCard(
 ) {
     val shape = RoundedCornerShape(16.dp)
     Column(modifier = modifier.shapeAwareClickable(shape = shape, onClick = onClick), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        MountedVideoThumbnail(
+        MountedMediaThumbnail(
+            imageThumbnailSourceLoader = imageThumbnailSourceLoader,
             thumbnailLoader = thumbnailLoader,
             thumbnailViewportScheduler = thumbnailViewportScheduler,
             viewportKey = viewportKey,
@@ -1116,6 +1159,112 @@ private fun MountedVideoPosterCard(
 }
 
 @Composable
+private fun MountedMediaThumbnail(
+    imageThumbnailSourceLoader: MountedImageThumbnailSourceLoader,
+    thumbnailLoader: MountedVideoThumbnailLoader,
+    thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
+    viewportKey: String? = null,
+    source: ClientStorageSource?,
+    movie: MovieDto,
+    modifier: Modifier = Modifier,
+    cornerRadius: Dp = 12.dp,
+    spec: MountedVideoThumbnailSpec = MountedLandscapeVideoThumbnailSpec,
+    showPlayIcon: Boolean = true,
+) {
+    if (movie.isMountedImageItem()) {
+        MountedImageThumbnail(
+            thumbnailSourceLoader = imageThumbnailSourceLoader,
+            thumbnailViewportScheduler = thumbnailViewportScheduler,
+            viewportKey = viewportKey,
+            source = source,
+            movie = movie,
+            modifier = modifier,
+            cornerRadius = cornerRadius,
+            spec = spec,
+        )
+    } else {
+        MountedVideoThumbnail(
+            thumbnailLoader = thumbnailLoader,
+            thumbnailViewportScheduler = thumbnailViewportScheduler,
+            viewportKey = viewportKey,
+            source = source,
+            movie = movie,
+            modifier = modifier,
+            cornerRadius = cornerRadius,
+            spec = spec,
+            showPlayIcon = showPlayIcon,
+        )
+    }
+}
+
+@Composable
+private fun MountedImageThumbnail(
+    thumbnailSourceLoader: MountedImageThumbnailSourceLoader,
+    thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
+    viewportKey: String? = null,
+    source: ClientStorageSource?,
+    movie: MovieDto,
+    modifier: Modifier = Modifier,
+    cornerRadius: Dp = 12.dp,
+    spec: MountedVideoThumbnailSpec = MountedLandscapeVideoThumbnailSpec,
+) {
+    var shouldLoad by remember(source?.id, source?.type, movie.path, movie.fileSize, movie.size, spec) {
+        mutableStateOf(false)
+    }
+    val thumbnailKey = remember(source?.id, source?.type, movie.path, movie.fileSize, movie.size, spec) {
+        mountedThumbnailKey(source, movie, spec)?.let { key -> "image|$key" } ?: movie.id.toString()
+    }
+    LaunchedEffect(thumbnailViewportScheduler, viewportKey, thumbnailKey) {
+        shouldLoad = false
+        val keyToWait = viewportKey ?: thumbnailKey
+        thumbnailViewportScheduler.awaitVisible(keyToWait)
+        delay(MountedThumbnailVisibleDebounceMillis)
+        thumbnailViewportScheduler.awaitVisible(keyToWait)
+        shouldLoad = true
+    }
+    val imageSource = remember(shouldLoad, source, movie.path, movie.fileSize, movie.size) {
+        if (shouldLoad) thumbnailSourceLoader(source, movie) else null
+    }
+    DisposableEffect(imageSource) {
+        onDispose { imageSource?.onClose?.invoke() }
+    }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Default.Image,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f),
+            modifier = Modifier.fillMaxSize(0.34f),
+        )
+        imageSource?.let { sourceInfo ->
+            val context = LocalContext.current
+            val imageRequest = remember(context, sourceInfo.uri, sourceInfo.headers, thumbnailKey, spec) {
+                ImageRequest.Builder(context)
+                    .data(sourceInfo.uri)
+                    .apply {
+                        sourceInfo.headers.forEach { (name, value) -> addHeader(name, value) }
+                    }
+                    .size(spec.width, spec.height)
+                    .crossfade(false)
+                    .memoryCacheKey(thumbnailKey)
+                    .diskCacheKey(thumbnailKey)
+                    .build()
+            }
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = movie.browseTitle(),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@Composable
 private fun MountedVideoThumbnail(
     thumbnailLoader: MountedVideoThumbnailLoader,
     thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
@@ -1123,7 +1272,7 @@ private fun MountedVideoThumbnail(
     source: ClientStorageSource?,
     movie: MovieDto,
     modifier: Modifier = Modifier,
-    cornerRadius: androidx.compose.ui.unit.Dp = 12.dp,
+    cornerRadius: Dp = 12.dp,
     spec: MountedVideoThumbnailSpec = MountedLandscapeVideoThumbnailSpec,
     showPlayIcon: Boolean = true,
 ) {
@@ -1270,6 +1419,7 @@ private fun CompactFolderRow(folder: FolderNodeDto, onClick: () -> Unit) {
 
 @Composable
 private fun CompactMovieRow(
+    imageThumbnailSourceLoader: MountedImageThumbnailSourceLoader,
     thumbnailLoader: MountedVideoThumbnailLoader,
     thumbnailViewportScheduler: MountedThumbnailViewportScheduler,
     source: ClientStorageSource?,
@@ -1282,7 +1432,8 @@ private fun CompactMovieRow(
         onClick = onClick,
         icon = {
             if (movie.isMountedLibraryItem()) {
-                MountedVideoThumbnail(
+                MountedMediaThumbnail(
+                    imageThumbnailSourceLoader = imageThumbnailSourceLoader,
                     thumbnailLoader = thumbnailLoader,
                     thumbnailViewportScheduler = thumbnailViewportScheduler,
                     viewportKey = movie.mountedThumbnailItemKey(source, MountedLandscapeVideoThumbnailSpec),
