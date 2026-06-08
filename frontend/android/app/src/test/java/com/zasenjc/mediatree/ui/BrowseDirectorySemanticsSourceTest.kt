@@ -168,6 +168,28 @@ class BrowseDirectorySemanticsSourceTest {
     }
 
     @Test
+    fun smbMountedBrowseKeepsImagesAsOpenableItems() {
+        val loadSmbBlock = browseSource
+            .substringAfter("private suspend fun loadSmb")
+            .substringBefore("private suspend fun loadWebDav")
+        val openRouteBlock = browseSource
+            .substringAfter("private fun MovieDto.openRoute(): String =")
+            .substringBefore("private fun MovieDto.isMountedLibraryItem")
+        val thumbnailBlock = browseSource
+            .substringAfter("private fun MountedVideoThumbnail(")
+            .substringBefore("@Composable\nprivate fun BrowserListRow")
+
+        assertTrue(loadSmbBlock.contains("it.isPlayableVideo || it.isViewableImage"))
+        assertTrue(loadSmbBlock.contains("entry.toMountedMovieDto(source)"))
+        assertFalse(loadSmbBlock.contains("entries.filter { it.isPlayableVideo }"))
+        assertTrue(openRouteBlock.contains("if (isMountedImageItem()) \"smbImage\" else \"smbPlayer\""))
+        assertTrue(browseSource.contains("scraperSource = MountedImageItemMarker.takeIf { isViewableImage }"))
+        assertTrue(browseSource.contains("scraperSource == MountedImageItemMarker"))
+        assertTrue(thumbnailBlock.contains("if (movie.isMountedImageItem()) return@LaunchedEffect"))
+        assertTrue(thumbnailBlock.contains("Icons.Default.Image"))
+    }
+
+    @Test
     fun browseSupportsWebDavMountedLibrarySource() {
         val loadWebDavBlock = browseSource
             .substringAfter("private suspend fun loadWebDav")
@@ -180,7 +202,7 @@ class BrowseDirectorySemanticsSourceTest {
         assertFalse(loadWebDavBlock.contains("container.webDavClient.list(source, entry.path)"))
         assertFalse(browseSource.contains("private suspend fun webDavDirectoryChildCount"))
         assertTrue(browseSource.contains("webDavLibraryPath(sourceId)"))
-        assertTrue(browseSource.contains("webdavPlayer/${'$'}sourceId?path="))
+        assertTrue(browseSource.contains("\"webdavImage\" else \"webdavPlayer\""))
     }
 
     @Test
@@ -383,6 +405,12 @@ class BrowseDirectorySemanticsSourceTest {
         val loadWebDavBlock = browseSource
             .substringAfter("private suspend fun loadWebDav")
             .substringBefore("fun loadMore")
+        val smbMappingBlock = browseSource
+            .substringAfter("private fun com.zasenjc.mediatree.data.SmbEntry.toMountedMovieDto")
+            .substringBefore("private fun com.zasenjc.mediatree.data.WebDavEntry.toMountedMovieDto")
+        val webDavMappingBlock = browseSource
+            .substringAfter("private fun com.zasenjc.mediatree.data.WebDavEntry.toMountedMovieDto")
+            .substringBefore("private fun List<MovieDto>.sortedMoviesForBrowse")
 
         assertTrue(loadRemoteBlock.contains("sort = sort.toProviderBrowseMovieSort(providerType)"))
         assertTrue(loadRemoteBlock.contains("movies = response?.movies.orEmpty().sortedMoviesForBrowse(sort)"))
@@ -393,10 +421,12 @@ class BrowseDirectorySemanticsSourceTest {
         assertTrue(browseSource.contains("ProviderType.MediaTree -> toMediaTreeBrowseMovieSort()"))
         assertTrue(browseSource.contains("ProviderType.Jellyfin, ProviderType.Emby -> toJellyfinBrowseMovieSort()"))
         assertFalse(browseSource.contains("private fun String.toApiMovieSort()"))
-        assertTrue(loadSmbBlock.contains("updatedAt = entry.modified.takeIf { it > 0L }?.toString()"))
-        assertTrue(loadSmbBlock.contains("createdAt = entry.modified.takeIf { it > 0L }?.toString()"))
-        assertTrue(loadWebDavBlock.contains("updatedAt = entry.modified.ifBlank { null }"))
-        assertTrue(loadWebDavBlock.contains("createdAt = entry.modified.ifBlank { null }"))
+        assertTrue(loadSmbBlock.contains("entry.toMountedMovieDto(source)"))
+        assertTrue(loadWebDavBlock.contains("entry.toMountedMovieDto(source)"))
+        assertTrue(smbMappingBlock.contains("updatedAt = modified.takeIf { it > 0L }?.toString()"))
+        assertTrue(smbMappingBlock.contains("createdAt = modified.takeIf { it > 0L }?.toString()"))
+        assertTrue(webDavMappingBlock.contains("updatedAt = modified.ifBlank { null }"))
+        assertTrue(webDavMappingBlock.contains("createdAt = modified.ifBlank { null }"))
     }
 
     @Test

@@ -16,8 +16,10 @@ class WebDavBrowserSourceTest {
 
         assertTrue(appSource.contains("webdav/{sourceId}"))
         assertTrue(appSource.contains("webdavPlayer/{sourceId}"))
+        assertTrue(appSource.contains("webdavImage/{sourceId}"))
         assertTrue(appSource.contains("WebDavBrowseScreen"))
         assertTrue(appSource.contains("WebDavPlayerScreen"))
+        assertTrue(appSource.contains("WebDavImageViewerScreen"))
     }
 
     @Test
@@ -41,7 +43,9 @@ class WebDavBrowserSourceTest {
         assertTrue(screenSource.contains("class WebDavBrowseViewModel"))
         assertTrue(screenSource.contains("container.webDavClient.list"))
         assertTrue(screenSource.contains("isPlayableVideo"))
+        assertTrue(screenSource.contains("isViewableImage"))
         assertTrue(screenSource.contains("webdavPlayer/${'$'}sourceId"))
+        assertTrue(screenSource.contains("webdavImage/${'$'}sourceId"))
         assertFalse(screenSource.contains("Smb"))
         assertFalse(screenSource.contains("MediaTreeApi"))
     }

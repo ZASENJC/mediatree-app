@@ -6,7 +6,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.Image as ComposeImage
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.filled.PlayArrow
@@ -82,6 +83,7 @@ import com.zasenjc.mediatree.data.mountedThumbnailKey
 import com.zasenjc.mediatree.data.webDavLibraryPath
 import com.zasenjc.mediatree.data.webDavLibrarySourceId
 import com.zasenjc.mediatree.data.smbLibrarySourceId
+import com.zasenjc.mediatree.data.isViewableImageFileName
 import com.zasenjc.mediatree.data.viewModelFactory
 import com.zasenjc.mediatree.ui.components.BackendSetupRequiredMessage
 import com.zasenjc.mediatree.ui.components.BackendSetupRequiredState
@@ -269,10 +271,10 @@ private class BrowseViewModel(private val container: AppContainer) : ViewModel()
             .firstOrNull { it.id == sourceId && it.type == com.zasenjc.mediatree.data.ClientStorageType.SMB && it.enabled }
             ?: throw IllegalArgumentException("SMB 存储源不可用")
         val searching = searchQuery.trim().isNotBlank()
-        val entries = if (recursiveVideosOnly || searching) {
-            collectSmbVideoEntries(source, folder)
-        } else {
-            container.smbClient.list(source, folder)
+        val entries = when {
+            recursiveVideosOnly -> collectSmbVideoEntries(source, folder)
+            searching -> collectSmbMediaEntries(source, folder)
+            else -> container.smbClient.list(source, folder)
         }
         val folders = if (recursiveVideosOnly || searching) emptyList() else entries.filter { it.isDirectory }
             .map { entry ->
@@ -286,21 +288,8 @@ private class BrowseViewModel(private val container: AppContainer) : ViewModel()
                 )
             }
             .sortedFoldersForBrowse(sort)
-        val movies = entries.filter { it.isPlayableVideo }
-            .map { entry ->
-                MovieDto(
-                    id = (source.id + ":" + entry.path).hashCode(),
-                    path = entry.path,
-                    code = entry.name,
-                    title = entry.name,
-                    displayTitle = entry.name,
-                    mediaRoot = mediaRootPath(sourceId),
-                    fileSize = entry.sizeBytes,
-                    size = entry.sizeBytes,
-                    updatedAt = entry.modified.takeIf { it > 0L }?.toString(),
-                    createdAt = entry.modified.takeIf { it > 0L }?.toString(),
-                )
-            }
+        val movies = entries.filter { it.isPlayableVideo || it.isViewableImage }
+            .map { entry -> entry.toMountedMovieDto(source) }
             .filterMoviesByQuery(searchQuery)
             .sortedMoviesForBrowse(sort)
         _state.update {
@@ -336,6 +325,24 @@ private class BrowseViewModel(private val container: AppContainer) : ViewModel()
         return videos
     }
 
+    private suspend fun collectSmbMediaEntries(source: ClientStorageSource, folder: String): List<com.zasenjc.mediatree.data.SmbEntry> {
+        val pending = ArrayDeque<String>()
+        val visited = mutableSetOf<String>()
+        val media = mutableListOf<com.zasenjc.mediatree.data.SmbEntry>()
+        pending.add(folder)
+        while (pending.isNotEmpty()) {
+            val currentFolder = pending.removeFirst()
+            if (!visited.add(currentFolder)) continue
+            container.smbClient.list(source, currentFolder).forEach { entry ->
+                when {
+                    entry.isDirectory -> pending.add(entry.path)
+                    entry.isPlayableVideo || entry.isViewableImage -> media.add(entry)
+                }
+            }
+        }
+        return media
+    }
+
     private suspend fun loadWebDav(
         sourceId: String,
         folder: String,
@@ -347,10 +354,10 @@ private class BrowseViewModel(private val container: AppContainer) : ViewModel()
             .firstOrNull { it.id == sourceId && it.type == com.zasenjc.mediatree.data.ClientStorageType.WebDAV && it.enabled }
             ?: throw IllegalArgumentException("WebDAV 存储源不可用")
         val searching = searchQuery.trim().isNotBlank()
-        val entries = if (recursiveVideosOnly || searching) {
-            collectWebDavVideoEntries(source, folder)
-        } else {
-            container.webDavClient.list(source, folder)
+        val entries = when {
+            recursiveVideosOnly -> collectWebDavVideoEntries(source, folder)
+            searching -> collectWebDavMediaEntries(source, folder)
+            else -> container.webDavClient.list(source, folder)
         }
         val folders = if (recursiveVideosOnly || searching) emptyList() else entries.filter { it.isDirectory }
             .map { entry ->
@@ -364,21 +371,8 @@ private class BrowseViewModel(private val container: AppContainer) : ViewModel()
                 )
             }
             .sortedFoldersForBrowse(sort)
-        val movies = entries.filter { it.isPlayableVideo }
-            .map { entry ->
-                MovieDto(
-                    id = (source.id + ":" + entry.path).hashCode(),
-                    path = entry.path,
-                    code = entry.name,
-                    title = entry.name,
-                    displayTitle = entry.name,
-                    mediaRoot = webDavLibraryPath(sourceId),
-                    fileSize = entry.sizeBytes,
-                    size = entry.sizeBytes,
-                    updatedAt = entry.modified.ifBlank { null },
-                    createdAt = entry.modified.ifBlank { null },
-                )
-            }
+        val movies = entries.filter { it.isPlayableVideo || it.isViewableImage }
+            .map { entry -> entry.toMountedMovieDto(source) }
             .filterMoviesByQuery(searchQuery)
             .sortedMoviesForBrowse(sort)
         _state.update {
@@ -436,6 +430,24 @@ private class BrowseViewModel(private val container: AppContainer) : ViewModel()
             }
         }
         return videos
+    }
+
+    private suspend fun collectWebDavMediaEntries(source: ClientStorageSource, folder: String): List<com.zasenjc.mediatree.data.WebDavEntry> {
+        val pending = ArrayDeque<String>()
+        val visited = mutableSetOf<String>()
+        val media = mutableListOf<com.zasenjc.mediatree.data.WebDavEntry>()
+        pending.add(folder)
+        while (pending.isNotEmpty()) {
+            val currentFolder = pending.removeFirst()
+            if (!visited.add(currentFolder)) continue
+            container.webDavClient.list(source, currentFolder).forEach { entry ->
+                when {
+                    entry.isDirectory -> pending.add(entry.path)
+                    entry.isPlayableVideo || entry.isViewableImage -> media.add(entry)
+                }
+            }
+        }
+        return media
     }
 
     suspend fun loadMountedVideoFrame(source: ClientStorageSource?, movie: MovieDto, spec: MountedVideoThumbnailSpec): Bitmap? {
@@ -1084,6 +1096,7 @@ private fun MountedVideoPosterCard(
                 .aspectRatio(2f / 3f),
             cornerRadius = 16.dp,
             spec = MountedPosterVideoThumbnailSpec,
+            showPlayIcon = !movie.isMountedImageItem(),
         )
         Text(
             text = movie.browseTitle(),
@@ -1121,6 +1134,7 @@ private fun MountedVideoThumbnail(
         mountedThumbnailKey(source, movie, spec)
     }
     LaunchedEffect(thumbnailLoader, source?.id, movie.mediaRoot, movie.path, movie.fileSize, movie.size, spec) {
+        if (movie.isMountedImageItem()) return@LaunchedEffect
         if (bitmap == null) {
             thumbnailKey?.let { key ->
                 val keyToWait = viewportKey ?: key
@@ -1138,7 +1152,7 @@ private fun MountedVideoThumbnail(
         contentAlignment = Alignment.Center,
     ) {
         bitmap?.let { frame ->
-            Image(
+            ComposeImage(
                 bitmap = frame.asImageBitmap(),
                 contentDescription = movie.browseTitle(),
                 contentScale = ContentScale.Crop,
@@ -1148,7 +1162,7 @@ private fun MountedVideoThumbnail(
         }
         if (bitmap == null) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                imageVector = if (movie.isMountedImageItem()) Icons.Default.Image else Icons.AutoMirrored.Filled.InsertDriveFile,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f),
                 modifier = Modifier.fillMaxSize(0.34f),
@@ -1438,6 +1452,36 @@ private fun List<FolderNodeDto>.sortedFoldersForBrowse(sort: String): List<Folde
     else -> sortedBy { it.browseTitle() }
 }
 
+private fun com.zasenjc.mediatree.data.SmbEntry.toMountedMovieDto(source: ClientStorageSource): MovieDto =
+    MovieDto(
+        id = (source.id + ":" + path).hashCode(),
+        path = path,
+        code = name,
+        title = name,
+        displayTitle = name,
+        mediaRoot = mediaRootPath(source.id),
+        scraperSource = MountedImageItemMarker.takeIf { isViewableImage },
+        fileSize = sizeBytes,
+        size = sizeBytes,
+        updatedAt = modified.takeIf { it > 0L }?.toString(),
+        createdAt = modified.takeIf { it > 0L }?.toString(),
+    )
+
+private fun com.zasenjc.mediatree.data.WebDavEntry.toMountedMovieDto(source: ClientStorageSource): MovieDto =
+    MovieDto(
+        id = (source.id + ":" + path).hashCode(),
+        path = path,
+        code = name,
+        title = name,
+        displayTitle = name,
+        mediaRoot = webDavLibraryPath(source.id),
+        scraperSource = MountedImageItemMarker.takeIf { isViewableImage },
+        fileSize = sizeBytes,
+        size = sizeBytes,
+        updatedAt = modified.ifBlank { null },
+        createdAt = modified.ifBlank { null },
+    )
+
 private fun List<MovieDto>.sortedMoviesForBrowse(sort: String): List<MovieDto> = when (sort) {
     "modified" -> sortedWith(compareByDescending<MovieDto> { it.updatedAt ?: it.createdAt.orEmpty() }.thenBy { it.browseTitle() })
     "size" -> sortedWith(compareByDescending<MovieDto> { it.fileSize ?: it.size ?: (it.duration?.toLong() ?: 0L) }.thenBy { it.browseTitle() })
@@ -1463,17 +1507,25 @@ private fun MovieDto.detailRoute(): String =
 private fun MovieDto.providerRouteItemId(): String = providerItemId?.takeIf { it.isNotBlank() } ?: path
 
 private fun MovieDto.openRoute(): String =
-    mediaRoot?.smbLibrarySourceId()?.let { sourceId -> "smbPlayer/$sourceId?path=${Uri.encode(path)}" }
-        ?: mediaRoot?.webDavLibrarySourceId()?.let { sourceId -> "webdavPlayer/$sourceId?path=${Uri.encode(path)}" }
+    mediaRoot?.smbLibrarySourceId()?.let { sourceId ->
+        "${if (isMountedImageItem()) "smbImage" else "smbPlayer"}/$sourceId?path=${Uri.encode(path)}"
+    }
+        ?: mediaRoot?.webDavLibrarySourceId()?.let { sourceId ->
+            "${if (isMountedImageItem()) "webdavImage" else "webdavPlayer"}/$sourceId?path=${Uri.encode(path)}"
+        }
         ?: detailRoute()
 
 private fun MovieDto.isMountedLibraryItem(): Boolean =
     mediaRoot?.mountedLibrarySourceId() != null
 
+private fun MovieDto.isMountedImageItem(): Boolean =
+    isMountedLibraryItem() && (scraperSource == MountedImageItemMarker || isViewableImageFileName(path.ifBlank { code }))
+
 private const val MountedPosterVideoFrameWidth = 120
 private const val MountedPosterVideoFrameHeight = 180
 private const val MountedLandscapeVideoFrameWidth = 128
 private const val MountedLandscapeVideoFrameHeight = 72
+private const val MountedImageItemMarker = "mounted-image"
 
 private fun mediaRootPath(sourceId: String): String = "smb/$sourceId"
 

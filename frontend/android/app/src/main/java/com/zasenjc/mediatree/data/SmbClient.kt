@@ -33,6 +33,9 @@ data class SmbEntry(
 ) {
     val isPlayableVideo: Boolean
         get() = !isDirectory && name.substringAfterLast('.', "").lowercase() in SmbVideoExtensions
+
+    val isViewableImage: Boolean
+        get() = !isDirectory && isViewableImageFileName(name)
 }
 
 class SmbClient(
@@ -124,6 +127,7 @@ class SmbClient(
             .sortedWith(
                 compareBy<SmbEntry> { !it.isDirectory }
                     .thenBy { !it.isPlayableVideo }
+                    .thenBy { !it.isViewableImage }
                     .thenBy { it.name.lowercase() },
             )
 

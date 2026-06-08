@@ -16,8 +16,43 @@ class SmbBrowserSourceTest {
 
         assertTrue(appSource.contains("smb/{sourceId}"))
         assertTrue(appSource.contains("smbPlayer/{sourceId}"))
+        assertTrue(appSource.contains("smbImage/{sourceId}"))
         assertTrue(appSource.contains("SmbBrowseScreen"))
         assertTrue(appSource.contains("SmbPlayerScreen"))
+        assertTrue(appSource.contains("SmbImageViewerScreen"))
+    }
+
+    @Test
+    fun imageViewerRoutesHideBottomNavigationChrome() {
+        val appSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/MediaTreeApp.kt")
+            .readText()
+        val bottomChromeBlock = appSource
+            .substringAfter("val bottomChromeVisible =")
+            .substringBefore("LaunchedEffect(currentRoute)")
+
+        assertTrue(bottomChromeBlock.contains("!currentRoute.startsWith(\"detail\")"))
+        assertTrue(bottomChromeBlock.contains("!currentRoute.endsWith(\"Player/{sourceId}?path={path}\")"))
+        assertTrue(bottomChromeBlock.contains("!currentRoute.endsWith(\"Image/{sourceId}?path={path}\")"))
+    }
+
+    @Test
+    fun imageViewerSupportsSameFolderPagingAndZoomGestures() {
+        val imageViewerSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/ImageViewerScreen.kt")
+            .readText()
+
+        assertTrue(imageViewerSource.contains("container.smbClient.list(loadedSource, storageParentPath(path))"))
+        assertTrue(imageViewerSource.contains("container.webDavClient.list(loadedSource, storageParentPath(path))"))
+        assertTrue(imageViewerSource.contains(".filter { it.isViewableImage }"))
+        assertTrue(imageViewerSource.contains("ensureCurrentImage("))
+        assertTrue(imageViewerSource.contains("rememberPagerState("))
+        assertTrue(imageViewerSource.contains("HorizontalPager("))
+        assertTrue(imageViewerSource.contains("userScrollEnabled = currentScale <= 1.01f"))
+        assertTrue(imageViewerSource.contains("awaitEachGesture"))
+        assertTrue(imageViewerSource.contains("calculateZoom()"))
+        assertTrue(imageViewerSource.contains("calculatePan()"))
+        assertTrue(imageViewerSource.contains("graphicsLayer"))
     }
 
     @Test
@@ -40,7 +75,9 @@ class SmbBrowserSourceTest {
         assertTrue(screenSource.contains("class SmbBrowseViewModel"))
         assertTrue(screenSource.contains("container.smbClient.list"))
         assertTrue(screenSource.contains("isPlayableVideo"))
+        assertTrue(screenSource.contains("isViewableImage"))
         assertTrue(screenSource.contains("smbPlayer/${'$'}sourceId"))
+        assertTrue(screenSource.contains("smbImage/${'$'}sourceId"))
         assertTrue(screenSource.contains("container.smbRangeProxy.playbackSource"))
         val proxySource = appRoot.resolve("src/main/java/com/zasenjc/mediatree/data/SmbRangeProxy.kt").readText()
         assertTrue(proxySource.contains("isClientDisconnect"))

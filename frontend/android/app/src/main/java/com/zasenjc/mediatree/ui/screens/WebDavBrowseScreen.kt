@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CardDefaults
@@ -166,6 +167,9 @@ fun WebDavBrowseScreen(
                     onOpenVideo = { entry ->
                         onNavigate("webdavPlayer/$sourceId?path=${Uri.encode(entry.path)}")
                     },
+                    onOpenImage = { entry ->
+                        onNavigate("webdavImage/$sourceId?path=${Uri.encode(entry.path)}")
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -179,6 +183,7 @@ private fun WebDavEntryList(
     entries: List<WebDavEntry>,
     onOpenDirectory: (WebDavEntry) -> Unit,
     onOpenVideo: (WebDavEntry) -> Unit,
+    onOpenImage: (WebDavEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -200,6 +205,7 @@ private fun WebDavEntryList(
                     when {
                         entry.isDirectory -> onOpenDirectory(entry)
                         entry.isPlayableVideo -> onOpenVideo(entry)
+                        entry.isViewableImage -> onOpenImage(entry)
                     }
                 },
             )
@@ -219,10 +225,11 @@ private fun WebDavEntryList(
 @Composable
 private fun WebDavEntryRow(entry: WebDavEntry, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
+    val enabled = entry.isDirectory || entry.isPlayableVideo || entry.isViewableImage
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .shapeAwareClickable(shape = shape, enabled = entry.isDirectory || entry.isPlayableVideo, onClick = onClick),
+            .shapeAwareClickable(shape = shape, enabled = enabled, onClick = onClick),
         shape = shape,
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
@@ -232,9 +239,13 @@ private fun WebDavEntryRow(entry: WebDavEntry, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
+                imageVector = when {
+                    entry.isDirectory -> Icons.Default.Folder
+                    entry.isViewableImage -> Icons.Default.Image
+                    else -> Icons.AutoMirrored.Filled.InsertDriveFile
+                },
                 contentDescription = null,
-                tint = if (entry.isPlayableVideo || entry.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(28.dp),
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -249,6 +260,8 @@ private fun WebDavEntryRow(entry: WebDavEntry, onClick: () -> Unit) {
             }
             if (entry.isPlayableVideo) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "播放")
+            } else if (entry.isViewableImage) {
+                Icon(Icons.Default.Image, contentDescription = "查看")
             }
         }
     }

@@ -24,6 +24,7 @@ class SmbClientTest {
             files = listOf(
                 SmbRemoteFile(name = "Season 1", isDirectory = true, sizeBytes = 0L, modified = 10L),
                 SmbRemoteFile(name = "video.mkv", isDirectory = false, sizeBytes = 1024L, modified = 20L),
+                SmbRemoteFile(name = "cover.JPG", isDirectory = false, sizeBytes = 512L, modified = 25L),
                 SmbRemoteFile(name = "readme.txt", isDirectory = false, sizeBytes = 32L, modified = 30L),
             ),
         )
@@ -33,7 +34,27 @@ class SmbClientTest {
         assertTrue(entries[0].isDirectory)
         assertEquals("video.mkv", entries[1].name)
         assertTrue(entries[1].isPlayableVideo)
+        assertEquals("cover.JPG", entries[2].name)
+        assertTrue(entries[2].isViewableImage)
         assertFalse(entries[2].isPlayableVideo)
+        assertFalse(entries[3].isViewableImage)
+        assertFalse(entries[3].isPlayableVideo)
+    }
+
+    @Test
+    fun classifiesSmbImagesWithoutMarkingDirectoriesOrVideosAsImages() {
+        val directory = SmbEntry(sourceId = "smb-1", name = "Photos", path = "Photos", isDirectory = true)
+        val image = SmbEntry(sourceId = "smb-1", name = "poster.avif", path = "Photos/poster.avif", isDirectory = false)
+        val video = SmbEntry(sourceId = "smb-1", name = "movie.mp4", path = "Movies/movie.mp4", isDirectory = false)
+        val document = SmbEntry(sourceId = "smb-1", name = "notes.txt", path = "notes.txt", isDirectory = false)
+
+        assertFalse(directory.isViewableImage)
+        assertTrue(image.isViewableImage)
+        assertFalse(image.isPlayableVideo)
+        assertTrue(video.isPlayableVideo)
+        assertFalse(video.isViewableImage)
+        assertFalse(document.isPlayableVideo)
+        assertFalse(document.isViewableImage)
     }
 
     @Test

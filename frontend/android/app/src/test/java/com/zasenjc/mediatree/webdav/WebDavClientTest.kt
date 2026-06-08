@@ -37,11 +37,18 @@ class WebDavClientTest {
                       <d:getcontenttype>video/x-matroska</d:getcontenttype>
                     </d:prop></d:propstat>
                   </d:response>
+                  <d:response>
+                    <d:href>/remote.php/dav/files/alice/poster.webp</d:href>
+                    <d:propstat><d:prop>
+                      <d:getcontentlength>2048</d:getcontentlength>
+                      <d:getcontenttype>image/webp</d:getcontenttype>
+                    </d:prop></d:propstat>
+                  </d:response>
                 </d:multistatus>
             """.trimIndent(),
         )
 
-        assertEquals(2, entries.size)
+        assertEquals(3, entries.size)
         assertEquals("Movies", entries[0].name)
         assertEquals("Movies", entries[0].path)
         assertTrue(entries[0].isDirectory)
@@ -50,6 +57,59 @@ class WebDavClientTest {
         assertFalse(entries[1].isDirectory)
         assertTrue(entries[1].isPlayableVideo)
         assertEquals(1234567L, entries[1].sizeBytes)
+        assertEquals("poster.webp", entries[2].name)
+        assertTrue(entries[2].isViewableImage)
+        assertFalse(entries[2].isPlayableVideo)
+    }
+
+    @Test
+    fun classifiesWebDavImagesFromContentTypeOrExtension() {
+        val directory = WebDavEntry(
+            sourceId = "webdav-1",
+            name = "Photos",
+            path = "Photos",
+            href = "/Photos/",
+            isDirectory = true,
+            contentType = "image/jpeg",
+        )
+        val contentTypeImage = WebDavEntry(
+            sourceId = "webdav-1",
+            name = "download",
+            path = "download",
+            href = "/download",
+            isDirectory = false,
+            contentType = "image/jpeg",
+        )
+        val extensionImage = WebDavEntry(
+            sourceId = "webdav-1",
+            name = "cover.HEIC",
+            path = "cover.HEIC",
+            href = "/cover.HEIC",
+            isDirectory = false,
+        )
+        val video = WebDavEntry(
+            sourceId = "webdav-1",
+            name = "movie.mkv",
+            path = "movie.mkv",
+            href = "/movie.mkv",
+            isDirectory = false,
+            contentType = "video/x-matroska",
+        )
+        val document = WebDavEntry(
+            sourceId = "webdav-1",
+            name = "notes.txt",
+            path = "notes.txt",
+            href = "/notes.txt",
+            isDirectory = false,
+        )
+
+        assertFalse(directory.isViewableImage)
+        assertTrue(contentTypeImage.isViewableImage)
+        assertTrue(extensionImage.isViewableImage)
+        assertFalse(video.isViewableImage)
+        assertTrue(video.isPlayableVideo)
+        assertFalse(document.isViewableImage)
+        assertFalse(document.isPlayableVideo)
     }
 
     @Test

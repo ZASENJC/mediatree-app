@@ -77,10 +77,12 @@ import com.zasenjc.mediatree.ui.screens.DetailScreen
 import com.zasenjc.mediatree.ui.screens.FavoritesScreen
 import com.zasenjc.mediatree.ui.screens.HomeScreen
 import com.zasenjc.mediatree.ui.screens.SettingsScreen
+import com.zasenjc.mediatree.ui.screens.SmbImageViewerScreen
 import com.zasenjc.mediatree.ui.screens.SmbBrowseScreen
 import com.zasenjc.mediatree.ui.screens.SmbPlayerScreen
 import com.zasenjc.mediatree.ui.screens.UpdateAvailableDot
 import com.zasenjc.mediatree.ui.screens.WebDavBrowseScreen
+import com.zasenjc.mediatree.ui.screens.WebDavImageViewerScreen
 import com.zasenjc.mediatree.ui.screens.WebDavPlayerScreen
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -147,7 +149,8 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     val settingsBadgeVisible = releaseUpdateState is ReleaseUpdateState.Available
     val bottomChromeVisible = chromeVisible &&
         !currentRoute.startsWith("detail") &&
-        !currentRoute.endsWith("Player/{sourceId}?path={path}")
+        !currentRoute.endsWith("Player/{sourceId}?path={path}") &&
+        !currentRoute.endsWith("Image/{sourceId}?path={path}")
 
     LaunchedEffect(currentRoute) {
         chromeVisible = true
@@ -378,6 +381,27 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                     )
                 }
                 composable(
+                    route = "webdavImage/{sourceId}?path={path}",
+                    arguments = listOf(
+                        navArgument("sourceId") { type = NavType.StringType },
+                        navArgument("path") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        },
+                    ),
+                    enterTransition = { md3DefaultEnterTransition() },
+                    exitTransition = { md3DefaultExitTransition() },
+                    popEnterTransition = { md3DefaultPopEnterTransition() },
+                    popExitTransition = { md3DefaultPopExitTransition() },
+                ) { entry ->
+                    WebDavImageViewerScreen(
+                        container = container,
+                        sourceId = entry.arguments?.getString("sourceId").orEmpty(),
+                        path = entry.arguments?.getString("path").orEmpty(),
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(
                     route = "smb/{sourceId}?path={path}",
                     arguments = listOf(
                         navArgument("sourceId") { type = NavType.StringType },
@@ -420,6 +444,27 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                         path = entry.arguments?.getString("path").orEmpty(),
                         onBack = { navController.popBackStack() },
                         onError = onError,
+                    )
+                }
+                composable(
+                    route = "smbImage/{sourceId}?path={path}",
+                    arguments = listOf(
+                        navArgument("sourceId") { type = NavType.StringType },
+                        navArgument("path") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        },
+                    ),
+                    enterTransition = { md3DefaultEnterTransition() },
+                    exitTransition = { md3DefaultExitTransition() },
+                    popEnterTransition = { md3DefaultPopEnterTransition() },
+                    popExitTransition = { md3DefaultPopExitTransition() },
+                ) { entry ->
+                    SmbImageViewerScreen(
+                        container = container,
+                        sourceId = entry.arguments?.getString("sourceId").orEmpty(),
+                        path = entry.arguments?.getString("path").orEmpty(),
+                        onBack = { navController.popBackStack() },
                     )
                 }
             }

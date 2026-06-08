@@ -27,7 +27,10 @@ data class WebDavEntry(
     val modified: String = "",
 ) {
     val isPlayableVideo: Boolean
-        get() = !isDirectory && (contentType.startsWith("video/") || name.substringAfterLast('.', "").lowercase() in VideoExtensions)
+        get() = !isDirectory && (contentType.startsWith("video/", ignoreCase = true) || name.substringAfterLast('.', "").lowercase() in VideoExtensions)
+
+    val isViewableImage: Boolean
+        get() = !isDirectory && (contentType.startsWith("image/", ignoreCase = true) || isViewableImageFileName(name))
 }
 
 class WebDavClient(
@@ -108,7 +111,12 @@ class WebDavClient(
                     contentType = response.firstText("getcontenttype"),
                     modified = response.firstText("getlastmodified"),
                 )
-            }.sortedWith(compareBy<WebDavEntry> { !it.isDirectory }.thenBy { it.name.lowercase() })
+            }.sortedWith(
+                compareBy<WebDavEntry> { !it.isDirectory }
+                    .thenBy { !it.isPlayableVideo }
+                    .thenBy { !it.isViewableImage }
+                    .thenBy { it.name.lowercase() },
+            )
         }
     }
 }
