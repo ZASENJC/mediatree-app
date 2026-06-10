@@ -1,6 +1,6 @@
 name = "kotlin-reviewer"
 description = "Read-only Kotlin, Android, Compose, coroutine, lifecycle, and Gradle reviewer for the native client app."
-model = "gpt-5.4"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 

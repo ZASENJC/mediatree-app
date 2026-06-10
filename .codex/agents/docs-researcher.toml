@@ -1,6 +1,6 @@
 name = "docs-researcher"
 description = "Read-only documentation researcher for verifying API, framework, dependency, and release-note claims against primary sources."
-model = "gpt-5.4"
+model = "gpt-5.5"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 
