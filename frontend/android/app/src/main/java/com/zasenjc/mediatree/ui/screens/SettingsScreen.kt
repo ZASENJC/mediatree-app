@@ -424,6 +424,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.sessionStore.setActiveLibrary(path) }
     }
 
+    fun selectStorageLibrary(path: String) {
+        viewModelScope.launch { container.sessionStore.activateStorageLibrary(path) }
+    }
+
     fun selectM3uProfile(profileId: String) {
         viewModelScope.launch {
             container.sessionStore.activateProfile(profileId)
@@ -675,7 +679,7 @@ fun SettingsScreen(
                                 trailing = {
                                     if (session.activeLibrary == libraryPath) Icon(Icons.Default.CheckCircle, contentDescription = "当前")
                                 },
-                                onClick = { vm.setActiveLibrary(libraryPath) },
+                                onClick = { vm.selectStorageLibrary(libraryPath) },
                             )
                         }
                 }

@@ -2,6 +2,7 @@ package com.zasenjc.mediatree.ui
 
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.ProviderType
+import com.zasenjc.mediatree.ui.screens.saveableStillImageKey
 import com.zasenjc.mediatree.ui.screens.detailStillImages
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -58,5 +59,18 @@ class DetailStillsTest {
             stills.map { it.url },
         )
         assertEquals(listOf(null, null), stills.map { it.fallbackUrl })
+    }
+
+    @Test
+    fun stillImageLazyKeysUseBundleSaveableStrings() {
+        val still = detailStillImages(
+            movie = MovieDto(id = 1440),
+            serverUrl = "http://media.local:27580",
+            providerType = ProviderType.MediaTree,
+            fallbackStill = "http://media.local:27580/api/episode-still/1440",
+            thumbnailUrl = { _, _ -> error("No secondary thumbnails expected") },
+        ).single()
+
+        assertEquals("http://media.local:27580/api/episode-still/1440", saveableStillImageKey(still))
     }
 }

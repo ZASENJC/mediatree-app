@@ -1068,7 +1068,7 @@ private fun ThumbnailStrip(
     if (thumbnails.isEmpty()) return
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(thumbnails.size, key = { thumbnails[it] }) { index ->
+            items(thumbnails.size, key = { saveableStillImageKey(thumbnails[it]) }) { index ->
                 val still = thumbnails[index]
                 val shape = RoundedCornerShape(12.dp)
                 var imageUrl by remember(still) { mutableStateOf(still.url) }

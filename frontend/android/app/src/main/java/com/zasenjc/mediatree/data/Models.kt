@@ -95,7 +95,11 @@ data class Session(
         get() = resolvedProfiles.activeProfile(activeProfileId)
 
     val activeProviderType: ProviderType
-        get() = activeProfile?.type ?: ProviderType.MediaTree
+        get() = when {
+            activeLibrary.smbLibrarySourceId() != null -> ProviderType.SMB
+            activeLibrary.webDavLibrarySourceId() != null -> ProviderType.WebDAV
+            else -> activeProfile?.type ?: ProviderType.MediaTree
+        }
 
     val activeUserId: String
         get() = activeProfile?.userId.orEmpty()

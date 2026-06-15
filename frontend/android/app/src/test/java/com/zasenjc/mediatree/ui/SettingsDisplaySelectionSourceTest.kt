@@ -167,6 +167,18 @@ class SettingsDisplaySelectionSourceTest {
     }
 
     @Test
+    fun storageLibrarySelectionUsesDedicatedActivationPath() {
+        val block = settingsSource
+            .substringAfter("fun setActiveLibrary(path: String)")
+            .substringBefore("fun selectM3uProfile(profileId: String)")
+
+        assertTrue(block.contains("container.sessionStore.setActiveLibrary(path)"))
+        assertTrue(settingsSource.contains("fun selectStorageLibrary(path: String)"))
+        assertTrue(settingsSource.contains("container.sessionStore.activateStorageLibrary(path)"))
+        assertFalse(settingsSource.contains("onClick = { vm.setActiveLibrary(libraryPath) }"))
+    }
+
+    @Test
     fun clientStorageConnectionsAreAlwaysEnabledAfterSave() {
         assertFalse(settingsSource.contains("EnabledSwitchRow("))
         assertFalse(settingsSource.contains("Switch("))

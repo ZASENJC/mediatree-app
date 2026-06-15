@@ -143,6 +143,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route.orEmpty()
     val topDestinations = remember(session.activeProviderType) { topDestinationsFor(session.activeProviderType) }
+    var previousTopDestinations by remember { mutableStateOf(topDestinations) }
     val pagerState = rememberPagerState(
         initialPage = initialTopDestinationPage(session),
         pageCount = { topDestinations.size },
@@ -187,9 +188,15 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         }
     }
 
-    LaunchedEffect(topDestinations.size, pagerState.currentPage) {
-        if (pagerState.currentPage >= topDestinations.size) {
-            pagerState.scrollToPage(0)
+    LaunchedEffect(topDestinations) {
+        val targetPage = destinationPageAfterProviderSwitch(
+            previousDestinations = previousTopDestinations,
+            nextDestinations = topDestinations,
+            previousPage = pagerState.currentPage,
+        )
+        previousTopDestinations = topDestinations
+        if (pagerState.currentPage != targetPage) {
+            pagerState.scrollToPage(targetPage)
         }
     }
 
@@ -289,9 +296,9 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
                         beyondViewportPageCount = 0,
-                        key = { page -> topDestinations[page].route },
+                        key = { page -> topDestinationPagerKey(topDestinations, page) },
                     ) { page ->
-                        val route = topDestinations[page].route
+                        val route = topDestinationRouteAt(topDestinations, page)
                         val pageActive = currentRoute == "main" && page == pagerState.currentPage
                         when (route) {
                             "home" -> HomeScreen(
@@ -335,6 +342,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 onError = onError,
                                 active = pageActive,
                             )
+                            else -> Box(Modifier.fillMaxSize())
                         }
                     }
                 }
@@ -683,6 +691,25 @@ fun initialTopDestinationPage(session: Session): Int {
     if (session.canLoadRemoteContent() || session.canLoadM3uContent()) return 0
     return destinations.indexOfFirst { it.route == "settings" }.coerceAtLeast(0)
 }
+
+fun destinationPageAfterProviderSwitch(
+    previousDestinations: List<TopDestination>,
+    nextDestinations: List<TopDestination>,
+    previousPage: Int,
+): Int {
+    if (previousDestinations.map { it.route } != nextDestinations.map { it.route }) return 0
+    val previousRoute = previousDestinations.getOrNull(previousPage)?.route ?: return 0
+    val nextPage = nextDestinations.indexOfFirst { it.route == previousRoute }
+    return nextPage.takeIf { it >= 0 } ?: 0
+}
+
+fun topDestinationRouteAt(destinations: List<TopDestination>, page: Int): String? =
+    destinations.getOrNull(page)?.route
+
+fun topDestinationPagerKey(destinations: List<TopDestination>, page: Int): String =
+    topDestinationRouteAt(destinations, page) ?: staleTopDestinationKey(page)
+
+fun staleTopDestinationKey(page: Int): String = "stale-top-destination-$page"
 
 fun shouldLoadRemoteContent(session: Session): Boolean = session.canLoadRemoteContent()
 

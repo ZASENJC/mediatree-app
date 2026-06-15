@@ -175,6 +175,25 @@ class SessionStore(context: Context) {
         }
     }
 
+    suspend fun activateStorageLibrary(path: String) {
+        val current = sessionFlow.first()
+        val activeProfile = current.activeProfile
+        val storageType = when {
+            path.smbLibrarySourceId() != null -> ProviderType.SMB
+            path.webDavLibrarySourceId() != null -> ProviderType.WebDAV
+            else -> activeProfile?.type ?: ProviderType.MediaTree
+        }
+        val profile = current.resolvedProfiles.firstOrNull { it.type == storageType }
+            ?: providerProfile(storageType, "", current.resolvedProfiles)
+        val profiles = current.resolvedProfiles.upsertProfile(profile.copy(activeLibrary = path))
+        appContext.sessionDataStore.edit { prefs ->
+            prefs[SERVER_URL] = profile.serverUrl
+            prefs[ACTIVE_PROFILE_ID] = profile.id
+            prefs[SERVER_PROFILES] = sessionJson.encodeToString(profiles.withoutStoredSecrets())
+            prefs[ACTIVE_LIBRARY] = path
+        }
+    }
+
     suspend fun clearToken() {
         val current = sessionFlow.first()
         val activeProfile = current.activeProfile

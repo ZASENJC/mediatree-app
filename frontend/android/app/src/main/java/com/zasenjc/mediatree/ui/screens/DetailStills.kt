@@ -11,6 +11,9 @@ data class DetailStillImage(
     val viewerUrl: String = fallbackUrl ?: url
 }
 
+fun saveableStillImageKey(still: DetailStillImage): String =
+    still.url
+
 fun detailStillImages(
     movie: MovieDto,
     serverUrl: String,

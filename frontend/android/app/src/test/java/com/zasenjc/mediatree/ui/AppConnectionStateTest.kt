@@ -5,6 +5,7 @@ import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.ServerProfile
 import com.zasenjc.mediatree.ui.navigation.topDestinations
+import com.zasenjc.mediatree.ui.navigation.topDestinationsFor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -70,6 +71,39 @@ class AppConnectionStateTest {
         assertFalse(result.clearToken)
         assertEquals(null, result.navigateRoute)
         assertEquals("token", result.session.token)
+    }
+
+    @Test
+    fun m3uToBackendProviderSwitchResetsSettingsIndexToHome() {
+        val oldDestinations = topDestinationsFor(ProviderType.M3U)
+        val newDestinations = topDestinationsFor(ProviderType.MediaTree)
+        val oldSettingsPage = oldDestinations.indexOfFirst { it.route == "settings" }
+
+        assertEquals("settings", oldDestinations[oldSettingsPage].route)
+        assertEquals(0, destinationPageAfterProviderSwitch(oldDestinations, newDestinations, oldSettingsPage))
+    }
+
+    @Test
+    fun sameProviderDestinationUpdateKeepsSharedCurrentRouteWhenStillAvailable() {
+        val oldDestinations = topDestinationsFor(ProviderType.MediaTree)
+        val newDestinations = topDestinationsFor(ProviderType.MediaTree)
+        val oldFavoritesPage = oldDestinations.indexOfFirst { it.route == "favorites" }
+
+        assertEquals("favorites", oldDestinations[oldFavoritesPage].route)
+        assertEquals(
+            newDestinations.indexOfFirst { it.route == "favorites" },
+            destinationPageAfterProviderSwitch(oldDestinations, newDestinations, oldFavoritesPage),
+        )
+    }
+
+    @Test
+    fun mainPagerUsesSafeDestinationLookupForStalePages() {
+        val m3uDestinations = topDestinationsFor(ProviderType.M3U)
+        val stalePageFromBackendSettings = 3
+
+        assertEquals(3, m3uDestinations.size)
+        assertEquals(null, topDestinationRouteAt(m3uDestinations, stalePageFromBackendSettings))
+        assertEquals("stale-top-destination-3", topDestinationPagerKey(m3uDestinations, stalePageFromBackendSettings))
     }
 
     private fun mediaBrowserSession(type: ProviderType, token: String, userId: String, authenticated: Boolean): Session {
