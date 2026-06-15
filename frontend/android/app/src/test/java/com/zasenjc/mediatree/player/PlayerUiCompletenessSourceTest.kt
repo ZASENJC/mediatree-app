@@ -156,6 +156,7 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(detailScreen.contains("showOrientationToggle = playerFullscreen"))
         assertTrue(detailScreen.contains("showAspectRatioControls = playerFullscreen"))
         assertTrue(detailScreen.contains("onToggleFullscreenOrientation = {"))
+        assertTrue(detailScreen.contains("var fullscreenRequested by rememberSaveable(movieId)"))
     }
 
     @Test
@@ -177,7 +178,8 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(aspectIndex > audioIndex)
         assertTrue(orientationIndex > aspectIndex)
         assertTrue(fullscreenIndex > orientationIndex)
-        assertTrue(player.contains("if (showOrientationToggle && isFullscreen)"))
+        assertTrue(player.contains("if (showOrientationToggle)"))
+        assertFalse(player.contains("if (showOrientationToggle && isFullscreen)"))
         assertTrue(player.contains("Spacer(Modifier.weight(1f))"))
     }
 

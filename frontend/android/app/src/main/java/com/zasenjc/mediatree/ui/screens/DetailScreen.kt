@@ -70,6 +70,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -333,7 +334,7 @@ fun DetailScreen(
     )
     var activeMovieId by remember(movieId) { mutableStateOf(movieId) }
     var leavingDetail by remember { mutableStateOf(false) }
-    var fullscreenRequested by remember { mutableStateOf(false) }
+    var fullscreenRequested by rememberSaveable(movieId) { mutableStateOf(false) }
     val playbackResumePositions = remember { mutableStateMapOf<Int, Double>() }
     val lastKnownPlaybackPositions = remember { mutableStateMapOf<Int, PlaybackPositionSnapshot>() }
     var playbackPositionSnapshot by remember { mutableStateOf<(() -> PlaybackPositionSnapshot?)?>(null) }

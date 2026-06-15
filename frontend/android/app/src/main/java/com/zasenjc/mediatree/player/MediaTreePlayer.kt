@@ -740,7 +740,7 @@ private fun PlayerControlsOverlay(
                         AspectRatioMenu(selectedAspectRatio = selectedAspectRatio, onAspectRatioChange = onAspectRatioChange)
                     }
                     Spacer(Modifier.weight(1f))
-                    if (showOrientationToggle && isFullscreen) {
+                    if (showOrientationToggle) {
                         FullscreenOrientationToggle(onToggleFullscreenOrientation = onToggleFullscreenOrientation)
                     }
                     if (showFullscreenButton || isFullscreen) {
