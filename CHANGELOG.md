@@ -8,11 +8,19 @@ All notable changes to MediaTree are documented here.
 
 ## Unreleased
 
+## 0.1.07 (2026-06-16) — Home Source Filename Display
+
+<!-- release-notes:start -->
+
+- Home can now keep the poster grid while showing original source folder and file names
+- Source-filename folder browsing now returns to Home when leaving that Home-launched drilldown
+- Detail-page stills now use a compact multi-row grid
+- Detail-page still previews reuse the fullscreen image viewer's zoom and pan gestures
+<!-- release-notes:end -->
+
 ### Android App
 
-- Changed detail-page stills from a single horizontal strip to a compact multi-row grid
-- Reused the fullscreen image viewer zoom and pan gestures for detail-page still previews
-- Added a homepage display mode that keeps the poster grid but shows source filenames, and made source-file-name folder browsing return to Home from that mode
+- Updated Android `versionCode` to `8` and `versionName` to `0.1.07`
 
 ---
 

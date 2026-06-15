@@ -93,25 +93,25 @@ class ReleaseReadinessSourceTest {
         val english = appRoot.resolve("../../../CHANGELOG.md").readText()
         val chinese = appRoot.resolve("../../../CHANGELOG_zh-CN.md").readText()
 
-        assertTrue(english.contains("## 0.1.06"))
-        assertTrue(chinese.contains("## 0.1.06"))
-        assertTrue(english.contains("Updated Android `versionCode` to `7` and `versionName` to `0.1.06`"))
-        assertTrue(chinese.contains("将 Android `versionCode` 更新为 `7`，`versionName` 更新为 `0.1.06`"))
-        assertFalse(english.substringBefore("## 0.1.06").contains("Updated Android `versionCode`"))
-        assertFalse(chinese.substringBefore("## 0.1.06").contains("将 Android `versionCode` 更新为"))
+        assertTrue(english.contains("## 0.1.07"))
+        assertTrue(chinese.contains("## 0.1.07"))
+        assertTrue(english.contains("Updated Android `versionCode` to `8` and `versionName` to `0.1.07`"))
+        assertTrue(chinese.contains("将 Android `versionCode` 更新为 `8`，`versionName` 更新为 `0.1.07`"))
+        assertFalse(english.substringBefore("## 0.1.07").contains("Updated Android `versionCode`"))
+        assertFalse(chinese.substringBefore("## 0.1.07").contains("将 Android `versionCode` 更新为"))
     }
 
     @Test
     fun releaseNotesBlockStaysUserFacingAndFunctionalOnly() {
         val english = appRoot.resolve("../../../CHANGELOG.md").readText()
         val chinese = appRoot.resolve("../../../CHANGELOG_zh-CN.md").readText()
-        val englishReleaseNotes = releaseNotesBlock(english, "0.1.06")
-        val chineseReleaseNotes = releaseNotesBlock(chinese, "0.1.06")
+        val englishReleaseNotes = releaseNotesBlock(english, "0.1.07")
+        val chineseReleaseNotes = releaseNotesBlock(chinese, "0.1.07")
 
-        assertTrue(englishReleaseNotes.contains("Mounted SMB and WebDAV"))
-        assertTrue(englishReleaseNotes.contains("fullscreen image viewer"))
-        assertTrue(chineseReleaseNotes.contains("挂载的 SMB 和 WebDAV"))
-        assertTrue(chineseReleaseNotes.contains("全屏图片查看"))
+        assertTrue(englishReleaseNotes.contains("Home can now keep the poster grid"))
+        assertTrue(englishReleaseNotes.contains("Source-filename folder browsing now returns to Home"))
+        assertTrue(chineseReleaseNotes.contains("首页现在可以在保留海报网格"))
+        assertTrue(chineseReleaseNotes.contains("源文件名文件夹浏览在返回时会回到首页"))
         assertFalse(englishReleaseNotes.contains("versionCode"))
         assertFalse(englishReleaseNotes.contains(".codex"))
         assertFalse(chineseReleaseNotes.contains("versionCode"))
