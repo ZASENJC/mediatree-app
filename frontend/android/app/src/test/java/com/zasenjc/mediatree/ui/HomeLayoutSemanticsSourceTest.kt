@@ -9,28 +9,47 @@ class HomeLayoutSemanticsSourceTest {
     private val appRoot = File(System.getProperty("user.dir") ?: ".")
 
     @Test
-    fun mediaFeedUsesGroupedMediaPostersAndDirectoryFirstReusesBrowseScreen() {
+    fun mediaFeedUsesGroupedMediaPostersAndSourceFileNameKeepsHomePosterGrid() {
         val source = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
             .readText()
         val mediaFeedBlock = source
-            .substringAfter("} else if (showMediaFeed) {")
+            .substringAfter("} else {")
             .substringBefore("AnimatedVisibility(")
-        val directoryFirstBlock = source
-            .substringAfter("if (homeLayout == HomeLayoutPreference.DirectoryFirst) {")
-            .substringBefore("val vm: HomeViewModel")
 
+        assertTrue(source.contains("val showSourceFileName = homeLayout == HomeLayoutPreference.SourceFileName"))
+        assertFalse(source.contains("HomeLayoutPreference.DirectoryFirst"))
         assertTrue(mediaFeedBlock.contains("state.libraryItems"))
         assertTrue(mediaFeedBlock.contains("HomeMediaPosterCard"))
+        assertTrue(mediaFeedBlock.contains("showSourceFileName = showSourceFileName"))
         assertTrue(mediaFeedBlock.contains("vm.openLibraryItem"))
         assertFalse(mediaFeedBlock.contains("state.feedMovies.isEmpty()"))
-
-        assertTrue(directoryFirstBlock.contains("BrowseScreen("))
-        assertTrue(directoryFirstBlock.contains("initialFolder = \"\""))
-        assertTrue(directoryFirstBlock.contains("viewMode = browseViewMode"))
-        assertTrue(directoryFirstBlock.contains("onViewModeChange = onBrowseViewModeChange"))
+        assertFalse(mediaFeedBlock.contains("BrowseScreen("))
         assertTrue(source.contains("webDavLibrarySourceId"))
         assertFalse(source.contains("HomeDirectoryRow("))
+    }
+
+    @Test
+    fun sourceFileNameModeNavigatesFoldersInsteadOfRecursiveVideoFlattening() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/HomeScreen.kt")
+            .readText()
+        val openBlock = source
+            .substringAfter("fun openLibraryItem(")
+            .substringBefore("private suspend fun loadSmbLibrary")
+        val cardBlock = source
+            .substringAfter("private fun HomeMediaPosterCard(")
+            .substringBefore("@Composable\nprivate fun RecentWatchingCard")
+
+        assertTrue(openBlock.contains("showSourceFileName: Boolean"))
+        assertTrue(openBlock.contains("if (showSourceFileName)"))
+        assertTrue(openBlock.contains("onNavigate(\"browse?folder="))
+        assertTrue(openBlock.contains("sourceFileName=true"))
+        assertFalse(openBlock.contains("recursiveVideos=true"))
+        assertTrue(cardBlock.contains("showSourceFileName: Boolean"))
+        assertTrue(cardBlock.contains("item.sourceFileNameTitle()"))
+        assertTrue(cardBlock.contains("item.homeTitle()"))
+        assertTrue(source.contains("storageFileNameOrFallback(path"))
     }
 
     @Test

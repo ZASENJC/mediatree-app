@@ -38,7 +38,10 @@ class SettingsDisplaySelectionSourceTest {
 
         assertFalse(block.contains("Text(\"深浅色模式\""))
         assertTrue(block.contains("PreferenceExpandableRow("))
-        assertTrue(block.contains("title = \"首页布局\""))
+        assertTrue(block.contains("title = \"首页显示\""))
+        assertTrue(block.contains("HomeLayoutPreference.SourceFileName to \"显示源文件名称\""))
+        assertFalse(block.contains("HomeLayoutPreference.DirectoryFirst"))
+        assertFalse(block.contains("目录优先"))
         assertTrue(block.contains("title = \"主题模式\""))
         assertTrue(block.contains("selectedLabel = state.themeModePreference.labelText()"))
         assertTrue(block.contains("ThemeColorPreferenceRow("))

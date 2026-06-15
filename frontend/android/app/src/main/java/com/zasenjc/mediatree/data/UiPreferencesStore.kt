@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.map
 
 enum class HomeLayoutPreference(val value: String) {
     MediaFeed("media_feed"),
-    DirectoryFirst("directory_first"),
+    SourceFileName("source_file_name"),
 }
 
 enum class ThemeModePreference(val value: String) {
@@ -34,7 +34,8 @@ class UiPreferencesStore(context: Context) {
 
     val homeLayoutFlow: Flow<HomeLayoutPreference> = appContext.uiPreferencesDataStore.data.map { prefs ->
         when (prefs[HOME_LAYOUT]) {
-            HomeLayoutPreference.DirectoryFirst.value -> HomeLayoutPreference.DirectoryFirst
+            HomeLayoutPreference.SourceFileName.value -> HomeLayoutPreference.SourceFileName
+            "directory_first" -> HomeLayoutPreference.SourceFileName
             else -> HomeLayoutPreference.MediaFeed
         }
     }

@@ -601,12 +601,12 @@ fun SettingsScreen(
             item {
                 SettingsSectionCard(title = "显示偏好", icon = Icons.Default.Visibility) {
                     PreferenceExpandableRow(
-                        title = "首页布局",
+                        title = "首页显示",
                         selectedLabel = state.homeLayoutPreference.labelText(),
                         icon = Icons.Default.Folder,
                         options = listOf(
                             HomeLayoutPreference.MediaFeed to "媒体流",
-                            HomeLayoutPreference.DirectoryFirst to "目录优先",
+                            HomeLayoutPreference.SourceFileName to "显示源文件名称",
                         ),
                         selected = state.homeLayoutPreference,
                         onSelect = vm::setHomeLayoutPreference,
@@ -1371,7 +1371,7 @@ private fun themeColorFromHex(value: String): Color {
 
 private fun HomeLayoutPreference.labelText(): String = when (this) {
     HomeLayoutPreference.MediaFeed -> "媒体流"
-    HomeLayoutPreference.DirectoryFirst -> "目录优先"
+    HomeLayoutPreference.SourceFileName -> "显示源文件名称"
 }
 
 private fun ThemeModePreference.labelText(): String = when (this) {

@@ -33,7 +33,7 @@ class BrowseDirectorySemanticsSourceTest {
         val source = browseSource
         val titleBlock = source
             .substringAfter("private fun FolderNodeDto.browseTitle(): String =")
-            .substringBefore("private fun FolderNodeDto.detailRoute")
+            .substringBefore("private fun FolderNodeDto.sourceFileNameTitle")
 
         assertTrue(titleBlock.trim().startsWith("name"))
         assertFalse(titleBlock.contains("displayTitle"))
@@ -123,15 +123,12 @@ class BrowseDirectorySemanticsSourceTest {
         val homeSignature = homeSource
             .substringAfter("fun HomeScreen(")
             .substringBefore(") {")
-        val homeBrowseWrapperCall = homeSource
-            .substringAfter("BrowseScreen(")
-            .substringBefore("return")
 
         assertTrue(imports.contains("import com.zasenjc.mediatree.ui.screens.BrowseScrollPosition"))
         assertTrue(mainShellBlock.contains("val browseScrollPositions = remember { mutableMapOf<String, BrowseScrollPosition>() }"))
         assertTrue(appBrowseCall.contains("browseScrollPositions = browseScrollPositions"))
         assertTrue(homeSignature.contains("browseScrollPositions: MutableMap<String, BrowseScrollPosition>"))
-        assertTrue(homeBrowseWrapperCall.contains("browseScrollPositions = browseScrollPositions"))
+        assertFalse(homeSource.contains("BrowseScreen("))
         assertFalse(homeSource.contains("remember { mutableMapOf<String, BrowseScrollPosition>() }"))
     }
 
@@ -206,7 +203,7 @@ class BrowseDirectorySemanticsSourceTest {
     }
 
     @Test
-    fun homeMediaFeedMountedFoldersOpenRecursiveBrowseVideoMode() {
+    fun homeMediaFeedMountedFoldersOpenFolderBrowseWithoutRecursiveFlattening() {
         val openLibraryItemBlock = homeSource
             .substringAfter("fun openLibraryItem")
             .substringBefore("fun HomeScreen(")
@@ -215,11 +212,45 @@ class BrowseDirectorySemanticsSourceTest {
             .substringBefore("BackHandler(")
 
         assertTrue(openLibraryItemBlock.contains("browse?folder="))
-        assertTrue(openLibraryItemBlock.contains("recursiveVideos=true"))
+        assertFalse(openLibraryItemBlock.contains("recursiveVideos=true"))
         assertFalse(openLibraryItemBlock.contains("onNavigate(\"smb/"))
         assertFalse(openLibraryItemBlock.contains("onNavigate(\"webdav/"))
         assertTrue(handleNavigateBlock.contains("browseRecursiveVideos"))
         assertTrue(handleNavigateBlock.contains("recursiveVideos"))
+    }
+
+    @Test
+    fun sourceFileNameBrowseKeepsPosterGridAndSourceNamesAcrossFolders() {
+        val browseSignature = browseSource
+            .substringAfter("fun BrowseScreen(")
+            .substringBefore(") {")
+        val screenBlock = browseSource
+            .substringAfter("fun BrowseScreen(")
+            .substringBefore("@Composable\nprivate fun DesignFolderRow")
+        val appBrowseCall = appSource
+            .substringAfter("\"browse\" -> BrowseScreen(")
+            .substringBefore(")")
+        val handleNavigateBlock = appSource
+            .substringAfter("fun handleAppNavigate(route: String)")
+            .substringBefore("BackHandler(")
+        val backHandlerBlock = appSource
+            .substringAfter("BackHandler(enabled = pagerState.currentPage")
+            .substringBefore("LaunchedEffect(initialMovieId")
+
+        assertTrue(browseSignature.contains("sourceFileNameMode: Boolean = false"))
+        assertTrue(appBrowseCall.contains("sourceFileNameMode = browseSourceFileName"))
+        assertTrue(handleNavigateBlock.contains("browseSourceFileName = params.getQueryParameter(\"sourceFileName\") == \"true\""))
+        assertTrue(backHandlerBlock.contains("if (parent.isBlank())"))
+        assertFalse(backHandlerBlock.contains("browseSourceFileName = false\n        navigateTopDestination"))
+        assertTrue(screenBlock.contains("val resolvedViewMode = if (sourceFileNameMode) \"poster\" else viewMode"))
+        assertTrue(screenBlock.contains("if (!sourceFileNameMode)"))
+        assertTrue(screenBlock.contains("sourceFileNameMode = sourceFileNameMode"))
+        assertTrue(screenBlock.contains("sourceFileNameRouteSuffix(sourceFileNameMode)"))
+        assertTrue(screenBlock.contains("browse?folder=&sourceFileName=true"))
+        assertTrue(browseSource.contains("private fun FolderNodeDto.sourceFileNameTitle()"))
+        assertTrue(browseSource.contains("private fun MovieDto.sourceFileNameTitle()"))
+        assertTrue(browseSource.contains("storageFileNameOrFallback(path"))
+        assertTrue(browseSource.contains("titleOverride = movie.sourceFileNameTitle().takeIf { sourceFileNameMode }"))
     }
 
     @Test

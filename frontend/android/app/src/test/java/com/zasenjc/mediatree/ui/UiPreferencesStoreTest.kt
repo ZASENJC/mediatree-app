@@ -1,9 +1,12 @@
 package com.zasenjc.mediatree.ui
 
 import com.zasenjc.mediatree.data.DEFAULT_THEME_COLOR
+import com.zasenjc.mediatree.data.HomeLayoutPreference
 import com.zasenjc.mediatree.data.sanitizeHomeSortMode
 import com.zasenjc.mediatree.data.sanitizeThemeColor
+import com.zasenjc.mediatree.ui.screens.storageFileNameOrFallback
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -38,9 +41,28 @@ class UiPreferencesStoreTest {
     }
 
     @Test
+    fun homeLayoutPreferenceReplacesDirectoryFirstWithSourceFileName() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/data/UiPreferencesStore.kt")
+            .readText()
+
+        assertEquals("source_file_name", HomeLayoutPreference.SourceFileName.value)
+        assertTrue(source.contains("SourceFileName(\"source_file_name\")"))
+        assertTrue(source.contains("\"directory_first\" -> HomeLayoutPreference.SourceFileName"))
+        assertTrue(source.contains("HomeLayoutPreference.SourceFileName.value -> HomeLayoutPreference.SourceFileName"))
+        assertFalse(source.contains("DirectoryFirst(\"directory_first\")"))
+    }
+
+    @Test
     fun sanitizeHomeSortModeFallsBackForUnknownInput() {
         assertEquals("title_asc", sanitizeHomeSortMode("title_asc"))
         assertEquals("release_date_desc", sanitizeHomeSortMode(""))
         assertEquals("release_date_desc", sanitizeHomeSortMode("unknown"))
+    }
+
+    @Test
+    fun storageFileNameOrFallbackKeepsProviderIdsReadable() {
+        assertEquals("Episode 01.mkv", storageFileNameOrFallback("/shows/Season 1/Episode 01.mkv", "剧集 01"))
+        assertEquals("剧集 01", storageFileNameOrFallback("f4a3b2c1d0", "剧集 01"))
     }
 }

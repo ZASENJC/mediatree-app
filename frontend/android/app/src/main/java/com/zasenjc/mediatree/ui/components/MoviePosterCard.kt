@@ -50,9 +50,10 @@ fun MoviePosterCard(
     modifier: Modifier = Modifier,
     aspectRatio: Float = 2f / 3f,
     showFavorite: Boolean = true,
+    titleOverride: String? = null,
 ) {
     var sheetOpen by remember { mutableStateOf(false) }
-    val title = movie.displayTitle ?: movie.title ?: movie.code
+    val title = titleOverride ?: movie.displayTitle ?: movie.title ?: movie.code
     val progress = (movie.progressPercent ?: 0.0).coerceIn(0.0, 100.0)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
         PosterImageFrame(

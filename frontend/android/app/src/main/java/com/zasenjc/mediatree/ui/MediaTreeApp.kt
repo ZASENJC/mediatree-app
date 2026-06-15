@@ -151,6 +151,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     var browseFolder by remember { mutableStateOf("") }
     var browseViewMode by rememberSaveable { mutableStateOf("compact") }
     var browseRecursiveVideos by remember { mutableStateOf(false) }
+    var browseSourceFileName by remember { mutableStateOf(false) }
     val browseScrollPositions = remember { mutableMapOf<String, BrowseScrollPosition>() }
     var chromeVisible by remember { mutableStateOf(true) }
     val releaseUpdateState by container.releaseUpdateChecker.state.collectAsStateWithLifecycle()
@@ -168,6 +169,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     LaunchedEffect(session.activeProviderType, session.activeLibrary) {
         browseFolder = ""
         browseRecursiveVideos = false
+        browseSourceFileName = false
     }
 
     LaunchedEffect(session.activeProviderType, session.activeProfileId) {
@@ -228,6 +230,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
             route == "browse" -> {
                 browseFolder = ""
                 browseRecursiveVideos = false
+                browseSourceFileName = false
                 navigateTopDestination("browse")
             }
             route.startsWith("browse?folder=") -> {
@@ -235,6 +238,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                 val params = Uri.parse("mediatree://local/browse?$query")
                 browseFolder = params.getQueryParameter("folder").orEmpty()
                 browseRecursiveVideos = params.getQueryParameter("recursiveVideos") == "true"
+                browseSourceFileName = params.getQueryParameter("sourceFileName") == "true"
                 navigateTopDestination("browse")
             }
             topDestinations.any { it.route == route } -> navigateTopDestination(route)
@@ -243,8 +247,12 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     }
 
     BackHandler(enabled = pagerState.currentPage == topDestinations.indexOfFirst { it.route == "browse" } && browseFolder.isNotBlank()) {
-        browseFolder = browseParentFolder()
+        val parent = browseParentFolder()
+        browseFolder = parent
         browseRecursiveVideos = false
+        if (parent.isBlank()) {
+            browseSourceFileName = false
+        }
         navigateTopDestination("browse")
     }
 
@@ -321,6 +329,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 active = pageActive,
                                 initialFolder = browseFolder,
                                 recursiveVideosOnly = browseRecursiveVideos,
+                                sourceFileNameMode = browseSourceFileName,
                                 viewMode = browseViewMode,
                                 onViewModeChange = { browseViewMode = it },
                                 browseScrollPositions = browseScrollPositions,

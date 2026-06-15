@@ -499,6 +499,7 @@ fun BrowseScreen(
     active: Boolean = true,
     initialFolder: String,
     recursiveVideosOnly: Boolean = false,
+    sourceFileNameMode: Boolean = false,
     viewMode: String,
     onViewModeChange: (String) -> Unit,
     browseScrollPositions: MutableMap<String, BrowseScrollPosition>,
@@ -538,7 +539,7 @@ fun BrowseScreen(
         }
     }
 
-    LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeLibrary, initialFolder, recursiveVideosOnly) {
+    LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeLibrary, initialFolder, recursiveVideosOnly, sourceFileNameMode) {
         if (!active) return@LaunchedEffect
         searchJob?.cancel()
         query = ""
@@ -570,6 +571,8 @@ fun BrowseScreen(
     fun openFolderNode(folder: FolderNodeDto) {
         if (folder.isLeaf && session.activeProviderType != ProviderType.MediaTree) {
             onNavigate(folder.detailRoute())
+        } else if (sourceFileNameMode) {
+            onNavigate("browse?folder=${Uri.encode(folder.path)}&sourceFileName=true")
         } else {
             onNavigate("browse?folder=${Uri.encode(folder.path)}")
         }
@@ -613,13 +616,15 @@ fun BrowseScreen(
                         val iconFolderRows = posterFolderRows
                         val posterMovieRows = remember(filteredMovies) { filteredMovies.chunked(2) }
                         val iconMovieRows = remember(filteredMovies) { filteredMovies.chunked(3) }
+                        val resolvedViewMode = if (sourceFileNameMode) "poster" else viewMode
                         val scrollKey = snapshot.scrollMemoryKey(
                             providerType = session.activeProviderType,
                             activeProfileId = session.activeProfileId,
                             activeLibrary = session.activeLibrary,
-                            viewMode = viewMode,
+                            viewMode = resolvedViewMode,
                             query = query,
                             recursiveVideosOnly = recursiveVideosOnly,
+                            sourceFileNameMode = sourceFileNameMode,
                         )
                         val rememberedScroll = browseScrollPositions[scrollKey]
                         val snapshotListState = rememberLazyListState(
@@ -666,14 +671,16 @@ fun BrowseScreen(
                                         singleLine = true,
                                         modifier = Modifier.fillMaxWidth(),
                                     )
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        items(browseViewModes) { mode ->
-                                            DesignFilterChip(
-                                                selected = viewMode == mode.key,
-                                                onClick = { onViewModeChange(mode.key) },
-                                                label = mode.label,
-                                                icon = mode.icon,
-                                            )
+                                    if (!sourceFileNameMode) {
+                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            items(browseViewModes) { mode ->
+                                                DesignFilterChip(
+                                                    selected = viewMode == mode.key,
+                                                    onClick = { onViewModeChange(mode.key) },
+                                                    label = mode.label,
+                                                    icon = mode.icon,
+                                                )
+                                            }
                                         }
                                     }
                                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -690,7 +697,7 @@ fun BrowseScreen(
                                 }
                             }
                             if (filteredFolders.isNotEmpty()) {
-                                when (viewMode) {
+                                when (resolvedViewMode) {
                                     "poster" -> {
                                         items(
                                             posterFolderRows,
@@ -700,6 +707,7 @@ fun BrowseScreen(
                                             PosterFolderRow(
                                                 row = row,
                                                 serverUrl = session.serverUrl,
+                                                sourceFileNameMode = sourceFileNameMode,
                                                 onOpen = ::openFolderNode,
                                             )
                                         }
@@ -729,7 +737,7 @@ fun BrowseScreen(
                                 }
                             }
                             if (filteredMovies.isNotEmpty() || snapshot.currentFolder.isNotBlank()) {
-                                when (viewMode) {
+                                when (resolvedViewMode) {
                                     "poster" -> {
                                         items(
                                             posterMovieRows,
@@ -746,6 +754,7 @@ fun BrowseScreen(
                                                             viewportKey = row.mountedThumbnailRowKey(snapshot.mountedSource, MountedPosterVideoThumbnailSpec),
                                                             source = snapshot.mountedSource,
                                                             movie = movie,
+                                                            sourceFileNameMode = sourceFileNameMode,
                                                             onClick = { onNavigate(movie.openRoute()) },
                                                             modifier = Modifier.weight(1f),
                                                         )
@@ -753,6 +762,7 @@ fun BrowseScreen(
                                                         MoviePosterCard(
                                                             movie = movie,
                                                             imageUrl = provider.coverUrl(session.serverUrl, movie.id),
+                                                            titleOverride = movie.sourceFileNameTitle().takeIf { sourceFileNameMode },
                                                             onClick = { onNavigate(movie.openRoute()) },
                                                             modifier = Modifier.weight(1f),
                                                         )
@@ -847,7 +857,9 @@ fun BrowseScreen(
                             IconButton(onClick = {
                                 val parent = initialFolder.trimEnd('/').substringBeforeLast("/", missingDelimiterValue = "")
                                 if (parent.isNotBlank()) {
-                                    onNavigate("browse?folder=${Uri.encode(parent)}")
+                                    onNavigate("browse?folder=${Uri.encode(parent)}${sourceFileNameRouteSuffix(sourceFileNameMode)}")
+                                } else if (sourceFileNameMode) {
+                                    onNavigate("browse?folder=&sourceFileName=true")
                                 } else {
                                     onNavigate("browse")
                                 }
@@ -904,6 +916,7 @@ private fun DesignFolderRow(folder: FolderNodeDto, onClick: () -> Unit) {
 private fun PosterFolderRow(
     row: List<FolderNodeDto>,
     serverUrl: String,
+    sourceFileNameMode: Boolean,
     onOpen: (FolderNodeDto) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -911,6 +924,7 @@ private fun PosterFolderRow(
             FolderPosterCard(
                 folder = folder,
                 imageUrl = UrlUtils.resolveApiUrl(serverUrl, folder.randomCover ?: folder.cover),
+                titleOverride = folder.sourceFileNameTitle().takeIf { sourceFileNameMode },
                 onClick = { onOpen(folder) },
                 modifier = Modifier.weight(1f),
             )
@@ -923,10 +937,11 @@ private fun PosterFolderRow(
 private fun FolderPosterCard(
     folder: FolderNodeDto,
     imageUrl: String?,
+    titleOverride: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val title = folder.browseTitle()
+    val title = titleOverride ?: folder.browseTitle()
     val shape = RoundedCornerShape(14.dp)
     ElevatedCard(
         modifier = modifier.shapeAwareClickable(shape = shape, onClick = onClick),
@@ -1122,6 +1137,7 @@ private fun MountedVideoPosterCard(
     viewportKey: String,
     source: ClientStorageSource?,
     movie: MovieDto,
+    sourceFileNameMode: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1142,7 +1158,7 @@ private fun MountedVideoPosterCard(
             showPlayIcon = !movie.isMountedImageItem(),
         )
         Text(
-            text = movie.browseTitle(),
+            text = if (sourceFileNameMode) movie.sourceFileNameTitle() else movie.browseTitle(),
             color = MaterialTheme.colorScheme.onBackground,
             style = MaterialTheme.typography.labelLarge,
             maxLines = 2,
@@ -1560,6 +1576,7 @@ private fun BrowseContentSnapshot.scrollMemoryKey(
     viewMode: String,
     query: String,
     recursiveVideosOnly: Boolean,
+    sourceFileNameMode: Boolean,
 ): String = listOf(
     providerType.name,
     activeProfileId,
@@ -1569,7 +1586,11 @@ private fun BrowseContentSnapshot.scrollMemoryKey(
     sortMode,
     query.trim(),
     recursiveVideosOnly.toString(),
+    sourceFileNameMode.toString(),
 ).joinToString("|")
+
+private fun sourceFileNameRouteSuffix(enabled: Boolean): String =
+    if (enabled) "&sourceFileName=true" else ""
 
 private fun androidx.compose.foundation.lazy.LazyListState.toBrowseScrollPosition(): BrowseScrollPosition =
     BrowseScrollPosition(
@@ -1650,6 +1671,9 @@ private fun MovieDto.mountedThumbnailItemKey(source: ClientStorageSource?, spec:
 
 private fun FolderNodeDto.browseTitle(): String = name
 
+private fun FolderNodeDto.sourceFileNameTitle(): String =
+    storageFileNameOrFallback(path, name.ifBlank { displayTitle.orEmpty() })
+
 private fun FolderNodeDto.detailRoute(): String =
     "detail/${path.toMovieRouteId()}?providerItemId=${Uri.encode(path)}"
 
@@ -1700,6 +1724,9 @@ private fun FolderNodeDto.folderMeta(): String =
     }
 
 private fun MovieDto.browseTitle(): String = displayTitle ?: title ?: code
+
+private fun MovieDto.sourceFileNameTitle(): String =
+    storageFileNameOrFallback(path, code.ifBlank { displayTitle ?: title.orEmpty() })
 
 private fun MovieDto.iconMovieMeta(): String =
     if (isMountedLibraryItem()) {

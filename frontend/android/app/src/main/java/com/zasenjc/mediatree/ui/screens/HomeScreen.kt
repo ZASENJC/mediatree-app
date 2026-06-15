@@ -434,14 +434,17 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         profileId: String,
         item: FolderNodeDto,
         fallbackMediaRoot: String,
+        showSourceFileName: Boolean,
         onNavigate: (String) -> Unit,
     ) {
         if (_state.value.openingPath == item.path) return
         viewModelScope.launch {
             _state.update { it.copy(openingPath = item.path, error = null) }
             try {
-                if (item.mediaRoot?.smbLibrarySourceId() != null || item.mediaRoot?.webDavLibrarySourceId() != null) {
-                    onNavigate("browse?folder=${Uri.encode(item.path)}&recursiveVideos=true")
+                if (showSourceFileName) {
+                    onNavigate("browse?folder=${Uri.encode(item.path)}&sourceFileName=true")
+                } else if (item.mediaRoot?.smbLibrarySourceId() != null || item.mediaRoot?.webDavLibrarySourceId() != null) {
+                    onNavigate("browse?folder=${Uri.encode(item.path)}")
                 } else if (item.isLeaf && providerType != ProviderType.MediaTree) {
                     onNavigate(item.detailRoute())
                 } else {
@@ -489,22 +492,7 @@ fun HomeScreen(
     onChromeVisibleChange: (Boolean) -> Unit = {},
 ) {
     val homeLayout by container.uiPreferencesStore.homeLayoutFlow.collectAsStateWithLifecycle(initialValue = HomeLayoutPreference.MediaFeed)
-    if (homeLayout == HomeLayoutPreference.DirectoryFirst && session.activeProviderType != ProviderType.M3U) {
-        BrowseScreen(
-            container = container,
-            session = session,
-            onNavigate = onNavigate,
-            onError = onError,
-            active = active,
-            initialFolder = "",
-            viewMode = browseViewMode,
-            onViewModeChange = onBrowseViewModeChange,
-            browseScrollPositions = browseScrollPositions,
-            chromeVisible = chromeVisible,
-            onChromeVisibleChange = onChromeVisibleChange,
-        )
-        return
-    }
+    val showSourceFileName = homeLayout == HomeLayoutPreference.SourceFileName
 
     val vm: HomeViewModel = viewModel(factory = viewModelFactory { HomeViewModel(container) })
     val state by vm.state.collectAsStateWithLifecycle()
@@ -612,12 +600,14 @@ fun HomeScreen(
                                         item.randomCover ?: item.cover,
                                     ),
                                     opening = state.openingPath == item.path,
+                                    showSourceFileName = showSourceFileName,
                                     onClick = {
                                         vm.openLibraryItem(
                                             providerType = session.activeProviderType,
                                             profileId = session.activeProfileId,
                                             item = item,
                                             fallbackMediaRoot = session.activeLibrary,
+                                            showSourceFileName = showSourceFileName,
                                             onNavigate = onNavigate,
                                         )
                                     },
@@ -857,10 +847,11 @@ private fun HomeMediaPosterCard(
     item: FolderNodeDto,
     imageUrl: String?,
     opening: Boolean,
+    showSourceFileName: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val title = item.displayTitle ?: item.name.ifBlank { item.path.substringAfterLast("/") }
+    val title = if (showSourceFileName) item.sourceFileNameTitle() else item.homeTitle()
     val cardShape = RoundedCornerShape(16.dp)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Card(
@@ -1518,6 +1509,9 @@ private fun ClientPlaybackProgress.progressPercent(durationSeconds: Double): Dou
     }
 
 private fun FolderNodeDto.homeTitle(): String = displayTitle ?: name.ifBlank { path }
+
+private fun FolderNodeDto.sourceFileNameTitle(): String =
+    storageFileNameOrFallback(path, name.ifBlank { displayTitle.orEmpty() })
 
 private fun FolderNodeDto.detailRoute(): String =
     "detail/${path.toMovieRouteId()}?providerItemId=${Uri.encode(path)}"

@@ -154,6 +154,23 @@ fun storageParentPath(path: String): String {
 fun storageFileName(path: String): String =
     path.trim('/', '\\').replace('\\', '/').substringAfterLast('/')
 
+fun storageFileNameOrFallback(path: String, fallback: String): String {
+    val leaf = storageFileName(path)
+    if (leaf.isBlank()) return fallback
+    val original = path.trim('/', '\\')
+    return if (
+        original.contains('/') ||
+        original.contains('\\') ||
+        leaf.contains('.') ||
+        fallback.isBlank() ||
+        leaf == fallback
+    ) {
+        leaf
+    } else {
+        fallback
+    }
+}
+
 fun ensureCurrentVideo(
     videos: List<ClientStorageVideoItem>,
     current: ClientStorageVideoItem,
