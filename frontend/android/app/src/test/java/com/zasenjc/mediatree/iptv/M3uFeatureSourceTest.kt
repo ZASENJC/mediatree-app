@@ -78,6 +78,8 @@ class M3uFeatureSourceTest {
         assertTrue(playerSource.contains("M3uChannelMiniCard"))
         assertTrue(playerSource.contains("LazyVerticalGrid"))
         assertTrue(playerSource.contains("GridCells.Adaptive"))
+        assertTrue(playerSource.contains(".weight(1f)"))
+        assertFalse(playerSource.contains("heightIn(max = 300.dp)"))
         assertFalse(playerSource.contains("m3uSubscriptionClient.load"))
         assertTrue(playbackSource.contains("fun m3u("))
         assertTrue(playbackSource.contains("M3uPlaybackSource"))

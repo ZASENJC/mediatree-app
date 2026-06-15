@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -220,7 +219,7 @@ fun M3uPlayerScreen(
                     )
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .align(Alignment.TopCenter),
                     ) {
                         if (!playerFullscreen) {
@@ -242,6 +241,7 @@ fun M3uPlayerScreen(
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .weight(1f)
                                     .padding(horizontal = 18.dp),
                             )
                         }
@@ -281,7 +281,7 @@ private fun M3uChannelSwitcher(
             columns = GridCells.Adaptive(108.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 300.dp),
+                .weight(1f),
             contentPadding = PaddingValues(vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
