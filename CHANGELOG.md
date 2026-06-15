@@ -8,6 +8,18 @@ All notable changes to MediaTree are documented here.
 
 ## Unreleased
 
+## 0.1.08 (2026-06-16) — Player Controls Polish
+
+<!-- release-notes:start -->
+- Player controls no longer dim the whole video; only the visible control rows now use a subtle fade
+- Double-tap seek, long-press fast-forward, and horizontal seek gestures now show only the small control prompt instead of opening the full player controls
+<!-- release-notes:end -->
+
+### Android App
+
+- Updated Android `versionCode` to `9` and `versionName` to `0.1.08`
+- Added source-level regression coverage for player gesture prompts and local row scrims
+
 ## 0.1.07 (2026-06-16) — M3U Live and Home Source Filename Display
 
 <!-- release-notes:start -->

@@ -123,6 +123,52 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
+    fun playerQuickGesturesOnlyShowHudWithoutOpeningFullControls() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+        val horizontalSeekHandler = player
+            .substringAfter("val horizontalSeekHandler by rememberUpdatedState(")
+            .substringBefore("val restoreTemporaryFastForward")
+        val doubleTapHandler = player
+            .substringAfter("onDoubleTap = { tapX, width ->")
+            .substringBefore("onLongPress = {")
+        val longPressHandler = player
+            .substringAfter("onLongPress = {")
+            .substringBefore("onPressEnd = {")
+
+        assertTrue(horizontalSeekHandler.contains("hudMessage = seekHudMessage(deltaSeconds, target, durationSeconds)"))
+        assertTrue(horizontalSeekHandler.contains("hudMessage = relativeSeekHudMessage(deltaSeconds)"))
+        assertTrue(horizontalSeekHandler.contains("showOverlay = false"))
+        assertFalse(horizontalSeekHandler.contains("showOverlay = true"))
+        assertTrue(doubleTapHandler.contains("hudMessage = \"快退 10 秒\""))
+        assertTrue(doubleTapHandler.contains("hudMessage = \"快进 10 秒\""))
+        assertTrue(doubleTapHandler.contains("showOverlay = false"))
+        assertFalse(doubleTapHandler.contains("showOverlay = true"))
+        assertTrue(longPressHandler.contains("hudMessage = \"2.0x\""))
+        assertTrue(longPressHandler.contains("showOverlay = false"))
+        assertFalse(longPressHandler.contains("showOverlay = true"))
+    }
+
+    @Test
+    fun playerControlsUseLocalRowScrimsInsteadOfFullscreenShadow() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+        val overlayStart = player.indexOf("private fun PlayerControlsOverlay(")
+        val overlayEnd = player.indexOf("@Composable\n@OptIn(ExperimentalMaterial3Api::class)\nprivate fun PlayerSeekBar", overlayStart)
+        val overlayBlock = player.substring(overlayStart, overlayEnd)
+
+        assertTrue(player.contains("import androidx.compose.ui.graphics.Brush"))
+        assertTrue(player.contains("private fun playerTopControlRowScrim(): Brush"))
+        assertTrue(player.contains("private fun playerBottomControlRowScrim(): Brush"))
+        assertTrue(overlayBlock.contains(".background(playerTopControlRowScrim())"))
+        assertTrue(overlayBlock.contains(".background(playerBottomControlRowScrim())"))
+        assertFalse(overlayBlock.contains("Box(modifier.background(Color.Black.copy(alpha = 0.22f)))"))
+        assertFalse(overlayBlock.contains("fillMaxSize().background(Color.Black.copy"))
+    }
+
+    @Test
     fun fullscreenAndLockBehaviorAreScoped() {
         val player = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")

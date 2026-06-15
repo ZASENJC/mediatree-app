@@ -18,6 +18,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 - Version rule: use `0.0.00` three-level format without `v` prefix where this repo controls release versions. Increment sequentially and do not skip major/minor version numbers.
 - Android app versions live in `frontend/android/app/build.gradle` (`versionCode` and `versionName`). Keep release notes synced with the app version that is actually built.
 - GitHub Release pages must show only user-facing functional changes. Put implementation details, config/tooling changes, tests, and version bookkeeping in `CHANGELOG.md` / `CHANGELOG_zh-CN.md`, but keep them outside the `release-notes` marker block used by the release workflow.
+- For every release, review the full version diff before publishing and summarize every user-visible feature, behavior change, and fix in the `release-notes` marker block. Do not omit major capabilities from the user-facing release notes even if they are documented elsewhere in the changelog.
 - Telegram release notifications must use GitHub Actions secrets (`TG_BOT_TOKEN` and `TG_CHAT_ID`). Do not hardcode bot tokens, chat IDs, or credentials in tracked files.
 
 ## Interaction Language Rules

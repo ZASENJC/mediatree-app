@@ -60,6 +60,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -192,14 +193,14 @@ fun MediaTreePlayer(
                 positionSeconds = target
                 percentPosition = playbackPercent(target, durationSeconds, percentPosition)
                 hudMessage = seekHudMessage(deltaSeconds, target, durationSeconds)
-                showOverlay = true
+                showOverlay = false
                 onProgressUpdate(target, durationSeconds)
             } else {
                 controller.seekBy(deltaSeconds)
                 val target = (positionSeconds + deltaSeconds).coerceAtLeast(0.0)
                 positionSeconds = target
                 hudMessage = relativeSeekHudMessage(deltaSeconds)
-                showOverlay = true
+                showOverlay = false
                 onProgressUpdate(target, durationSeconds)
             }
         },
@@ -461,7 +462,7 @@ fun MediaTreePlayer(
                         hudMessage = "快进 10 秒"
                     }
                 }
-                showOverlay = true
+                showOverlay = false
             },
             onLongPress = {
                 if (playerLocked || temporarySpeedRestoreValue != null) return@PlayerGestureLayer
@@ -469,6 +470,7 @@ fun MediaTreePlayer(
                 temporarySpeedRestoreValue = speedBeforeHold
                 controller.setPlaybackSpeed(temporaryFastForwardSpeed(currentSpeed = playbackSpeed))
                 hudMessage = "2.0x"
+                showOverlay = false
             },
             onPressEnd = {
                 restoreTemporaryFastForward()
@@ -686,10 +688,11 @@ private fun PlayerControlsOverlay(
     onToggleFullscreenOrientation: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.background(Color.Black.copy(alpha = 0.22f))) {
+    Box(modifier) {
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
+                .background(playerTopControlRowScrim())
                 .padding(10.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -701,6 +704,7 @@ private fun PlayerControlsOverlay(
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)
+                    .background(playerBottomControlRowScrim())
                     .padding(horizontal = 14.dp, vertical = 12.dp)
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(7.dp),
@@ -751,6 +755,20 @@ private fun PlayerControlsOverlay(
         }
     }
 }
+
+private fun playerTopControlRowScrim(): Brush = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.0f to Color.Black.copy(alpha = 0.34f),
+        1.0f to Color.Transparent,
+    ),
+)
+
+private fun playerBottomControlRowScrim(): Brush = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.0f to Color.Transparent,
+        1.0f to Color.Black.copy(alpha = 0.38f),
+    ),
+)
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
