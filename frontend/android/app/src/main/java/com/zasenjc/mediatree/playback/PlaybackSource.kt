@@ -42,6 +42,14 @@ sealed interface PlaybackSource {
             subtitleTracks = subtitleTracks,
         )
 
+        fun m3u(
+            streamUrl: String,
+            subtitleTracks: List<PlaybackSubtitleTrack> = emptyList(),
+        ): M3uPlaybackSource = M3uPlaybackSource(
+            uri = streamUrl,
+            subtitleTracks = subtitleTracks,
+        )
+
         fun jellyfin(
             serverUrl: String,
             itemId: String,
@@ -131,6 +139,12 @@ data class HttpPlaybackSource(
 }
 
 data class WebDavPlaybackSource(
+    override val uri: String,
+    override val headers: Map<String, String> = emptyMap(),
+    override val subtitleTracks: List<PlaybackSubtitleTrack> = emptyList(),
+) : PlaybackSource
+
+data class M3uPlaybackSource(
     override val uri: String,
     override val headers: Map<String, String> = emptyMap(),
     override val subtitleTracks: List<PlaybackSubtitleTrack> = emptyList(),

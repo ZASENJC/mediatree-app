@@ -22,7 +22,10 @@ class MpvPlayerControllerTest {
         )
 
         assertEquals(appContext, backend.createdContext)
-        assertEquals(listOf("force-window" to "no"), backend.options)
+        assertTrue(backend.options.contains("force-window" to "no"))
+        assertTrue(backend.options.contains("vd-lavc-threads" to "0"))
+        assertTrue(backend.options.contains("ad-lavc-threads" to "0"))
+        assertTrue(backend.options.contains("ad" to "av3a"))
         assertEquals(
             listOf(
                 listOf("change-list", "http-header-fields", "clr", ""),

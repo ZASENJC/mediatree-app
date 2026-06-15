@@ -62,6 +62,7 @@ import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.ReleaseUpdateState
 import com.zasenjc.mediatree.data.Session
+import com.zasenjc.mediatree.data.isM3uProfile
 import com.zasenjc.mediatree.ui.components.LoadingPane
 import com.zasenjc.mediatree.ui.components.LocalMediaTreeImageAuth
 import com.zasenjc.mediatree.ui.components.MediaTreePageBackground
@@ -74,11 +75,13 @@ import com.zasenjc.mediatree.ui.motion.md3DefaultPopEnterTransition
 import com.zasenjc.mediatree.ui.motion.md3DefaultPopExitTransition
 import com.zasenjc.mediatree.ui.navigation.TopDestination
 import com.zasenjc.mediatree.ui.navigation.topDestinations
+import com.zasenjc.mediatree.ui.navigation.topDestinationsFor
 import com.zasenjc.mediatree.ui.screens.BrowseScrollPosition
 import com.zasenjc.mediatree.ui.screens.BrowseScreen
 import com.zasenjc.mediatree.ui.screens.DetailScreen
 import com.zasenjc.mediatree.ui.screens.FavoritesScreen
 import com.zasenjc.mediatree.ui.screens.HomeScreen
+import com.zasenjc.mediatree.ui.screens.M3uPlayerScreen
 import com.zasenjc.mediatree.ui.screens.SettingsScreen
 import com.zasenjc.mediatree.ui.screens.SmbImageViewerScreen
 import com.zasenjc.mediatree.ui.screens.SmbBrowseScreen
@@ -139,6 +142,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     val scope = rememberCoroutineScope()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route.orEmpty()
+    val topDestinations = remember(session.activeProviderType) { topDestinationsFor(session.activeProviderType) }
     val pagerState = rememberPagerState(
         initialPage = initialTopDestinationPage(session),
         pageCount = { topDestinations.size },
@@ -152,6 +156,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     val settingsBadgeVisible = releaseUpdateState is ReleaseUpdateState.Available
     val bottomChromeVisible = chromeVisible &&
         !currentRoute.startsWith("detail") &&
+        !currentRoute.startsWith("m3uPlayer") &&
         !currentRoute.endsWith("Player/{sourceId}?path={path}") &&
         !currentRoute.endsWith("Image/{sourceId}?path={path}")
 
@@ -164,6 +169,12 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         browseRecursiveVideos = false
     }
 
+    LaunchedEffect(session.activeProviderType, session.activeProfileId) {
+        if (session.activeProviderType == ProviderType.M3U) {
+            pagerState.scrollToPage(0)
+        }
+    }
+
     fun navigateTopDestination(route: String) {
         val page = topDestinations.indexOfFirst { it.route == route }
         if (page >= 0) {
@@ -173,6 +184,12 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                     animationSpec = tween(durationMillis = 360, easing = Md3StandardEasing),
                 )
             }
+        }
+    }
+
+    LaunchedEffect(topDestinations.size, pagerState.currentPage) {
+        if (pagerState.currentPage >= topDestinations.size) {
+            pagerState.scrollToPage(0)
         }
     }
 
@@ -347,6 +364,22 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                     )
                 }
                 composable(
+                    route = "m3uPlayer/{channelId}",
+                    arguments = listOf(navArgument("channelId") { type = NavType.StringType }),
+                    enterTransition = { md3DefaultEnterTransition() },
+                    exitTransition = { md3DefaultExitTransition() },
+                    popEnterTransition = { md3DefaultPopEnterTransition() },
+                    popExitTransition = { md3DefaultPopExitTransition() },
+                ) { entry ->
+                    M3uPlayerScreen(
+                        container = container,
+                        session = session,
+                        channelId = entry.arguments?.getString("channelId").orEmpty(),
+                        onBack = { navController.popBackStack() },
+                        onError = onError,
+                    )
+                }
+                composable(
                     route = "webdav/{sourceId}?path={path}",
                     arguments = listOf(
                         navArgument("sourceId") { type = NavType.StringType },
@@ -487,6 +520,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             DesignBottomNavigationBar(
+                destinations = topDestinations,
                 currentPage = pagerState.currentPage,
                 pageOffsetFraction = pagerState.currentPageOffsetFraction,
                 settingsBadgeVisible = settingsBadgeVisible,
@@ -501,6 +535,7 @@ private val SnackbarBottomChromePadding = 96.dp
 
 @Composable
 private fun DesignBottomNavigationBar(
+    destinations: List<TopDestination>,
     currentPage: Int,
     pageOffsetFraction: Float,
     settingsBadgeVisible: Boolean,
@@ -522,7 +557,7 @@ private fun DesignBottomNavigationBar(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            topDestinations.forEachIndexed { index, item ->
+            destinations.forEachIndexed { index, item ->
                 val pageDistance = (currentPage - index) + pageOffsetFraction
                 val selectedAmount = (1f - abs(pageDistance)).coerceIn(0f, 1f)
                 BottomNavItem(
@@ -644,8 +679,9 @@ data class ConnectionErrorResult(
 )
 
 fun initialTopDestinationPage(session: Session): Int {
-    if (session.canLoadRemoteContent()) return 0
-    return topDestinations.indexOfFirst { it.route == "settings" }.coerceAtLeast(0)
+    val destinations = topDestinationsFor(session.activeProviderType)
+    if (session.canLoadRemoteContent() || session.canLoadM3uContent()) return 0
+    return destinations.indexOfFirst { it.route == "settings" }.coerceAtLeast(0)
 }
 
 fun shouldLoadRemoteContent(session: Session): Boolean = session.canLoadRemoteContent()
@@ -654,8 +690,14 @@ fun Session.canLoadRemoteContent(): Boolean = when (activeProviderType) {
     ProviderType.MediaTree -> serverUrl.isNotBlank() && (activeProfile?.authenticated == true || token.isNotBlank())
     ProviderType.Jellyfin, ProviderType.Emby ->
         serverUrl.isNotBlank() && activeProfile?.authenticated == true && token.isNotBlank() && activeUserId.isNotBlank()
-    ProviderType.WebDAV, ProviderType.SMB -> false
+    ProviderType.M3U,
+    ProviderType.WebDAV,
+    ProviderType.SMB,
+    -> false
 }
+
+fun Session.canLoadM3uContent(): Boolean =
+    activeProviderType == ProviderType.M3U && activeProfile?.isM3uProfile() == true
 
 fun handleConnectionError(session: Session, throwable: Throwable): ConnectionErrorResult {
     if (throwable is ApiException && throwable.statusCode == 401) {

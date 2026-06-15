@@ -18,7 +18,7 @@ class ServerProfileTest {
     @Test
     fun supportsPlannedProviderTypes() {
         assertEquals(
-            setOf("MediaTree", "Jellyfin", "Emby", "WebDAV", "SMB"),
+            setOf("MediaTree", "Jellyfin", "Emby", "M3U", "WebDAV", "SMB"),
             ProviderType.entries.map { it.name }.toSet(),
         )
     }

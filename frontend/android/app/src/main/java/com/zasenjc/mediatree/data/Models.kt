@@ -22,6 +22,7 @@ enum class ProviderType {
     MediaTree,
     Jellyfin,
     Emby,
+    M3U,
     WebDAV,
     SMB,
 }

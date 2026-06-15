@@ -124,6 +124,7 @@ fun ProviderType.supportsRemoteHomeSnapshot(): Boolean = when (this) {
     ProviderType.MediaTree,
     ProviderType.Jellyfin -> true
     ProviderType.Emby,
+    ProviderType.M3U,
     ProviderType.WebDAV,
     ProviderType.SMB -> false
 }

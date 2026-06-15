@@ -37,6 +37,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
@@ -83,6 +86,7 @@ import com.zasenjc.mediatree.data.HomeLayoutPreference
 import com.zasenjc.mediatree.data.HomeSnapshot
 import com.zasenjc.mediatree.data.FolderNodeDto
 import com.zasenjc.mediatree.data.MediaRootDto
+import com.zasenjc.mediatree.data.M3uChannel
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.MoviesResponseDto
 import com.zasenjc.mediatree.data.RemotePlaybackMemory
@@ -106,6 +110,7 @@ import com.zasenjc.mediatree.ui.components.SyncChromeWithGridScroll
 import com.zasenjc.mediatree.ui.components.shapeAwareClickable
 import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.topChromeExitTransition
+import com.zasenjc.mediatree.ui.canLoadM3uContent
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
 import kotlinx.coroutines.CancellationException
@@ -115,6 +120,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -134,6 +140,8 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         val roots: List<MediaRootDto> = emptyList(),
         val recent: List<MovieDto> = emptyList(),
         val libraryItems: List<FolderNodeDto> = emptyList(),
+        val m3uChannels: List<M3uChannel> = emptyList(),
+        val m3uFavoriteIds: Set<String> = emptySet(),
         val sortMode: String = DefaultHomeSortMode,
         val openingPath: String? = null,
         val error: Throwable? = null,
@@ -157,6 +165,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     refreshing = hasContent,
                     error = null,
                     sortMode = sort,
+                    m3uChannels = emptyList(),
                 )
             }
             try {
@@ -174,6 +183,59 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 loadRemoteHome(providerType, profileId, activeLibrary, sort, forceScan)
             } catch (e: Throwable) {
                 _state.update { it.copy(loading = false, refreshing = false, error = e) }
+            }
+        }
+    }
+
+    fun loadM3uChannels(profileId: String, forceRefresh: Boolean = false) {
+        viewModelScope.launch {
+            val hasContent = _state.value.m3uChannels.isNotEmpty()
+            _state.update {
+                it.copy(
+                    loading = !hasContent,
+                    refreshing = hasContent || forceRefresh,
+                    error = null,
+                    recent = emptyList(),
+                    libraryItems = emptyList(),
+                    roots = emptyList(),
+                )
+            }
+            try {
+                val profile = container.sessionStore.sessionFlow.first().resolvedProfiles
+                    .firstOrNull { it.id == profileId && it.type == ProviderType.M3U }
+                    ?: throw IllegalArgumentException("M3U 订阅未配置")
+                val favorites = container.m3uFavoritesRepository.load(profile.id)
+                val channels = if (forceRefresh) {
+                    container.m3uSubscriptionCacheRepository.refresh(profile)
+                } else {
+                    container.m3uSubscriptionCacheRepository.loadCached(profile)
+                }
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        refreshing = false,
+                        m3uChannels = channels,
+                        m3uFavoriteIds = favorites,
+                    )
+                }
+            } catch (e: Throwable) {
+                _state.update { it.copy(loading = false, refreshing = false, error = e) }
+            }
+        }
+    }
+
+    fun toggleM3uFavorite(profileId: String, channelId: String) {
+        viewModelScope.launch {
+            val favorite = channelId !in _state.value.m3uFavoriteIds
+            container.m3uFavoritesRepository.setFavorite(profileId, channelId, favorite)
+            _state.update { current ->
+                current.copy(
+                    m3uFavoriteIds = if (favorite) {
+                        current.m3uFavoriteIds + channelId
+                    } else {
+                        current.m3uFavoriteIds - channelId
+                    },
+                )
             }
         }
     }
@@ -365,7 +427,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun UiState.hasHomeContent(): Boolean =
-        roots.isNotEmpty() || recent.isNotEmpty() || libraryItems.isNotEmpty()
+        roots.isNotEmpty() || recent.isNotEmpty() || libraryItems.isNotEmpty() || m3uChannels.isNotEmpty()
 
     fun openLibraryItem(
         providerType: ProviderType,
@@ -427,7 +489,7 @@ fun HomeScreen(
     onChromeVisibleChange: (Boolean) -> Unit = {},
 ) {
     val homeLayout by container.uiPreferencesStore.homeLayoutFlow.collectAsStateWithLifecycle(initialValue = HomeLayoutPreference.MediaFeed)
-    if (homeLayout == HomeLayoutPreference.DirectoryFirst) {
+    if (homeLayout == HomeLayoutPreference.DirectoryFirst && session.activeProviderType != ProviderType.M3U) {
         BrowseScreen(
             container = container,
             session = session,
@@ -470,7 +532,9 @@ fun HomeScreen(
     LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeProfileId, session.activeLibrary, homeSortMode) {
         if (!active) return@LaunchedEffect
         val resolvedHomeSortMode = homeSortMode ?: return@LaunchedEffect
-        if (session.canLoadHomeContent()) {
+        if (session.canLoadM3uContent()) {
+            vm.loadM3uChannels(session.activeProfileId)
+        } else if (session.canLoadHomeContent()) {
             vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = resolvedHomeSortMode)
         }
     }
@@ -490,18 +554,27 @@ fun HomeScreen(
                 isRefreshing = state.refreshing,
                 onRefresh = {
                     val resolvedHomeSortMode = homeSortMode ?: DefaultHomeSortMode
-                    if (session.canLoadHomeContent()) {
+                    if (session.canLoadM3uContent()) {
+                        vm.loadM3uChannels(session.activeProfileId, forceRefresh = true)
+                    } else if (session.canLoadHomeContent()) {
                         vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = resolvedHomeSortMode, forceScan = true)
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (
-                    !session.canLoadHomeContent()
+                    !session.canLoadHomeContent() && !session.canLoadM3uContent()
                 ) {
                     BackendSetupRequiredState(icon = Icons.Filled.Home, message = BackendSetupRequiredMessage)
                 } else if (state.loading) {
                     LoadingPane(Modifier.fillMaxSize())
+                } else if (session.activeProviderType == ProviderType.M3U) {
+                    M3uChannelGrid(
+                        channels = state.m3uChannels,
+                        favoriteIds = state.m3uFavoriteIds,
+                        onOpen = { channel -> onNavigate(channel.m3uPlayerRoute()) },
+                        onToggleFavorite = { channel -> vm.toggleM3uFavorite(session.activeProfileId, channel.id) },
+                    )
                 } else {
                     LazyVerticalGrid(
                         state = gridState,
@@ -568,23 +641,25 @@ fun HomeScreen(
                         IconButton(onClick = { showSearch = true }) {
                             Icon(Icons.Default.Search, contentDescription = "搜索")
                         }
-                        Box {
-                            IconButton(onClick = { showSort = true }) {
-                                Icon(Icons.Default.Menu, contentDescription = "排序")
-                            }
-                            DropdownMenu(expanded = showSort, onDismissRequest = { showSort = false }) {
-                                sortOptions.forEach { (key, label) ->
-                                    DropdownMenuItem(
-                                        text = { Text(label) },
-                                        onClick = {
-                                            showSort = false
-                                            homeSortMode = key
-                                            scope.launch { container.uiPreferencesStore.setHomeSortModePreference(key) }
-                                            if (session.canLoadHomeContent()) {
-                                                vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = key)
-                                            }
-                                        },
-                                    )
+                        if (session.activeProviderType != ProviderType.M3U) {
+                            Box {
+                                IconButton(onClick = { showSort = true }) {
+                                    Icon(Icons.Default.Menu, contentDescription = "排序")
+                                }
+                                DropdownMenu(expanded = showSort, onDismissRequest = { showSort = false }) {
+                                    sortOptions.forEach { (key, label) ->
+                                        DropdownMenuItem(
+                                            text = { Text(label) },
+                                            onClick = {
+                                                showSort = false
+                                                homeSortMode = key
+                                                scope.launch { container.uiPreferencesStore.setHomeSortModePreference(key) }
+                                                if (session.canLoadHomeContent()) {
+                                                    vm.load(session.activeProviderType, session.activeProfileId, session.activeLibrary, sort = key)
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -614,6 +689,107 @@ private fun HomeSectionHeader(text: String) {
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onBackground,
     )
+}
+
+@Composable
+fun M3uChannelGrid(
+    channels: List<M3uChannel>,
+    favoriteIds: Set<String>,
+    onOpen: (M3uChannel) -> Unit,
+    onToggleFavorite: (M3uChannel) -> Unit,
+    emptyText: String = "暂无直播频道",
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(142.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 20.dp, top = 86.dp, end = 20.dp, bottom = 116.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (channels.isEmpty()) {
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                EmptyMediaState(emptyText)
+            }
+        } else {
+            items(channels, key = { it.id }, contentType = { "m3u-channel" }) { channel ->
+                M3uChannelCard(
+                    channel = channel,
+                    favorite = channel.id in favoriteIds,
+                    onClick = { onOpen(channel) },
+                    onToggleFavorite = { onToggleFavorite(channel) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun M3uChannelCard(
+    channel: M3uChannel,
+    favorite: Boolean,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val cardShape = RoundedCornerShape(16.dp)
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Card(
+            modifier = Modifier.shapeAwareClickable(shape = cardShape, onClick = onClick),
+            shape = cardShape,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 10f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (channel.logoUrl.isNotBlank()) {
+                    MediaAsyncImage(
+                        imageUrl = channel.logoUrl,
+                        contentDescription = channel.name,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 72.dp),
+                        cornerRadius = 16.dp,
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.LiveTv,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(36.dp),
+                    )
+                }
+                IconButton(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                ) {
+                    Icon(
+                        if (favorite) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = if (favorite) "取消收藏" else "收藏频道",
+                        tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        Text(
+            text = channel.name,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = channel.group.ifBlank { "直播频道" },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable
@@ -819,6 +995,7 @@ private fun HomeSearchOverlay(
 ) {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<MovieDto>>(emptyList()) }
+    var m3uResults by remember { mutableStateOf<List<M3uChannel>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var searchJob by remember { mutableStateOf<Job?>(null) }
@@ -839,6 +1016,7 @@ private fun HomeSearchOverlay(
         val request = value.trim()
         if (request.isBlank()) {
             results = emptyList()
+            m3uResults = emptyList()
             searching = false
             searchJob = null
             return
@@ -846,8 +1024,31 @@ private fun HomeSearchOverlay(
         searching = true
         searchJob = scope.launch {
             delay(280)
+            if (session.canLoadM3uContent()) {
+                try {
+                    val profile = container.sessionStore.sessionFlow.first().activeProfile
+                        ?: throw IllegalArgumentException("M3U 订阅未配置")
+                    val channels = container.m3uSubscriptionCacheRepository.loadCached(profile).filterM3uQuery(request)
+                    if (query.trim() == request) {
+                        m3uResults = channels
+                        results = emptyList()
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Throwable) {
+                    if (query.trim() == request) {
+                        m3uResults = emptyList()
+                    }
+                } finally {
+                    if (query.trim() == request) {
+                        searching = false
+                    }
+                }
+                return@launch
+            }
             if (!session.canLoadHomeContent()) {
                 results = emptyList()
+                m3uResults = emptyList()
                 searching = false
                 return@launch
             }
@@ -875,6 +1076,7 @@ private fun HomeSearchOverlay(
                 )
                 if (query.trim() == request) {
                     results = resp.movies
+                    m3uResults = emptyList()
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -904,6 +1106,7 @@ private fun HomeSearchOverlay(
             delay(180)
             query = ""
             results = emptyList()
+            m3uResults = emptyList()
         }
     }
 
@@ -937,7 +1140,7 @@ private fun HomeSearchOverlay(
                 OutlinedTextField(
                     value = query,
                     onValueChange = ::updateQuery,
-                    placeholder = { Text("搜索番号或标题") },
+                    placeholder = { Text(if (session.activeProviderType == ProviderType.M3U) "搜索频道" else "搜索番号或标题") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         IconButton(onClick = { dismissSearch() }) {
@@ -952,7 +1155,7 @@ private fun HomeSearchOverlay(
                 )
 
                 AnimatedVisibility(
-                    visible = query.isNotBlank() || searching || results.isNotEmpty(),
+                    visible = query.isNotBlank() || searching || results.isNotEmpty() || m3uResults.isNotEmpty(),
                     enter = fadeIn(animationSpec = tween(120)) +
                         expandVertically(expandFrom = Alignment.Top, animationSpec = tween(220)),
                     exit = fadeOut(animationSpec = tween(80)) +
@@ -971,7 +1174,7 @@ private fun HomeSearchOverlay(
                                     CircularProgressIndicator()
                                 }
                             }
-                            query.isNotBlank() && results.isEmpty() -> {
+                            query.isNotBlank() && results.isEmpty() && m3uResults.isEmpty() -> {
                                 Box(
                                     Modifier
                                         .fillMaxWidth()
@@ -983,6 +1186,25 @@ private fun HomeSearchOverlay(
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
+                                }
+                            }
+                            session.activeProviderType == ProviderType.M3U -> {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 420.dp),
+                                    contentPadding = PaddingValues(bottom = 4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    items(m3uResults, key = { it.id }) { channel ->
+                                        M3uSearchResultRow(
+                                            channel = channel,
+                                            onClick = {
+                                                focusManager.clearFocus()
+                                                onNavigate(channel.m3uPlayerRoute())
+                                            },
+                                        )
+                                    }
                                 }
                             }
                             else -> {
@@ -1052,6 +1274,62 @@ private fun HomeSearchResultRow(
                 Text(
                     text = listOfNotNull(movie.releaseDate?.take(4), movie.code.takeIf { it.isNotBlank() })
                         .joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun M3uSearchResultRow(
+    channel: M3uChannel,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(16.dp)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shapeAwareClickable(shape = shape, onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.38f),
+        shape = shape,
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(72.dp)
+                    .height(48.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (channel.logoUrl.isNotBlank()) {
+                    MediaAsyncImage(
+                        imageUrl = channel.logoUrl,
+                        contentDescription = channel.name,
+                        modifier = Modifier.fillMaxSize(),
+                        cornerRadius = 10.dp,
+                    )
+                } else {
+                    Icon(Icons.Default.LiveTv, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = channel.name,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = channel.group.ifBlank { "直播频道" },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -1345,13 +1623,30 @@ private fun MovieDto.continueWatchingKeys(): List<String> = buildList {
 private fun ProviderType.defaultHomeSearchSort(): String = when (this) {
     ProviderType.MediaTree -> "created_desc"
     ProviderType.Jellyfin, ProviderType.Emby -> "created_desc"
-    ProviderType.SMB, ProviderType.WebDAV -> "created_desc"
+    ProviderType.M3U,
+    ProviderType.SMB,
+    ProviderType.WebDAV,
+    -> "created_desc"
 }
 
 private fun Session.canLoadHomeContent(): Boolean =
     shouldLoadRemoteContent(this) ||
+        canLoadM3uContent() ||
         activeLibrary.smbLibrarySourceId() != null ||
         activeLibrary.webDavLibrarySourceId() != null
+
+fun M3uChannel.m3uPlayerRoute(): String = "m3uPlayer/${Uri.encode(id)}"
+
+private fun List<M3uChannel>.filterM3uQuery(query: String): List<M3uChannel> {
+    val q = query.trim().lowercase()
+    if (q.isBlank()) return this
+    return filter { channel ->
+        channel.name.lowercase().contains(q) ||
+            channel.group.lowercase().contains(q) ||
+            channel.tvgName.lowercase().contains(q) ||
+            channel.tvgId.lowercase().contains(q)
+    }
+}
 
 private fun String.toMovieRouteId(): Int =
     takeLast(8).toUIntOrNull(16)?.toInt() ?: hashCode()

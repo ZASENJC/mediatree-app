@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Cached
@@ -88,6 +89,7 @@ import com.zasenjc.mediatree.data.ReleaseUpdateState
 import com.zasenjc.mediatree.data.ServerProfile
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.ThemeModePreference
+import com.zasenjc.mediatree.data.isM3uProfile
 import com.zasenjc.mediatree.data.sanitizeThemeColor
 import com.zasenjc.mediatree.data.smbLibraryPath
 import com.zasenjc.mediatree.data.viewModelFactory
@@ -98,6 +100,7 @@ import com.zasenjc.mediatree.ui.components.DesignSettingsRow
 import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.util.UrlUtils
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,12 +109,14 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 
 private val serverProviderTypes = listOf(ProviderType.MediaTree, ProviderType.Jellyfin, ProviderType.Emby)
+private val connectionProviderTypes = serverProviderTypes + ProviderType.M3U
 private const val MEDIATREE_BACKEND_REPOSITORY_URL = "https://github.com/ZASENJC/mediatree"
 
 private fun ProviderType.labelText(): String = when (this) {
     ProviderType.MediaTree -> "MediaTree"
     ProviderType.Jellyfin -> "Jellyfin"
     ProviderType.Emby -> "Emby"
+    ProviderType.M3U -> "M3U"
     ProviderType.WebDAV -> "WebDAV"
     ProviderType.SMB -> "SMB"
 }
@@ -125,6 +130,7 @@ private fun ProviderType.connectionIcon(): ImageVector = when (this) {
     ProviderType.MediaTree -> Icons.Default.Dns
     ProviderType.Jellyfin -> Icons.Default.Movie
     ProviderType.Emby -> Icons.Default.PlayArrow
+    ProviderType.M3U -> Icons.Default.LiveTv
     ProviderType.WebDAV -> Icons.Default.Storage
     ProviderType.SMB -> Icons.Default.Router
 }
@@ -282,10 +288,39 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun saveM3uProfile(profileId: String?, profileName: String, subscriptionUrl: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(message = "", error = null) }
+            kotlin.runCatching {
+                val before = profileId?.let { id ->
+                    container.sessionStore.sessionFlow.first().resolvedProfiles
+                        .firstOrNull { it.id == id && it.type == ProviderType.M3U }
+                }
+                container.sessionStore.saveM3uProfile(
+                    subscriptionUrl = subscriptionUrl,
+                    name = profileName,
+                    profileId = profileId,
+                )
+                val profile = container.sessionStore.sessionFlow.first().activeProfile
+                    ?.takeIf { it.type == ProviderType.M3U }
+                    ?: throw IllegalArgumentException("M3U 订阅未配置")
+                val shouldRefreshSubscription = before == null ||
+                    before.serverUrl != profile.serverUrl ||
+                    !container.m3uSubscriptionCacheRepository.hasCacheFor(profile)
+                if (shouldRefreshSubscription) {
+                    container.m3uSubscriptionCacheRepository.refresh(profile)
+                }
+            }
+                .onSuccess { _state.update { it.copy(message = "M3U 订阅已保存", error = null) } }
+                .onFailure { throwable -> _state.update { it.copy(error = throwable.message ?: "M3U 订阅保存失败") } }
+        }
+    }
+
     fun logoutServerProfile(profileId: String?) {
         if (profileId == null) return
         viewModelScope.launch {
             container.sessionStore.removeProfile(profileId)
+            container.m3uSubscriptionCacheRepository.remove(profileId)
             _state.update { it.copy(message = "后端已登出", error = null) }
         }
     }
@@ -387,6 +422,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setActiveLibrary(path: String) {
         viewModelScope.launch { container.sessionStore.setActiveLibrary(path) }
+    }
+
+    fun selectM3uProfile(profileId: String) {
+        viewModelScope.launch {
+            container.sessionStore.activateProfile(profileId)
+            container.sessionStore.setActiveLibrary("")
+        }
     }
 
     fun saveWebDavSource() {
@@ -604,6 +646,21 @@ fun SettingsScreen(
                             onSelect = vm::selectBackendLibrary,
                         )
                     }
+                    session.resolvedProfiles
+                        .filter { it.type == ProviderType.M3U && it.isM3uProfile() }
+                        .forEach { profile ->
+                            DesignSettingsRow(
+                                title = profile.displayName(),
+                                subtitle = "M3U 直播 · ${profile.serverUrl}",
+                                icon = profile.type.connectionIcon(),
+                                trailing = {
+                                    if (session.activeProfileId == profile.id) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = "当前")
+                                    }
+                                },
+                                onClick = { vm.selectM3uProfile(profile.id) },
+                            )
+                        }
                     state.clientStorageSources
                         .filter { it.enabled }
                         .forEach { source ->
@@ -698,6 +755,10 @@ fun SettingsScreen(
                 vm.logoutServerProfile(profileId)
                 editingConnection = null
             },
+            onSaveM3u = { profileId, name, url ->
+                vm.saveM3uProfile(profileId, name, url)
+                editingConnection = null
+            },
             onSaveWebDav = { id, name, url, username, password, authType, enabled ->
                 vm.saveWebDavSource(id, name, url, username, password, authType, enabled)
                 editingConnection = null
@@ -786,13 +847,17 @@ private fun ConnectionsSection(
                     Icon(Icons.Default.Add, contentDescription = "添加连接")
                 }
                 DropdownMenu(expanded = addMenuExpanded, onDismissRequest = { addMenuExpanded = false }) {
-                    serverProviderTypes.forEach { type ->
+                    connectionProviderTypes.forEach { type ->
                         DropdownMenuItem(
-                            text = { Text("${type.labelText()} 后端") },
+                            text = { Text(if (type == ProviderType.M3U) "M3U 订阅" else "${type.labelText()} 后端") },
                             leadingIcon = { Icon(type.connectionIcon(), contentDescription = null) },
                             onClick = {
                                 addMenuExpanded = false
-                                onAdd(ConnectionEditorTarget.Server(type = type))
+                                if (type == ProviderType.M3U) {
+                                    onAdd(ConnectionEditorTarget.M3u())
+                                } else {
+                                    onAdd(ConnectionEditorTarget.Server(type = type))
+                                }
                             },
                         )
                     }
@@ -816,7 +881,7 @@ private fun ConnectionsSection(
             }
         },
     ) {
-        val profiles = session.resolvedProfiles.filter { it.type in serverProviderTypes }
+        val profiles = session.resolvedProfiles.filter { it.type in connectionProviderTypes }
         if (profiles.isEmpty() && sources.isEmpty()) {
             Text(
                 text = "暂无连接，点击右上角添加。",
@@ -827,14 +892,24 @@ private fun ConnectionsSection(
         profiles.forEach { profile ->
             DesignSettingsRow(
                 title = profile.displayName(),
-                subtitle = "${profile.type.labelText()} 后端 · ${profile.connectionStatus(session)}",
+                subtitle = if (profile.type == ProviderType.M3U) {
+                    "M3U 直播 · ${profile.connectionStatus(session)}"
+                } else {
+                    "${profile.type.labelText()} 后端 · ${profile.connectionStatus(session)}"
+                },
                 icon = profile.type.connectionIcon(),
                 trailing = {
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         Icon(Icons.Default.ChevronRight, contentDescription = null)
                     }
                 },
-                onClick = { onEdit(ConnectionEditorTarget.Server(type = profile.type, profile = profile)) },
+                onClick = {
+                    if (profile.type == ProviderType.M3U) {
+                        onEdit(ConnectionEditorTarget.M3u(profile))
+                    } else {
+                        onEdit(ConnectionEditorTarget.Server(type = profile.type, profile = profile))
+                    }
+                },
             )
         }
         sources.forEach { source ->
@@ -866,6 +941,7 @@ private fun ConnectionEditorDialog(
     onDismiss: () -> Unit,
     onLoginServer: (String?, ProviderType, String, String, String, String) -> Unit,
     onLogoutServer: (String?) -> Unit,
+    onSaveM3u: (String?, String, String) -> Unit,
     onSaveWebDav: (String?, String, String, String, String, ClientStorageAuthType, Boolean) -> Unit,
     onSaveSmb: (String?, String, String, String, String, String, Boolean) -> Unit,
 ) {
@@ -875,6 +951,12 @@ private fun ConnectionEditorDialog(
             onDismiss = onDismiss,
             onLogin = onLoginServer,
             onLogout = onLogoutServer,
+        )
+        is ConnectionEditorTarget.M3u -> M3uConnectionDialog(
+            target = target,
+            onDismiss = onDismiss,
+            onSave = onSaveM3u,
+            onDelete = onLogoutServer,
         )
         is ConnectionEditorTarget.WebDav -> WebDavConnectionDialog(
             target = target,
@@ -966,6 +1048,61 @@ private fun ServerConnectionDialog(
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("登出")
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text("取消") }
+            }
+        },
+    )
+}
+
+@Composable
+private fun M3uConnectionDialog(
+    target: ConnectionEditorTarget.M3u,
+    onDismiss: () -> Unit,
+    onSave: (String?, String, String) -> Unit,
+    onDelete: (String?) -> Unit,
+) {
+    val profile = target.profile
+    var name by remember(target) { mutableStateOf(profile?.displayName ?: "M3U 直播") }
+    var subscriptionUrl by remember(target) { mutableStateOf(profile?.serverUrl.orEmpty()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (profile == null) "添加 M3U 订阅" else "编辑 M3U 订阅") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("订阅名称") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = subscriptionUrl,
+                    onValueChange = { subscriptionUrl = it },
+                    label = { Text("M3U 订阅链接") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(profile?.id, name, subscriptionUrl) }) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (profile != null) {
+                    TextButton(
+                        onClick = { onDelete(profile.id) },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("删除")
                     }
                 }
                 TextButton(onClick = onDismiss) { Text("取消") }
@@ -1093,6 +1230,7 @@ private fun PasswordTextField(
 
 private sealed interface ConnectionEditorTarget {
     data class Server(val type: ProviderType, val profile: ServerProfile? = null) : ConnectionEditorTarget
+    data class M3u(val profile: ServerProfile? = null) : ConnectionEditorTarget
     data class WebDav(val source: ClientStorageSource? = null) : ConnectionEditorTarget
     data class Smb(val source: ClientStorageSource? = null) : ConnectionEditorTarget
 }
@@ -1356,6 +1494,8 @@ private fun ClientStorageSource.storageSummary(): String {
 }
 
 private fun ServerProfile.connectionStatus(session: Session): String = when {
+    type == ProviderType.M3U && id == session.activeProfileId && authenticated -> "当前 · 已启用"
+    type == ProviderType.M3U && authenticated -> "已启用"
     id == session.activeProfileId && authenticated -> "当前 · 已登录"
     authenticated -> "已登录"
     else -> "未配置"
@@ -1371,5 +1511,8 @@ private fun ServerProfile.canLoadMediaRoots(): Boolean = when (type) {
     ProviderType.MediaTree -> serverUrl.isNotBlank() && authenticated
     ProviderType.Jellyfin, ProviderType.Emby ->
         serverUrl.isNotBlank() && authenticated && token.isNotBlank() && userId.isNotBlank()
-    ProviderType.WebDAV, ProviderType.SMB -> false
+    ProviderType.M3U,
+    ProviderType.WebDAV,
+    ProviderType.SMB,
+    -> false
 }

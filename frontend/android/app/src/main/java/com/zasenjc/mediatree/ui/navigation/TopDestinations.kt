@@ -10,6 +10,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.zasenjc.mediatree.data.ProviderType
 
 data class TopDestination(
     val route: String,
@@ -24,3 +25,10 @@ val topDestinations = listOf(
     TopDestination("favorites", "收藏", Icons.Filled.Bookmarks, Icons.Outlined.Bookmarks),
     TopDestination("settings", "设置", Icons.Filled.Settings, Icons.Outlined.Settings),
 )
+
+fun topDestinationsFor(providerType: ProviderType): List<TopDestination> =
+    if (providerType == ProviderType.M3U) {
+        topDestinations.filterNot { it.route == "browse" }
+    } else {
+        topDestinations
+    }

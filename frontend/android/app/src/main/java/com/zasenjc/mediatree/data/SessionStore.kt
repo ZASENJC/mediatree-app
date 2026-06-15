@@ -101,6 +101,35 @@ class SessionStore(context: Context) {
         }
     }
 
+    suspend fun saveM3uProfile(
+        subscriptionUrl: String,
+        name: String = "",
+        profileId: String? = null,
+    ) {
+        val current = sessionFlow.first()
+        val normalized = resolveAllowedUrl(subscriptionUrl, null)
+            ?: throw IllegalArgumentException("M3U 订阅地址仅支持 http/https")
+        val existing = profileId?.let { id ->
+            current.resolvedProfiles.firstOrNull { it.id == id && it.type == ProviderType.M3U }
+        }
+        val profile = (existing ?: providerProfile(ProviderType.M3U, normalized, current.resolvedProfiles)).copy(
+            type = ProviderType.M3U,
+            name = name.ifBlank { existing?.name.orEmpty() }.ifBlank { "M3U 直播" },
+            serverUrl = normalized,
+            userId = "",
+            token = "",
+            activeLibrary = "",
+            authenticated = true,
+        )
+        val profiles = current.resolvedProfiles.upsertProfile(profile)
+        appContext.sessionDataStore.edit { prefs ->
+            prefs[SERVER_URL] = normalized
+            prefs[SERVER_PROFILES] = sessionJson.encodeToString(profiles.withoutStoredSecrets())
+            prefs[ACTIVE_PROFILE_ID] = profile.id
+            prefs.remove(ACTIVE_LIBRARY)
+        }
+    }
+
     suspend fun removeProfile(profileId: String) {
         val current = sessionFlow.first()
         val profile = current.resolvedProfiles.firstOrNull { it.id == profileId } ?: return
@@ -218,12 +247,17 @@ private fun providerProfile(
     if (type == ProviderType.MediaTree) {
         mediaTreeProfile(serverUrl)
     } else {
-        val baseId = "${type.name.lowercase()}-${UrlUtils.normalizeServerUrl(serverUrl)}"
+        val normalizedServerUrl = if (type == ProviderType.M3U) {
+            resolveAllowedUrl(serverUrl, null).orEmpty()
+        } else {
+            UrlUtils.normalizeServerUrl(serverUrl)
+        }
+        val baseId = "${type.name.lowercase()}-$normalizedServerUrl"
         ServerProfile(
             id = baseId.uniqueProfileId(existingProfiles),
             type = type,
             name = type.name,
-            serverUrl = serverUrl,
+            serverUrl = normalizedServerUrl,
         )
     }
 

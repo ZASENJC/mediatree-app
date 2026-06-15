@@ -122,7 +122,7 @@ class SettingsConnectionsSourceTest {
             .readText()
         val dialogBlock = source
             .substringAfter("private fun ServerConnectionDialog(")
-            .substringBefore("@Composable\nprivate fun WebDavConnectionDialog")
+            .substringBefore("@Composable\nprivate fun M3uConnectionDialog")
 
         assertTrue(dialogBlock.contains("confirmButton"))
         assertTrue(dialogBlock.contains("Text(\"登录\")"))

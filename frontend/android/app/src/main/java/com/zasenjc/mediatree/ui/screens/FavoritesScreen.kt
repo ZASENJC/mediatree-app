@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zasenjc.mediatree.data.AppContainer
+import com.zasenjc.mediatree.data.M3uChannel
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.Session
@@ -65,10 +66,12 @@ import com.zasenjc.mediatree.ui.components.MoviePosterCard
 import com.zasenjc.mediatree.ui.components.SyncChromeWithGridScroll
 import com.zasenjc.mediatree.ui.components.topChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.topChromeExitTransition
+import com.zasenjc.mediatree.ui.canLoadM3uContent
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
@@ -80,6 +83,8 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
         val page: Int = 0,
         val loading: Boolean = false,
         val movies: List<MovieDto> = emptyList(),
+        val m3uChannels: List<M3uChannel> = emptyList(),
+        val m3uFavoriteIds: Set<String> = emptySet(),
         val total: Int = 0,
         val error: Throwable? = null,
     )
@@ -96,6 +101,44 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
         if (s.loading || s.movies.size >= s.total && s.total > 0) return
         if (activeLibrary.smbLibrarySourceId() != null || activeLibrary.webDavLibrarySourceId() != null) return
         loadPage(providerType, activeLibrary, page = s.page + 1, replace = false)
+    }
+
+    fun loadM3uFavorites(profileId: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(loading = true, error = null, movies = emptyList(), total = 0) }
+            try {
+                val profile = container.sessionStore.sessionFlow.first().resolvedProfiles
+                    .firstOrNull { it.id == profileId && it.type == ProviderType.M3U }
+                    ?: throw IllegalArgumentException("M3U 订阅未配置")
+                val favorites = container.m3uFavoritesRepository.load(profile.id)
+                val channels = container.m3uSubscriptionCacheRepository.loadCached(profile)
+                    .filter { it.id in favorites }
+                _state.update {
+                    it.copy(
+                        page = 0,
+                        loading = false,
+                        m3uChannels = channels,
+                        m3uFavoriteIds = favorites,
+                        total = channels.size,
+                    )
+                }
+            } catch (e: Throwable) {
+                _state.update { it.copy(loading = false, error = e) }
+            }
+        }
+    }
+
+    fun removeM3uFavorite(profileId: String, channelId: String) {
+        viewModelScope.launch {
+            container.m3uFavoritesRepository.setFavorite(profileId, channelId, false)
+            _state.update { current ->
+                current.copy(
+                    m3uFavoriteIds = current.m3uFavoriteIds - channelId,
+                    m3uChannels = current.m3uChannels.filterNot { it.id == channelId },
+                    total = (current.total - 1).coerceAtLeast(0),
+                )
+            }
+        }
     }
 
     private fun loadPage(providerType: ProviderType, activeLibrary: String, page: Int, replace: Boolean) {
@@ -209,7 +252,9 @@ fun FavoritesScreen(
 
     LaunchedEffect(active, session.serverUrl, session.activeProviderType, session.activeLibrary) {
         if (!active) return@LaunchedEffect
-        if (session.canLoadFavoritesContent()) {
+        if (session.canLoadM3uContent()) {
+            vm.loadM3uFavorites(session.activeProfileId)
+        } else if (session.canLoadFavoritesContent()) {
             vm.refresh(session.activeProviderType, session.activeLibrary)
         }
     }
@@ -232,8 +277,19 @@ fun FavoritesScreen(
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             if (!session.canLoadFavoritesContent()) {
                 BackendSetupRequiredState(icon = Icons.Filled.Bookmarks, message = BackendSetupRequiredMessage)
-            } else if (state.loading && state.movies.isEmpty()) {
+            } else if (state.loading && state.movies.isEmpty() && state.m3uChannels.isEmpty()) {
                 LoadingPane(Modifier.fillMaxSize())
+            } else if (session.activeProviderType == ProviderType.M3U) {
+                val channels = remember(state.m3uChannels, query) {
+                    state.m3uChannels.filterFavoriteChannelsQuery(query)
+                }
+                M3uChannelGrid(
+                    channels = channels,
+                    favoriteIds = state.m3uFavoriteIds,
+                    onOpen = { channel -> onNavigate(channel.m3uPlayerRoute()) },
+                    onToggleFavorite = { channel -> vm.removeM3uFavorite(session.activeProfileId, channel.id) },
+                    emptyText = "还没有收藏频道",
+                )
             } else {
                 LazyVerticalGrid(
                     state = gridState,
@@ -325,8 +381,10 @@ fun FavoritesScreen(
                         IconButton(onClick = { searchVisible = !searchVisible }) {
                             Icon(Icons.Default.Search, contentDescription = "搜索")
                         }
-                        IconButton(onClick = {}, enabled = false) {
-                            Icon(Icons.Default.Tune, contentDescription = "筛选未实现")
+                        if (session.activeProviderType != ProviderType.M3U) {
+                            IconButton(onClick = {}, enabled = false) {
+                                Icon(Icons.Default.Tune, contentDescription = "筛选未实现")
+                            }
                         }
                         Box {
                             IconButton(onClick = { moreVisible = true }) {
@@ -338,7 +396,9 @@ fun FavoritesScreen(
                                     leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
                                     onClick = {
                                         moreVisible = false
-                                        if (session.canLoadFavoritesContent()) {
+                                        if (session.canLoadM3uContent()) {
+                                            vm.loadM3uFavorites(session.activeProfileId)
+                                        } else if (session.canLoadFavoritesContent()) {
                                             vm.refresh(session.activeProviderType, session.activeLibrary)
                                         }
                                     },
@@ -346,6 +406,21 @@ fun FavoritesScreen(
                             }
                         }
                     },
+                )
+            }
+            AnimatedVisibility(
+                visible = session.activeProviderType == ProviderType.M3U && searchVisible,
+                enter = topChromeEnterTransition(),
+                exit = topChromeExitTransition(),
+                modifier = Modifier.align(Alignment.TopCenter).padding(start = 16.dp, top = 72.dp, end = 16.dp),
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    placeholder = { Text("搜索收藏频道") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -390,6 +465,17 @@ private fun List<MovieDto>.filterFavoritesQuery(query: String): List<MovieDto> {
     }
 }
 
+private fun List<M3uChannel>.filterFavoriteChannelsQuery(query: String): List<M3uChannel> {
+    val q = query.trim().lowercase()
+    if (q.isBlank()) return this
+    return filter {
+        it.name.lowercase().contains(q) ||
+            it.group.lowercase().contains(q) ||
+            it.tvgName.lowercase().contains(q) ||
+            it.tvgId.lowercase().contains(q)
+    }
+}
+
 private fun MovieDto.routeId(): Int = id
 
 private fun MovieDto.detailRoute(): String =
@@ -407,6 +493,7 @@ private fun MovieDto.isMountedLibraryItem(): Boolean =
 
 private fun Session.canLoadFavoritesContent(): Boolean =
     shouldLoadRemoteContent(this) ||
+        canLoadM3uContent() ||
         activeLibrary.smbLibrarySourceId() != null ||
         activeLibrary.webDavLibrarySourceId() != null
 

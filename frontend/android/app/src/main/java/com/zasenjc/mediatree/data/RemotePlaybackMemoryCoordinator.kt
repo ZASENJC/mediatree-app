@@ -122,5 +122,6 @@ private fun ProviderType.syncsPlaybackMemoryToBackend(): Boolean = when (this) {
     -> true
     ProviderType.SMB,
     ProviderType.WebDAV,
+    ProviderType.M3U,
     -> false
 }

@@ -1580,7 +1580,10 @@ private fun androidx.compose.foundation.lazy.LazyListState.toBrowseScrollPositio
 private fun String.toProviderBrowseMovieSort(providerType: ProviderType): String = when (providerType) {
     ProviderType.MediaTree -> toMediaTreeBrowseMovieSort()
     ProviderType.Jellyfin, ProviderType.Emby -> toJellyfinBrowseMovieSort()
-    ProviderType.SMB, ProviderType.WebDAV -> this
+    ProviderType.M3U,
+    ProviderType.SMB,
+    ProviderType.WebDAV,
+    -> this
 }
 
 private fun String.toMediaTreeBrowseMovieSort(): String = when (this) {

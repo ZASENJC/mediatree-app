@@ -103,6 +103,9 @@ class MpvPlayerController(
         if (initialized) return
         backend.create(appContext)
         backend.setOptionString("force-window", "no")
+        backend.setOptionString("vd-lavc-threads", "0")
+        backend.setOptionString("ad-lavc-threads", "0")
+        backend.setOptionString("ad", "av3a")
         backend.init()
         observePlaybackProperties()
         initialized = true
