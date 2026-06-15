@@ -48,6 +48,8 @@ import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.ClientStorageSource
 import com.zasenjc.mediatree.data.ClientStorageType
 import com.zasenjc.mediatree.data.WebDavClient
+import com.zasenjc.mediatree.ui.components.LocalMediaTreeImageAuth
+import com.zasenjc.mediatree.ui.components.mediaTreeImageHeaders
 import kotlin.math.abs
 
 private const val ImageViewerMaxScale = 5f
@@ -312,44 +314,43 @@ private fun SmbZoomableRemoteImage(
 }
 
 @Composable
-private fun ZoomableRemoteImage(
+fun ZoomableRemoteImage(
     imageUrl: String,
     headers: Map<String, String>,
     contentDescription: String,
+    fallbackImageUrl: String? = null,
     onScaleChange: (Float) -> Unit,
 ) {
-    val context = LocalContext.current
-    var failed by remember(imageUrl, headers) { mutableStateOf(false) }
-    var scale by remember(imageUrl) { mutableFloatStateOf(1f) }
-    var offset by remember(imageUrl) { mutableStateOf(Offset.Zero) }
+    var displayedImageUrl by remember(imageUrl, fallbackImageUrl) { mutableStateOf(imageUrl) }
+    var failed by remember(displayedImageUrl, headers) { mutableStateOf(false) }
+    var scale by remember(displayedImageUrl) { mutableFloatStateOf(1f) }
+    var offset by remember(displayedImageUrl) { mutableStateOf(Offset.Zero) }
     var layoutSize by remember { mutableStateOf(IntSize.Zero) }
-    LaunchedEffect(imageUrl) {
+    LaunchedEffect(imageUrl, fallbackImageUrl) {
+        displayedImageUrl = imageUrl
+    }
+    LaunchedEffect(displayedImageUrl) {
         scale = 1f
         offset = Offset.Zero
         onScaleChange(1f)
     }
-    val cacheKey = remember(imageUrl, headers) { "$imageUrl#${headers.hashCode()}" }
-    val request = remember(context, imageUrl, headers) {
-        ImageRequest.Builder(context)
-            .data(imageUrl)
-            .apply {
-                headers.forEach { (name, value) -> addHeader(name, value) }
-            }
-            .crossfade(false)
-            .memoryCacheKey(cacheKey)
-            .diskCacheKey(cacheKey)
-            .build()
-    }
+    val request = rememberZoomableImageRequest(imageUrl = displayedImageUrl, headers = headers)
     AsyncImage(
         model = request,
         contentDescription = contentDescription,
         contentScale = ContentScale.Fit,
         onSuccess = { failed = false },
-        onError = { failed = true },
+        onError = {
+            if (!fallbackImageUrl.isNullOrBlank() && displayedImageUrl != fallbackImageUrl) {
+                displayedImageUrl = fallbackImageUrl
+            } else {
+                failed = true
+            }
+        },
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { layoutSize = it }
-            .pointerInput(imageUrl, layoutSize) {
+            .pointerInput(displayedImageUrl, layoutSize) {
                 awaitEachGesture {
                     do {
                         val event = awaitPointerEvent()
@@ -384,6 +385,33 @@ private fun ZoomableRemoteImage(
     )
     if (failed) {
         ImageViewerMessage("图片无法加载")
+    }
+}
+
+@Composable
+private fun rememberZoomableImageRequest(
+    imageUrl: String,
+    headers: Map<String, String>,
+): ImageRequest {
+    val context = LocalContext.current
+    val auth = LocalMediaTreeImageAuth.current
+    val mergedHeaders = remember(imageUrl, headers, auth) {
+        buildMap {
+            putAll(mediaTreeImageHeaders(imageUrl, auth))
+            putAll(headers)
+        }
+    }
+    val cacheKey = remember(imageUrl, mergedHeaders) { "$imageUrl#${mergedHeaders.hashCode()}" }
+    return remember(context, imageUrl, mergedHeaders, cacheKey) {
+        ImageRequest.Builder(context)
+            .data(imageUrl)
+            .apply {
+                mergedHeaders.forEach { (name, value) -> addHeader(name, value) }
+            }
+            .crossfade(false)
+            .memoryCacheKey(cacheKey)
+            .diskCacheKey(cacheKey)
+            .build()
     }
 }
 

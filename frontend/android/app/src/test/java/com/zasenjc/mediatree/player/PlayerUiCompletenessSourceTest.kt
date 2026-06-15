@@ -456,12 +456,36 @@ class PlayerUiCompletenessSourceTest {
         val thumbnailStart = detailScreen.indexOf("private fun ThumbnailStrip(")
         val thumbnailEnd = detailScreen.indexOf("@Composable", thumbnailStart + 1)
         val thumbnailBlock = detailScreen.substring(thumbnailStart, thumbnailEnd)
+        val tileStart = detailScreen.indexOf("private fun DetailStillTile(")
+        val tileEnd = detailScreen.indexOf("@Composable", tileStart + 1)
+        val tileBlock = detailScreen.substring(tileStart, tileEnd)
 
-        assertTrue(thumbnailBlock.contains("selectedThumbnailUrl"))
-        assertTrue(thumbnailBlock.contains("shapeAwareClickable"))
+        assertTrue(thumbnailBlock.contains("selectedThumbnailIndex"))
+        assertTrue(tileBlock.contains("shapeAwareClickable"))
         assertTrue(thumbnailBlock.contains("StillImageViewer("))
         assertTrue(detailScreen.contains("private fun StillImageViewer("))
         assertTrue(detailScreen.contains("contentDescription = \"关闭剧照预览\""))
+    }
+
+    @Test
+    fun detailPageStillsUseSmallVerticalGrid() {
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+        val thumbnailStart = detailScreen.indexOf("private fun ThumbnailStrip(")
+        val thumbnailEnd = detailScreen.indexOf("@Composable", thumbnailStart + 1)
+        val thumbnailBlock = detailScreen.substring(thumbnailStart, thumbnailEnd)
+        val gridStart = detailScreen.indexOf("private fun DetailStillGrid(")
+        val gridEnd = detailScreen.indexOf("@Composable", gridStart + 1)
+        val gridBlock = detailScreen.substring(gridStart, gridEnd)
+
+        assertTrue(detailScreen.contains("private const val DetailStillGridColumns = 3"))
+        assertTrue(thumbnailBlock.contains("DetailStillGrid("))
+        assertTrue(gridBlock.contains("stills.chunked(DetailStillGridColumns)"))
+        assertTrue(gridBlock.contains("Row("))
+        assertTrue(gridBlock.contains("Modifier.weight(1f)"))
+        assertFalse(thumbnailBlock.contains("LazyRow("))
+        assertFalse(thumbnailBlock.contains(".width(132.dp)"))
     }
 
     @Test
@@ -479,12 +503,43 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(detailScreen.contains("import androidx.compose.foundation.pager.rememberPagerState"))
         assertTrue(detailScreen.contains("selectedThumbnailIndex"))
         assertTrue(detailScreen.contains("imageUrls = thumbnails"))
-        assertTrue(detailScreen.contains("initialPage = selectedThumbnailIndex"))
-        assertTrue(detailScreen.contains("still.fallbackUrl"))
+        assertTrue(detailScreen.contains("selectedThumbnailIndex?.let { initialPage ->"))
+        assertTrue(detailScreen.contains("initialPage = initialPage"))
+        assertTrue(detailScreen.contains("still.viewerUrl"))
         assertTrue(viewerBlock.contains("val pagerState = rememberPagerState("))
         assertTrue(viewerBlock.contains("pageCount = { imageUrls.size }"))
         assertTrue(viewerBlock.contains("HorizontalPager("))
         assertTrue(viewerBlock.contains("val still = imageUrls[page]"))
+    }
+
+    @Test
+    fun detailPageStillViewerSupportsPinchZoom() {
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+        val imageViewerScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/ImageViewerScreen.kt")
+            .readText()
+        val viewerStart = detailScreen.indexOf("private fun StillImageViewer(")
+        val viewerEnd = detailScreen.indexOf("@Composable", viewerStart + 1)
+            .takeIf { it > viewerStart }
+            ?: detailScreen.indexOf("private fun CrewSection(", viewerStart)
+        val viewerBlock = detailScreen.substring(viewerStart, viewerEnd)
+        val zoomableStart = imageViewerScreen.indexOf("fun ZoomableRemoteImage(")
+        val zoomableEnd = imageViewerScreen.indexOf("@Composable", zoomableStart + 1)
+            .takeIf { it > zoomableStart }
+            ?: imageViewerScreen.indexOf("private fun ImageViewerMessage", zoomableStart)
+        val zoomableBlock = imageViewerScreen.substring(zoomableStart, zoomableEnd)
+
+        assertTrue(detailScreen.contains("ZoomableRemoteImage("))
+        assertTrue(viewerBlock.contains("var currentScale"))
+        assertTrue(viewerBlock.contains("userScrollEnabled = currentScale <= 1.01f"))
+        assertTrue(viewerBlock.contains("onScaleChange = { scale ->"))
+        assertTrue(imageViewerScreen.contains("private const val ImageViewerMaxScale = 5f"))
+        assertTrue(zoomableBlock.contains("awaitEachGesture"))
+        assertTrue(zoomableBlock.contains("event.calculateZoom()"))
+        assertTrue(zoomableBlock.contains("event.calculatePan()"))
+        assertTrue(zoomableBlock.contains("graphicsLayer"))
     }
 
     @Test

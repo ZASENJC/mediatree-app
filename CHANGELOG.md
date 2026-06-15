@@ -6,6 +6,15 @@ All notable changes to MediaTree are documented here.
 
 ---
 
+## Unreleased
+
+### Android App
+
+- Changed detail-page stills from a single horizontal strip to a compact multi-row grid
+- Reused the fullscreen image viewer zoom and pan gestures for detail-page still previews
+
+---
+
 ## 0.1.06 (2026-06-09) — Mounted Image Browsing
 
 <!-- release-notes:start -->

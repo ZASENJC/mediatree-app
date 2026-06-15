@@ -66,6 +66,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -128,6 +129,7 @@ import java.util.concurrent.TimeUnit
 
 private const val ExitPlayerReleaseDelayMillis = PlayerExitNavigationDelayMillis
 private const val MediaTokenRefreshWindowSeconds = 60L
+private const val DetailStillGridColumns = 3
 
 fun mediaTreeResumePosition(progress: ProgressDto): Double {
     return backendPlaybackResumePosition(progress)
@@ -1054,8 +1056,7 @@ private fun ThumbnailStrip(
     providerType: ProviderType,
     fallbackStill: String,
 ) {
-    var selectedThumbnailUrl by remember(movie.id) { mutableStateOf<String?>(null) }
-    var selectedThumbnailIndex by remember(movie.id) { mutableStateOf(0) }
+    var selectedThumbnailIndex by remember(movie.id) { mutableStateOf<Int?>(null) }
     val thumbnails = remember(movie.id, movie.episodeStill, movie.javdbThumbnails, serverUrl, provider, providerType, fallbackStill) {
         detailStillImages(
             movie = movie,
@@ -1067,38 +1068,64 @@ private fun ThumbnailStrip(
     }
     if (thumbnails.isEmpty()) return
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(thumbnails.size, key = { saveableStillImageKey(thumbnails[it]) }) { index ->
-                val still = thumbnails[index]
-                val shape = RoundedCornerShape(12.dp)
-                var imageUrl by remember(still) { mutableStateOf(still.url) }
-                AsyncImage(
-                    model = rememberMediaTreeImageRequest(imageUrl = imageUrl),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    onError = {
-                        if (still.fallbackUrl != null && imageUrl != still.fallbackUrl) {
-                            imageUrl = still.fallbackUrl
-                        }
-                    },
-                    modifier = Modifier
-                        .width(132.dp)
-                        .aspectRatio(16f / 9f)
-                        .shapeAwareClickable(shape = shape) {
-                            selectedThumbnailIndex = index
-                            selectedThumbnailUrl = still.viewerUrl
-                        },
-                )
+        DetailStillGrid(
+            stills = thumbnails,
+            onOpen = { selectedThumbnailIndex = it },
+        )
+    }
+    selectedThumbnailIndex?.let { initialPage ->
+        StillImageViewer(
+            imageUrls = thumbnails,
+            initialPage = initialPage,
+            onDismiss = { selectedThumbnailIndex = null },
+        )
+    }
+}
+
+@Composable
+private fun DetailStillGrid(
+    stills: List<DetailStillImage>,
+    onOpen: (Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        stills.chunked(DetailStillGridColumns).forEachIndexed { rowIndex, rowStills ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                rowStills.forEachIndexed { columnIndex, still ->
+                    DetailStillTile(
+                        still = still,
+                        onOpen = { onOpen(rowIndex * DetailStillGridColumns + columnIndex) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(DetailStillGridColumns - rowStills.size) {
+                    Spacer(Modifier.weight(1f))
+                }
             }
         }
     }
-    selectedThumbnailUrl?.let {
-        StillImageViewer(
-            imageUrls = thumbnails,
-            initialPage = selectedThumbnailIndex,
-            onDismiss = { selectedThumbnailUrl = null },
-        )
-    }
+}
+
+@Composable
+private fun DetailStillTile(
+    still: DetailStillImage,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    var imageUrl by remember(still) { mutableStateOf(still.url) }
+    AsyncImage(
+        model = rememberMediaTreeImageRequest(imageUrl = imageUrl),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        onError = {
+            if (still.fallbackUrl != null && imageUrl != still.fallbackUrl) {
+                imageUrl = still.fallbackUrl
+            }
+        },
+        modifier = modifier
+            .aspectRatio(16f / 9f)
+            .shapeAwareClickable(shape = shape, onClick = onOpen),
+    )
 }
 
 @Composable
@@ -1108,6 +1135,10 @@ private fun StillImageViewer(imageUrls: List<DetailStillImage>, initialPage: Int
         initialPage = initialPage.coerceIn(0, imageUrls.lastIndex),
         pageCount = { imageUrls.size },
     )
+    var currentScale by remember { mutableFloatStateOf(1f) }
+    LaunchedEffect(pagerState.currentPage) {
+        currentScale = 1f
+    }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -1115,36 +1146,30 @@ private fun StillImageViewer(imageUrls: List<DetailStillImage>, initialPage: Int
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.92f))
-                .shapeAwareClickable(shape = RoundedCornerShape(0.dp), onClick = onDismiss)
-                .padding(16.dp),
+                .background(Color.Black.copy(alpha = 0.92f)),
             contentAlignment = Alignment.Center,
         ) {
-            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+            HorizontalPager(
+                state = pagerState,
+                userScrollEnabled = currentScale <= 1.01f,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
                 val still = imageUrls[page]
-                var imageUrl by remember(still) { mutableStateOf(still.url) }
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AsyncImage(
-                        model = rememberMediaTreeImageRequest(imageUrl = imageUrl),
-                        contentDescription = "剧照预览",
-                        contentScale = ContentScale.Fit,
-                        onError = {
-                            if (still.fallbackUrl != null && imageUrl != still.fallbackUrl) {
-                                imageUrl = still.fallbackUrl
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(),
-                    )
-                }
+                ZoomableRemoteImage(
+                    imageUrl = still.viewerUrl,
+                    headers = emptyMap(),
+                    contentDescription = "剧照预览",
+                    fallbackImageUrl = still.url.takeIf { it != still.viewerUrl },
+                    onScaleChange = { scale ->
+                        if (page == pagerState.currentPage) {
+                            currentScale = scale
+                        }
+                    },
+                )
             }
             IconButton(
                 onClick = onDismiss,
-                modifier = Modifier.align(Alignment.TopEnd),
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
             ) {
                 Icon(
                     Icons.Default.Close,
