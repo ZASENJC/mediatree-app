@@ -192,20 +192,10 @@ fun M3uPlayerScreen(
                 error != null -> ErrorPane(message = error?.message ?: "直播频道加载失败", modifier = Modifier.fillMaxSize())
                 loadedChannel == null -> LoadingPane(Modifier.fillMaxSize())
                 else -> {
-                    val playerModifier = if (playerFullscreen) {
-                        Modifier.fillMaxSize()
-                    } else {
-                        Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
-                            .align(Alignment.TopCenter)
-                    }
-                    MediaTreePlayer(
-                        playbackSource = PlaybackSource.m3u(loadedChannel.streamUrl),
-                        startPosition = 0.0,
-                        isFullscreen = playerFullscreen,
-                        showFullscreenButton = true,
-                        showAspectRatioControls = playerFullscreen,
+                    M3uPlayerContent(
+                        channel = loadedChannel,
+                        channels = channels,
+                        playerFullscreen = playerFullscreen,
                         onFullscreenRequest = {
                             if (playerFullscreen) {
                                 fullscreenRequested = false
@@ -215,39 +205,70 @@ fun M3uPlayerScreen(
                                 requestFullscreenOrientation(activity, fullscreenModePreference)
                             }
                         },
-                        modifier = playerModifier,
+                        onSelectChannel = { nextChannel ->
+                            channel = nextChannel
+                            favorite = nextChannel.id in favoriteIds
+                            error = null
+                        },
+                        modifier = Modifier.fillMaxSize(),
                     )
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .align(Alignment.TopCenter),
-                    ) {
-                        if (!playerFullscreen) {
-                            Spacer(Modifier.height((LocalConfiguration.current.screenWidthDp * 9f / 16f).dp + 14.dp))
-                            M3uChannelDetails(
-                                channel = loadedChannel,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 18.dp),
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            M3uChannelSwitcher(
-                                channels = channels,
-                                currentChannel = loadedChannel,
-                                onSelect = { nextChannel ->
-                                    channel = nextChannel
-                                    favorite = nextChannel.id in favoriteIds
-                                    error = null
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .padding(horizontal = 18.dp),
-                            )
-                        }
-                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun M3uPlayerContent(
+    channel: M3uChannel,
+    channels: List<M3uChannel>,
+    playerFullscreen: Boolean,
+    onFullscreenRequest: () -> Unit,
+    onSelectChannel: (M3uChannel) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (playerFullscreen) {
+        MediaTreePlayer(
+            playbackSource = PlaybackSource.m3u(channel.streamUrl),
+            startPosition = 0.0,
+            isFullscreen = true,
+            showFullscreenButton = true,
+            showAspectRatioControls = true,
+            onFullscreenRequest = onFullscreenRequest,
+            modifier = modifier.fillMaxSize(),
+        )
+    } else {
+        Column(
+            modifier = modifier,
+        ) {
+            MediaTreePlayer(
+                playbackSource = PlaybackSource.m3u(channel.streamUrl),
+                startPosition = 0.0,
+                isFullscreen = false,
+                showFullscreenButton = true,
+                showAspectRatioControls = false,
+                onFullscreenRequest = onFullscreenRequest,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f),
+            )
+            Spacer(Modifier.height(14.dp))
+            M3uChannelDetails(
+                channel = channel,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            M3uChannelSwitcher(
+                channels = channels,
+                currentChannel = channel,
+                onSelect = onSelectChannel,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(horizontal = 18.dp),
+            )
         }
     }
 }
