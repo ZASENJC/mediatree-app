@@ -25,6 +25,8 @@ class MediaProviderSourceTest {
         listOf(
             "authStatus(",
             "login(",
+            "setupAuth(",
+            "mediaToken(",
             "mediaRoots(",
             "folders(",
             "recentWatched(",
@@ -48,6 +50,29 @@ class MediaProviderSourceTest {
         assertTrue(adapterSource.contains("class MediaTreeProvider("))
         assertTrue(adapterSource.contains("private val api: MediaTreeApi"))
         assertTrue(adapterSource.contains(": MediaProvider"))
+    }
+
+    @Test
+    fun mediaTreeApiSupportsCurrentBackendAuthShape() {
+        val apiSource = dataRoot.resolve("MediaTreeApi.kt").readText()
+        val modelsSource = dataRoot.resolve("Models.kt").readText()
+
+        assertTrue(apiSource.contains("path = \"/auth/setup\""))
+        assertTrue(modelsSource.contains("@SerialName(\"auth_configured\") val authConfigured"))
+    }
+
+    @Test
+    fun mediaTreeApiSupportsCurrentLibraryAndMediaUrlShape() {
+        val apiSource = dataRoot.resolve("MediaTreeApi.kt").readText()
+        val providerSource = dataRoot.resolve("MediaProvider.kt").readText()
+        val modelsSource = dataRoot.resolve("Models.kt").readText()
+
+        assertTrue(providerSource.contains("mediaRoot: String = \"\""))
+        assertTrue(apiSource.contains("\"media_root\" to mediaRoot"))
+        assertTrue(apiSource.contains("fun thumbnailUrl(serverUrl: String, movieId: Int, index: Int)"))
+        assertTrue(apiSource.contains("/thumbnail/"))
+        assertTrue(apiSource.contains("${'$'}movieId/${'$'}index"))
+        assertTrue(modelsSource.contains("@SerialName(\"video_count\") val videoCount"))
     }
 
     @Test

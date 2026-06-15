@@ -112,7 +112,7 @@ private class FakeMediaProvider(
     override suspend fun folders(mediaRoot: String): FolderTreeResponseDto = FolderTreeResponseDto()
     override suspend fun recentWatched(limit: Int, offset: Int, mediaRoot: String): MoviesResponseDto = MoviesResponseDto()
     override suspend fun movies(folder: String, code: String, tag: String, sort: String, limit: Int, offset: Int, mediaRoot: String): MoviesResponseDto = MoviesResponseDto()
-    override suspend fun favorites(limit: Int, offset: Int, sort: String): MoviesResponseDto = MoviesResponseDto()
+    override suspend fun favorites(limit: Int, offset: Int, sort: String, mediaRoot: String): MoviesResponseDto = MoviesResponseDto()
     override suspend fun detail(movieId: Int): MovieDto = MovieDto(id = movieId)
     override suspend fun progress(movieId: Int): ProgressDto = progressByMovieId[movieId] ?: ProgressDto()
     override suspend fun saveProgress(movieId: Int, position: Double, duration: Double?, stopped: Boolean): SaveProgressResponseDto {
@@ -126,8 +126,9 @@ private class FakeMediaProvider(
     override suspend fun scan(mediaRoot: String): ScanResponseDto = ScanResponseDto()
     override fun coverUrl(serverUrl: String, movieId: Int): String = ""
     override fun episodeStillUrl(serverUrl: String, movieId: Int): String = ""
+    override fun thumbnailUrl(serverUrl: String, movieId: Int, index: Int): String = ""
     override fun streamUrl(serverUrl: String, movieId: Int): String = ""
     override fun subtitleUrl(serverUrl: String, movieId: Int, trackIndex: Int): String = ""
-    override fun playbackSource(serverUrl: String, movieId: Int, token: String, userId: String, subtitleTracks: List<SubtitleTrackDto>): PlaybackSource =
+    override fun playbackSource(serverUrl: String, movieId: Int, token: String, userId: String, mediaToken: String, subtitleTracks: List<SubtitleTrackDto>): PlaybackSource =
         PlaybackSource.mediaTree(serverUrl = serverUrl, movieId = movieId, token = token)
 }

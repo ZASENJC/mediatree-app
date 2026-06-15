@@ -48,6 +48,22 @@ class MediaTreeApi(private val sessionStore: SessionStore) {
             tokenOverride = "",
         )
 
+    suspend fun setupAuth(serverUrl: String, username: String, password: String): LoginResponseDto =
+        request(
+            path = "/auth/setup",
+            method = "POST",
+            body = json.encodeToString(mapOf("username" to username, "password" to password)),
+            serverOverride = serverUrl,
+            tokenOverride = "",
+        )
+
+    suspend fun mediaToken(): MediaTokenDto =
+        request(
+            path = "/media-token",
+            method = "POST",
+            body = "{}",
+        )
+
     suspend fun mediaRoots(): MediaRootsResponseDto = request("/media-roots")
 
     suspend fun mediaRoots(serverUrl: String, token: String): MediaRootsResponseDto =
@@ -98,8 +114,21 @@ class MediaTreeApi(private val sessionStore: SessionStore) {
         ),
     )
 
-    suspend fun favorites(limit: Int = 48, offset: Int = 0, sort: String = "created_desc"): MoviesResponseDto =
-        request("/favorites", params = params("limit" to "$limit", "offset" to "$offset", "sort" to sort))
+    suspend fun favorites(
+        limit: Int = 48,
+        offset: Int = 0,
+        sort: String = "created_desc",
+        mediaRoot: String = "",
+    ): MoviesResponseDto =
+        request(
+            "/favorites",
+            params = params(
+                "limit" to "$limit",
+                "offset" to "$offset",
+                "sort" to sort,
+                "media_root" to mediaRoot,
+            ),
+        )
 
     suspend fun detail(movieId: Int): MovieDto = request("/detail/$movieId")
 
@@ -139,6 +168,9 @@ class MediaTreeApi(private val sessionStore: SessionStore) {
     fun coverUrl(serverUrl: String, movieId: Int): String = "${UrlUtils.apiBase(serverUrl)}/cover/$movieId"
 
     fun episodeStillUrl(serverUrl: String, movieId: Int): String = "${UrlUtils.apiBase(serverUrl)}/episode-still/$movieId"
+
+    fun thumbnailUrl(serverUrl: String, movieId: Int, index: Int): String =
+        "${UrlUtils.apiBase(serverUrl)}/thumbnail/$movieId/$index"
 
     fun streamUrl(serverUrl: String, movieId: Int): String = "${UrlUtils.apiBase(serverUrl)}/stream/$movieId"
 

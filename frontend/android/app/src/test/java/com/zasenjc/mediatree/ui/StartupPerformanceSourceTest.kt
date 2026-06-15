@@ -74,10 +74,13 @@ class StartupPerformanceSourceTest {
             .readText()
 
         assertFalse(mediaAsyncImage.contains("Brush.linearGradient"))
-        assertTrue(mediaAsyncImage.contains("val imageRequest = remember(context, imageUrl)"))
+        assertTrue(mediaAsyncImage.contains("fun rememberMediaTreeImageRequest("))
+        assertTrue(mediaAsyncImage.contains("return remember(context, imageUrl, width, height, memoryCacheKeyValue, diskCacheKeyValue, headers)"))
         assertTrue(mediaAsyncImage.contains("private const val AveragePosterImageWidthPx"))
         assertTrue(mediaAsyncImage.contains("private const val AveragePosterImageHeightPx"))
-        assertTrue(mediaAsyncImage.contains(".size(AveragePosterImageWidthPx, AveragePosterImageHeightPx)"))
+        assertTrue(mediaAsyncImage.contains("width = AveragePosterImageWidthPx"))
+        assertTrue(mediaAsyncImage.contains("height = AveragePosterImageHeightPx"))
+        assertTrue(mediaAsyncImage.contains("if (width != null && height != null) size(width, height)"))
         assertTrue(mediaAsyncImage.contains("model = imageRequest"))
     }
 

@@ -79,6 +79,8 @@ import com.zasenjc.mediatree.data.ClientStorageType
 import com.zasenjc.mediatree.data.DEFAULT_THEME_COLOR
 import com.zasenjc.mediatree.data.FullscreenModePreference
 import com.zasenjc.mediatree.data.HomeLayoutPreference
+import com.zasenjc.mediatree.data.LoginResponseDto
+import com.zasenjc.mediatree.data.MediaProvider
 import com.zasenjc.mediatree.data.MediaRootDto
 import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.ReleaseUpdateChecker
@@ -267,13 +269,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             _state.update { it.copy(message = "", error = null) }
             try {
                 val provider = container.mediaProviderFor(providerType)
-                val status = provider.authStatus(normalized)
-                if (!status.needAuth) {
-                    container.sessionStore.saveSession(normalized, "", type = providerType, name = profileName, profileId = profileId)
-                    _state.update { it.copy(message = "${providerType.labelText()} 登录成功") }
-                    return@launch
-                }
-                val result = provider.login(normalized, username, password)
+                val result = authenticateServer(provider, providerType, normalized, username, password)
                 if (result.ok) {
                     container.sessionStore.saveSession(normalized, result.token, type = providerType, userId = result.userId, name = profileName, profileId = profileId)
                     _state.update { it.copy(message = "${providerType.labelText()} 登录成功") }
@@ -356,13 +352,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             _state.update { it.copy(message = "", error = null) }
             try {
                 val provider = container.mediaProviderFor(state.providerType)
-                val status = provider.authStatus(normalized)
-                if (!status.needAuth) {
-                    container.sessionStore.saveSession(normalized, "", type = state.providerType)
-                    _state.update { it.copy(message = "登录成功") }
-                    return@launch
-                }
-                val result = provider.login(normalized, state.username, state.password)
+                val result = authenticateServer(provider, state.providerType, normalized, state.username, state.password)
                 if (result.ok) {
                     container.sessionStore.saveSession(normalized, result.token, type = state.providerType, userId = result.userId)
                     _state.update { it.copy(message = "登录成功") }
@@ -372,6 +362,22 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             } catch (e: Throwable) {
                 _state.update { it.copy(error = e.message ?: "登录失败") }
             }
+        }
+    }
+
+    private suspend fun authenticateServer(
+        provider: MediaProvider,
+        providerType: ProviderType,
+        normalizedServerUrl: String,
+        username: String,
+        password: String,
+    ): LoginResponseDto {
+        val status = provider.authStatus(normalizedServerUrl)
+        if (!status.needAuth) return LoginResponseDto(ok = true)
+        return if (providerType == ProviderType.MediaTree && !status.authConfigured) {
+            provider.setupAuth(normalizedServerUrl, username, password)
+        } else {
+            provider.login(normalizedServerUrl, username, password)
         }
     }
 

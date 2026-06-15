@@ -36,8 +36,8 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("controller.setPlaybackSpeed"))
         assertTrue(player.contains("controller.selectAudioTrack"))
         assertTrue(player.contains("controller.setAspectRatio"))
-        assertTrue(player.contains("controller.percentPosition()"))
-        assertTrue(player.contains("controller.lastError()"))
+        assertTrue(player.contains("controller.playbackStateAsync("))
+        assertTrue(player.contains("controller.audioTrackOptionsAsync()"))
     }
 
     @Test
@@ -253,6 +253,31 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(player.contains("isPlaying = false"))
         assertTrue(player.contains("lifecycle.addObserver(observer)"))
         assertTrue(player.contains("lifecycle.removeObserver(observer)"))
+    }
+
+    @Test
+    fun playerDoesNotSynchronouslyReadMpvStateOnComposeThread() {
+        val player = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
+            .readText()
+        val controller = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/player/MpvPlayerController.kt")
+            .readText()
+
+        assertFalse(player.contains("controller.audioTrackOptions()"))
+        assertFalse(player.contains("controller.lastError()"))
+        assertFalse(player.contains("controller.positionSeconds()"))
+        assertFalse(player.contains("controller.durationSeconds()"))
+        assertFalse(player.contains("controller.percentPosition()"))
+        assertFalse(player.contains("controller.isEnded()"))
+        assertTrue(player.contains("controller.audioTrackOptionsAsync()"))
+        assertTrue(player.contains("controller.playbackStateAsync("))
+        assertTrue(player.contains("rememberCoroutineScope()"))
+        assertTrue(player.contains("audioTracksRefreshing"))
+        assertTrue(controller.contains("suspend fun audioTrackOptionsAsync()"))
+        assertTrue(controller.contains("suspend fun playbackStateAsync("))
+        assertTrue(controller.contains("val lastError: String?"))
+        assertTrue(controller.contains("withContext(Dispatchers.IO)"))
     }
 
     @Test

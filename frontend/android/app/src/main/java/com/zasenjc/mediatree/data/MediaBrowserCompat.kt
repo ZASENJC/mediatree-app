@@ -121,6 +121,7 @@ fun MediaBrowserItemDto.toMediaTreeFolderNodeDto(
         path = id,
         isLeaf = !isBrowsableMediaBrowserItem(),
         movieCount = mediaBrowserItemCount(),
+        videoCount = childCount ?: recursiveItemCount ?: 0,
         cover = itemImageUrl(base, id, "Primary", imageTags["Primary"]),
         backdrop = backdropImageTags.firstOrNull()?.let { tag -> itemImageUrl(base, id, "Backdrop", tag) },
         displayTitle = title,

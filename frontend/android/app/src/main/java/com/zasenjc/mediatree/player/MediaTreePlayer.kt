@@ -55,6 +55,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,8 +73,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.zasenjc.mediatree.playback.PlaybackSource
 import com.zasenjc.mediatree.playback.PlaybackSubtitleTrack
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 private const val SourceSwapCurtainFadeInMillis = 120
 private const val SourceSwapCurtainFadeOutMillis = 220
@@ -142,6 +145,7 @@ fun MediaTreePlayer(
     val appContext = context.applicationContext
     val lifecycleOwner = LocalLifecycleOwner.current
     val controller = remember(appContext) { MpvPlayerController(appContext) }
+    val scope = rememberCoroutineScope()
 
     var isPlaying by remember { mutableStateOf(false) }
     var positionSeconds by remember { mutableDoubleStateOf(startPosition.coerceAtLeast(0.0)) }
@@ -159,6 +163,7 @@ fun MediaTreePlayer(
     var selectedAspectRatio by remember { mutableStateOf("no") }
     var selectedAudioTrackId by remember { mutableStateOf("") }
     var audioTracks by remember { mutableStateOf<List<MpvTrackOption>>(emptyList()) }
+    var audioTracksRefreshing by remember { mutableStateOf(false) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var curtainVisible by remember { mutableStateOf(true) }
     val curtainAlpha by animateFloatAsState(
@@ -200,6 +205,22 @@ fun MediaTreePlayer(
         if (speedBeforeHold != null) {
             temporarySpeedRestoreValue = null
             controller.setPlaybackSpeed(restoredPlaybackSpeed(speedBeforeHold = speedBeforeHold, currentSpeed = playbackSpeed))
+        }
+    }
+    val refreshAudioTracks: () -> Unit = {
+        if (!audioTracksRefreshing) {
+            audioTracksRefreshing = true
+            scope.launch {
+                try {
+                    audioTracks = controller.audioTrackOptionsAsync()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Throwable) {
+                    playbackError = error.message ?: "音轨读取失败"
+                } finally {
+                    audioTracksRefreshing = false
+                }
+            }
         }
     }
 
@@ -248,6 +269,9 @@ fun MediaTreePlayer(
         durationSeconds = 0.0
         percentPosition = 0.0
         seekingPositionSeconds = null
+        audioTracks = emptyList()
+        selectedAudioTrackId = ""
+        audioTracksRefreshing = false
         completedReported = false
         delay(SourceSwapCurtainFadeInMillis.toLong())
         runCatching {
@@ -285,9 +309,17 @@ fun MediaTreePlayer(
         while (isActive) {
             delay(500)
             tickCount += 1
-            val controllerPosition = controller.positionSeconds().coerceAtLeast(0.0)
-            val controllerDuration = controller.durationSeconds().coerceAtLeast(0.0)
-            val controllerPercent = controller.percentPosition().coerceIn(0.0, 100.0)
+            val playbackState = try {
+                controller.playbackStateAsync(includeLastError = tickCount % 3 == 1)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                playbackError = error.message ?: "播放状态读取失败"
+                continue
+            }
+            val controllerPosition = playbackState.positionSeconds.coerceAtLeast(0.0)
+            val controllerDuration = playbackState.durationSeconds.coerceAtLeast(0.0)
+            val controllerPercent = playbackState.percentPosition.coerceIn(0.0, 100.0)
             val resolvedPosition = if (controllerPosition > 0.0) {
                 controllerPosition
             } else if (controllerDuration > 0.0 && controllerPercent > 0.0) {
@@ -308,24 +340,24 @@ fun MediaTreePlayer(
             )
             onPlaybackPositionChange(positionSeconds, durationSeconds)
             if (tickCount % 3 == 1) {
-                playbackError = controller.lastError() ?: playbackError
+                playbackState.lastError?.let { playbackError = it }
             }
-            if (showOverlay && tickCount % 5 == 1) {
-                audioTracks = controller.audioTrackOptions()
-            }
-            if (!completedReported && controller.isEnded()) {
+            if (!completedReported && playbackState.ended) {
                 completedReported = true
                 onPlaybackComplete(positionSeconds, durationSeconds)
             }
         }
     }
 
-    DisposableEffect(controller, onPlaybackPositionSnapshot) {
+    val currentPositionSeconds by rememberUpdatedState(positionSeconds)
+    val currentDurationSeconds by rememberUpdatedState(durationSeconds)
+    val currentPercentPosition by rememberUpdatedState(percentPosition)
+    DisposableEffect(onPlaybackPositionSnapshot) {
         onPlaybackPositionSnapshot?.invoke {
             PlaybackPositionSnapshot(
-                positionSeconds = controller.positionSeconds().coerceAtLeast(0.0),
-                durationSeconds = controller.durationSeconds().coerceAtLeast(0.0),
-                percentPosition = controller.percentPosition().coerceIn(0.0, 100.0),
+                positionSeconds = currentPositionSeconds.coerceAtLeast(0.0),
+                durationSeconds = currentDurationSeconds.coerceAtLeast(0.0),
+                percentPosition = currentPercentPosition.coerceIn(0.0, 100.0),
             )
         }
         onDispose {
@@ -463,6 +495,7 @@ fun MediaTreePlayer(
                 selectedSubtitle = selectedSubtitle,
                 subtitleTracks = playbackSource.subtitleTracks,
                 audioTracks = audioTracks,
+                audioTracksRefreshing = audioTracksRefreshing,
                 selectedAudioTrackId = selectedAudioTrackId,
                 selectedAspectRatio = selectedAspectRatio,
                 showFullscreenButton = showFullscreenButton,
@@ -517,9 +550,7 @@ fun MediaTreePlayer(
                     showOverlay = true
                     onProgressUpdate(target, durationSeconds)
                 },
-                onAudioMenuOpen = {
-                    audioTracks = controller.audioTrackOptions()
-                },
+                onAudioMenuOpen = refreshAudioTracks,
                 onAudioTrackChange = { option ->
                     selectedAudioTrackId = option.id
                     controller.selectAudioTrack(option.id)
@@ -621,6 +652,7 @@ private fun PlayerControlsOverlay(
     selectedSubtitle: Int,
     subtitleTracks: List<PlaybackSubtitleTrack>,
     audioTracks: List<MpvTrackOption>,
+    audioTracksRefreshing: Boolean,
     selectedAudioTrackId: String,
     selectedAspectRatio: String,
     showFullscreenButton: Boolean,
@@ -686,6 +718,7 @@ private fun PlayerControlsOverlay(
                     AudioTrackMenu(
                         selectedAudioTrackId = selectedAudioTrackId,
                         tracks = audioTracks,
+                        refreshing = audioTracksRefreshing,
                         onAudioMenuOpen = onAudioMenuOpen,
                         onAudioTrackChange = onAudioTrackChange,
                     )
@@ -909,6 +942,7 @@ private fun SubtitleTrackMenu(
 private fun AudioTrackMenu(
     selectedAudioTrackId: String,
     tracks: List<MpvTrackOption>,
+    refreshing: Boolean,
     onAudioMenuOpen: () -> Unit,
     onAudioTrackChange: (MpvTrackOption) -> Unit,
 ) {
@@ -923,6 +957,13 @@ private fun AudioTrackMenu(
         },
         enabled = true,
     ) {
+        if (refreshing) {
+            DropdownMenuItem(
+                text = { Text("音轨读取中...") },
+                onClick = {},
+                enabled = false,
+            )
+        }
         tracks.forEach { track ->
             DropdownMenuItem(
                 text = { Text(if (track.id == selectedAudioTrackId) "${track.label} · 当前" else track.label) },

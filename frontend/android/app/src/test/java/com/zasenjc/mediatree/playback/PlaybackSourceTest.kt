@@ -8,7 +8,24 @@ import java.io.File
 
 class PlaybackSourceTest {
     @Test
-    fun mediaTreeSourceUsesBackendStreamEndpointWithAuthorizationHeader() {
+    fun mediaTreeSourceUsesBackendStreamEndpointWithMediaTokenQueryWhenAvailable() {
+        val source: PlaybackSource = PlaybackSource.mediaTree(
+            serverUrl = "http://192.168.1.10:27580/",
+            movieId = 42,
+            token = "auth-token",
+            mediaToken = "media:token value",
+            subtitleTracks = listOf(PlaybackSubtitleTrack(index = 3, title = "zh-CN")),
+        )
+
+        assertTrue(source is HttpPlaybackSource)
+        assertEquals("http://192.168.1.10:27580/api/stream/42?token=media%3Atoken%20value", source.uri)
+        assertEquals(emptyMap<String, String>(), source.headers)
+        assertEquals("http://192.168.1.10:27580/api/subtitle/42/3?token=media%3Atoken%20value", source.subtitleUri(3))
+        assertEquals(listOf(PlaybackSubtitleTrack(index = 3, title = "zh-CN")), source.subtitleTracks)
+    }
+
+    @Test
+    fun mediaTreeSourceFallsBackToAuthorizationHeaderWithoutMediaToken() {
         val source: PlaybackSource = PlaybackSource.mediaTree(
             serverUrl = "http://192.168.1.10:27580/",
             movieId = 42,
@@ -16,11 +33,9 @@ class PlaybackSourceTest {
             subtitleTracks = listOf(PlaybackSubtitleTrack(index = 3, title = "zh-CN")),
         )
 
-        assertTrue(source is HttpPlaybackSource)
         assertEquals("http://192.168.1.10:27580/api/stream/42", source.uri)
         assertEquals(mapOf("Authorization" to "Bearer secret-token"), source.headers)
         assertEquals("http://192.168.1.10:27580/api/subtitle/42/3", source.subtitleUri(3))
-        assertEquals(listOf(PlaybackSubtitleTrack(index = 3, title = "zh-CN")), source.subtitleTracks)
     }
 
     @Test
@@ -98,7 +113,23 @@ class PlaybackSourceTest {
             .readText()
 
         assertTrue(detailScreen.contains("PlaybackSource"))
+        assertTrue(detailScreen.contains("val mediaToken = runCatching { provider.mediaToken() }.getOrNull()"))
+        assertTrue(detailScreen.contains("mediaToken = state.mediaToken"))
+        assertTrue(detailScreen.contains("mediaTokenExpiresAt = mediaToken?.expiresAt ?: 0L"))
         assertFalse(detailScreen.contains(".streamUrl("))
         assertFalse(detailScreen.contains(".subtitleUrl("))
+    }
+
+    @Test
+    fun detailScreenRefreshesExpiringMediaTokenAndUsesBackendThumbnailProxy() {
+        val appRoot = File(System.getProperty("user.dir") ?: ".")
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+
+        assertTrue(detailScreen.contains("mediaTokenExpiresAt"))
+        assertTrue(detailScreen.contains("mediaTokenShouldRefresh"))
+        assertTrue(detailScreen.contains("ensureMediaToken("))
+        assertTrue(detailScreen.contains("thumbnailUrl(serverUrl, movie.id, index)"))
     }
 }

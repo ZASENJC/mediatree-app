@@ -19,14 +19,16 @@ sealed interface PlaybackSource {
             serverUrl: String,
             movieId: Int,
             token: String,
+            mediaToken: String = "",
             subtitleTracks: List<PlaybackSubtitleTrack> = emptyList(),
         ): HttpPlaybackSource {
             val apiBase = UrlUtils.apiBase(serverUrl)
+            val mediaTokenParam = mediaToken.takeIf { it.isNotBlank() }
             return HttpPlaybackSource(
-                uri = "$apiBase/stream/$movieId",
-                headers = authorizationHeaders(token),
+                uri = "$apiBase/stream/$movieId".withMediaToken(mediaTokenParam),
+                headers = if (mediaTokenParam != null) emptyMap() else authorizationHeaders(token),
                 subtitleTracks = subtitleTracks,
-                subtitleUriForTrack = { trackIndex -> "$apiBase/subtitle/$movieId/$trackIndex" },
+                subtitleUriForTrack = { trackIndex -> "$apiBase/subtitle/$movieId/$trackIndex".withMediaToken(mediaTokenParam) },
             )
         }
 
@@ -188,6 +190,13 @@ private fun mediaBrowserHeaders(
 
 private fun encodeQuery(value: String): String =
     URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
+
+private fun String.withMediaToken(mediaToken: String?): String =
+    if (mediaToken.isNullOrBlank()) {
+        this
+    } else {
+        "$this${if (contains("?")) "&" else "?"}token=${encodeQuery(mediaToken)}"
+    }
 
 private fun encodePathSegment(value: String): String =
     URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")

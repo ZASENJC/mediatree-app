@@ -12,6 +12,12 @@ class MediaTreeProvider(
     override suspend fun login(serverUrl: String, username: String, password: String): LoginResponseDto =
         api.login(serverUrl, username, password)
 
+    override suspend fun setupAuth(serverUrl: String, username: String, password: String): LoginResponseDto =
+        api.setupAuth(serverUrl, username, password)
+
+    override suspend fun mediaToken(): MediaTokenDto =
+        api.mediaToken()
+
     override suspend fun mediaRoots(): MediaRootsResponseDto =
         api.mediaRoots()
 
@@ -44,8 +50,8 @@ class MediaTreeProvider(
     ): MoviesResponseDto =
         api.movies(folder, code, tag, sort, limit, offset, mediaRoot)
 
-    override suspend fun favorites(limit: Int, offset: Int, sort: String): MoviesResponseDto =
-        api.favorites(limit, offset, sort)
+    override suspend fun favorites(limit: Int, offset: Int, sort: String, mediaRoot: String): MoviesResponseDto =
+        api.favorites(limit, offset, sort, mediaRoot)
 
     override suspend fun detail(movieId: Int): MovieDto =
         api.detail(movieId)
@@ -82,6 +88,9 @@ class MediaTreeProvider(
     override fun episodeStillUrl(serverUrl: String, movieId: Int): String =
         api.episodeStillUrl(serverUrl, movieId)
 
+    override fun thumbnailUrl(serverUrl: String, movieId: Int, index: Int): String =
+        api.thumbnailUrl(serverUrl, movieId, index)
+
     override fun streamUrl(serverUrl: String, movieId: Int): String =
         api.streamUrl(serverUrl, movieId)
 
@@ -93,12 +102,14 @@ class MediaTreeProvider(
         movieId: Int,
         token: String,
         userId: String,
+        mediaToken: String,
         subtitleTracks: List<SubtitleTrackDto>,
     ): PlaybackSource =
         PlaybackSource.mediaTree(
             serverUrl = serverUrl,
             movieId = movieId,
             token = token,
+            mediaToken = mediaToken,
             subtitleTracks = subtitleTracks.map { it.toPlaybackSubtitleTrack() },
         )
 }

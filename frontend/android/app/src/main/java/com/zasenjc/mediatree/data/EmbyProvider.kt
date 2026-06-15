@@ -17,6 +17,7 @@ class EmbyProvider(
         movieId: Int,
         token: String,
         userId: String,
+        mediaToken: String,
         subtitleTracks: List<SubtitleTrackDto>,
     ): PlaybackSource =
         PlaybackSource.emby(

@@ -36,6 +36,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +63,9 @@ import com.zasenjc.mediatree.data.ProviderType
 import com.zasenjc.mediatree.data.ReleaseUpdateState
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.ui.components.LoadingPane
+import com.zasenjc.mediatree.ui.components.LocalMediaTreeImageAuth
 import com.zasenjc.mediatree.ui.components.MediaTreePageBackground
+import com.zasenjc.mediatree.ui.components.MediaTreeImageAuth
 import com.zasenjc.mediatree.ui.components.bottomChromeEnterTransition
 import com.zasenjc.mediatree.ui.components.bottomChromeExitTransition
 import com.zasenjc.mediatree.ui.motion.md3DefaultEnterTransition
@@ -233,8 +236,16 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         }
     }
 
-    MediaTreePageBackground {
-        Scaffold(
+    val mediaTreeImageAuth = remember(session.activeProviderType, session.serverUrl, session.token) {
+        if (session.activeProviderType == ProviderType.MediaTree) {
+            MediaTreeImageAuth(serverUrl = session.serverUrl, token = session.token)
+        } else {
+            MediaTreeImageAuth()
+        }
+    }
+    CompositionLocalProvider(LocalMediaTreeImageAuth provides mediaTreeImageAuth) {
+        MediaTreePageBackground {
+            Scaffold(
             contentWindowInsets = WindowInsets.safeDrawing,
             snackbarHost = {
                 SnackbarHost(
@@ -481,6 +492,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                 settingsBadgeVisible = settingsBadgeVisible,
                 onNavigate = ::navigateTopDestination,
             )
+        }
         }
     }
 }

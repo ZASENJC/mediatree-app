@@ -7,6 +7,11 @@ interface MediaProvider {
 
     suspend fun login(serverUrl: String, username: String, password: String): LoginResponseDto
 
+    suspend fun setupAuth(serverUrl: String, username: String, password: String): LoginResponseDto =
+        login(serverUrl, username, password)
+
+    suspend fun mediaToken(): MediaTokenDto? = null
+
     suspend fun mediaRoots(): MediaRootsResponseDto
 
     suspend fun mediaRoots(profile: ServerProfile): MediaRootsResponseDto = mediaRoots()
@@ -34,7 +39,12 @@ interface MediaProvider {
         mediaRoot: String = "",
     ): MoviesResponseDto
 
-    suspend fun favorites(limit: Int = 48, offset: Int = 0, sort: String = "created_desc"): MoviesResponseDto
+    suspend fun favorites(
+        limit: Int = 48,
+        offset: Int = 0,
+        sort: String = "created_desc",
+        mediaRoot: String = "",
+    ): MoviesResponseDto
 
     suspend fun detail(movieId: Int): MovieDto
 
@@ -61,6 +71,8 @@ interface MediaProvider {
 
     fun episodeStillUrl(serverUrl: String, movieId: Int): String
 
+    fun thumbnailUrl(serverUrl: String, movieId: Int, index: Int): String
+
     fun streamUrl(serverUrl: String, movieId: Int): String
 
     fun subtitleUrl(serverUrl: String, movieId: Int, trackIndex: Int): String
@@ -70,6 +82,7 @@ interface MediaProvider {
         movieId: Int,
         token: String,
         userId: String = "",
+        mediaToken: String = "",
         subtitleTracks: List<SubtitleTrackDto> = emptyList(),
     ): PlaybackSource
 }

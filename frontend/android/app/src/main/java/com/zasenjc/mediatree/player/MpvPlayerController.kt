@@ -5,6 +5,8 @@ import android.view.Surface
 import com.zasenjc.mediatree.data.PlaybackMemoryLogger
 import com.zasenjc.mediatree.data.memoryLogValue
 import `is`.xyz.mpv.MPVLib
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 interface MpvBackend {
     fun create(context: Any)
@@ -70,6 +72,14 @@ object NativeMpvBackend : MpvBackend {
 data class MpvTrackOption(
     val id: String,
     val label: String,
+)
+
+data class MpvPlaybackState(
+    val positionSeconds: Double,
+    val durationSeconds: Double,
+    val percentPosition: Double,
+    val ended: Boolean,
+    val lastError: String?,
 )
 
 class MpvPlayerController(
@@ -319,6 +329,10 @@ class MpvPlayerController(
         null
     }
 
+    suspend fun lastErrorAsync(): String? = withContext(Dispatchers.IO) {
+        lastError()
+    }
+
     fun audioTrackOptions(): List<MpvTrackOption> {
         if (!initialized) return emptyList()
         val count = backend.getPropertyInt("track-list/count").coerceAtLeast(0)
@@ -329,6 +343,20 @@ class MpvPlayerController(
             val language = backend.getPropertyString("track-list/$index/lang").orEmpty()
             MpvTrackOption(id = id, label = audioTrackLabel(id, title, language))
         }
+    }
+
+    suspend fun audioTrackOptionsAsync(): List<MpvTrackOption> = withContext(Dispatchers.IO) {
+        audioTrackOptions()
+    }
+
+    suspend fun playbackStateAsync(includeLastError: Boolean = false): MpvPlaybackState = withContext(Dispatchers.IO) {
+        MpvPlaybackState(
+            positionSeconds = positionSeconds(),
+            durationSeconds = durationSeconds(),
+            percentPosition = percentPosition(),
+            ended = isEnded(),
+            lastError = if (includeLastError) lastError() else null,
+        )
     }
 
     fun release() {

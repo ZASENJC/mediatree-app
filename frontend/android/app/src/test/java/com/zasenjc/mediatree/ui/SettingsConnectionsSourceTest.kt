@@ -73,11 +73,46 @@ class SettingsConnectionsSourceTest {
         val loginBlock = source
             .substringAfter("fun loginServerProfile(")
             .substringBefore("fun loadRoots(")
+        val authBlock = source
+            .substringAfter("private suspend fun authenticateServer(")
+            .substringBefore("fun logout()")
 
         assertFalse(source.contains("fun saveServerProfile("))
         assertFalse(loginBlock.contains("saveProfile("))
-        assertTrue(loginBlock.contains("saveSession(normalized, \"\", type = providerType, name = profileName, profileId = profileId"))
+        assertTrue(authBlock.contains("if (!status.needAuth) return LoginResponseDto(ok = true)"))
         assertTrue(loginBlock.contains("saveSession(normalized, result.token, type = providerType, userId = result.userId, name = profileName, profileId = profileId"))
+    }
+
+    @Test
+    fun mediaTreeConnectionInitializesUnconfiguredBackendAuth() {
+        val source = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/SettingsScreen.kt")
+            .readText()
+        val authBlock = source
+            .substringAfter("private suspend fun authenticateServer(")
+            .substringBefore("fun logout()")
+
+        assertTrue(authBlock.contains("provider.authStatus(normalizedServerUrl)"))
+        assertTrue(authBlock.contains("!status.needAuth"))
+        assertTrue(authBlock.contains("providerType == ProviderType.MediaTree && !status.authConfigured"))
+        assertTrue(authBlock.contains("provider.setupAuth(normalizedServerUrl, username, password)"))
+        assertTrue(authBlock.contains("provider.login(normalizedServerUrl, username, password)"))
+    }
+
+    @Test
+    fun appShellProvidesMediaTreeImageAuthContext() {
+        val appSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/MediaTreeApp.kt")
+            .readText()
+        val imageSource = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/components/MediaAsyncImage.kt")
+            .readText()
+
+        assertTrue(appSource.contains("LocalMediaTreeImageAuth provides mediaTreeImageAuth"))
+        assertTrue(appSource.contains("session.activeProviderType == ProviderType.MediaTree"))
+        assertTrue(imageSource.contains("ProtectedMediaTreeImagePathPrefixes"))
+        assertTrue(imageSource.contains("\"/api/cover/\""))
+        assertTrue(imageSource.contains("addHeader(name, value)"))
     }
 
     @Test

@@ -89,6 +89,7 @@ import coil.compose.AsyncImage
 import com.zasenjc.mediatree.data.AppContainer
 import com.zasenjc.mediatree.data.CrewCreditDto
 import com.zasenjc.mediatree.data.FullscreenModePreference
+import com.zasenjc.mediatree.data.MediaProvider
 import com.zasenjc.mediatree.data.MediaInfoDto
 import com.zasenjc.mediatree.data.MovieDto
 import com.zasenjc.mediatree.data.PersonCreditDto
@@ -112,6 +113,7 @@ import com.zasenjc.mediatree.ui.components.DesignFilterChip
 import com.zasenjc.mediatree.ui.components.DesignTopAppBar
 import com.zasenjc.mediatree.ui.components.SectionHeader
 import com.zasenjc.mediatree.ui.components.shapeAwareClickable
+import com.zasenjc.mediatree.ui.components.rememberMediaTreeImageRequest
 import com.zasenjc.mediatree.ui.motion.PlayerExitNavigationDelayMillis
 import com.zasenjc.mediatree.ui.shouldLoadRemoteContent
 import com.zasenjc.mediatree.util.UrlUtils
@@ -122,8 +124,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
+import java.util.concurrent.TimeUnit
 
 private const val ExitPlayerReleaseDelayMillis = PlayerExitNavigationDelayMillis
+private const val MediaTokenRefreshWindowSeconds = 60L
 
 fun mediaTreeResumePosition(progress: ProgressDto): Double {
     return backendPlaybackResumePosition(progress)
@@ -140,6 +144,13 @@ fun bestPlaybackSnapshot(
     return if (lastKnownPosition != null) lastKnownSnapshot else null
 }
 
+fun mediaTokenShouldRefresh(
+    token: String,
+    expiresAtSeconds: Long,
+    nowSeconds: Long = System.currentTimeMillis() / 1000,
+): Boolean =
+    token.isBlank() || expiresAtSeconds <= nowSeconds + MediaTokenRefreshWindowSeconds
+
 class DetailViewModel(private val container: AppContainer) : ViewModel() {
     data class UiState(
         val loading: Boolean = true,
@@ -150,6 +161,8 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
         val resume: Double = 0.0,
         val subtitleTracks: List<SubtitleTrackDto> = emptyList(),
         val selectedSubtitle: Int = -1,
+        val mediaToken: String = "",
+        val mediaTokenExpiresAt: Long = 0L,
         val error: Throwable? = null,
     )
 
@@ -166,6 +179,7 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
                 val resume = container.remotePlaybackMemoryCoordinator.resumePosition(providerType, profileId, movieId)
                 val subs = runCatching { provider.subtitleTracks(movieId) }.getOrDefault(emptyList())
                 val mediaInfo = runCatching { provider.mediaInfo(movieId) }.getOrNull()
+                val mediaToken = runCatching { provider.mediaToken() }.getOrNull()
                 val seriesFolder = seriesFolderFor(movie)
                 val providerSeriesFolder = movie.providerSeriesId
                     ?.takeIf { providerType == ProviderType.Jellyfin || providerType == ProviderType.Emby }
@@ -192,10 +206,26 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
                         mediaRoot = resolvedMediaRoot,
                         resume = resume,
                         subtitleTracks = subs,
+                        mediaToken = mediaToken?.token.orEmpty(),
+                        mediaTokenExpiresAt = mediaToken?.expiresAt ?: 0L,
                     )
                 }
             } catch (e: Throwable) {
                 _state.update { it.copy(loading = false, error = e) }
+            }
+        }
+    }
+
+    fun ensureMediaToken(providerType: ProviderType) {
+        val current = _state.value
+        if (!mediaTokenShouldRefresh(current.mediaToken, current.mediaTokenExpiresAt)) return
+        viewModelScope.launch {
+            val token = runCatching { container.mediaProviderFor(providerType).mediaToken() }.getOrNull() ?: return@launch
+            _state.update {
+                it.copy(
+                    mediaToken = token.token,
+                    mediaTokenExpiresAt = token.expiresAt,
+                )
             }
         }
     }
@@ -369,6 +399,13 @@ fun DetailScreen(
         }
     }
 
+    LaunchedEffect(activeMovieId, session.activeProviderType, state.mediaToken, state.mediaTokenExpiresAt) {
+        while (shouldLoadRemoteContent(session)) {
+            vm.ensureMediaToken(session.activeProviderType)
+            delay(TimeUnit.MINUTES.toMillis(5))
+        }
+    }
+
     LaunchedEffect(state.error) {
         state.error?.let(onError)
     }
@@ -400,12 +437,14 @@ fun DetailScreen(
         session.activeProviderType,
         activeMovieId,
         state.subtitleTracks,
+        state.mediaToken,
     ) {
         provider.playbackSource(
             serverUrl = session.serverUrl,
             movieId = activeMovieId,
             token = session.token,
             userId = session.activeUserId,
+            mediaToken = state.mediaToken,
             subtitleTracks = state.subtitleTracks,
         )
     }
@@ -677,6 +716,8 @@ private fun DetailMetadataContent(
             ThumbnailStrip(
                 movie = movie,
                 serverUrl = session.serverUrl,
+                provider = provider,
+                providerType = session.activeProviderType,
                 fallbackStill = fallbackStill,
             )
         } else {
@@ -836,7 +877,7 @@ private fun PersonCard(person: PersonCreditDto, serverUrl: String) {
             }
         } else {
             AsyncImage(
-                model = imageUrl,
+                model = rememberMediaTreeImageRequest(imageUrl = imageUrl),
                 contentDescription = person.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(54.dp).clip(CircleShape),
@@ -958,7 +999,7 @@ private fun EpisodeCoverCard(
         ) {
             Box {
                 AsyncImage(
-                    model = imageUrl,
+                    model = rememberMediaTreeImageRequest(imageUrl = imageUrl),
                     contentDescription = movie.episodeTitle ?: movie.displayTitle ?: movie.title ?: movie.code,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -1006,14 +1047,24 @@ private fun WatchFlag(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ThumbnailStrip(movie: MovieDto, serverUrl: String, fallbackStill: String) {
+private fun ThumbnailStrip(
+    movie: MovieDto,
+    serverUrl: String,
+    provider: MediaProvider,
+    providerType: ProviderType,
+    fallbackStill: String,
+) {
     var selectedThumbnailUrl by remember(movie.id) { mutableStateOf<String?>(null) }
     var selectedThumbnailIndex by remember(movie.id) { mutableStateOf(0) }
-    val thumbnails = remember(movie.id, movie.episodeStill, movie.javdbThumbnails, serverUrl, fallbackStill) {
+    val thumbnails = remember(movie.id, movie.episodeStill, movie.javdbThumbnails, serverUrl, provider, providerType, fallbackStill) {
         buildList {
             add(movie.episodeStill?.let { UrlUtils.resolveApiUrl(serverUrl, it) } ?: fallbackStill)
-            movie.javdbThumbnails.forEach { value ->
-                UrlUtils.resolveApiUrl(serverUrl, value)?.let { add(it) }
+            movie.javdbThumbnails.forEachIndexed { index, value ->
+                if (providerType == ProviderType.MediaTree) {
+                    add(provider.thumbnailUrl(serverUrl, movie.id, index))
+                } else {
+                    UrlUtils.resolveApiUrl(serverUrl, value)?.let { add(it) }
+                }
             }
         }.distinct().take(10)
     }
@@ -1024,7 +1075,7 @@ private fun ThumbnailStrip(movie: MovieDto, serverUrl: String, fallbackStill: St
                 val url = thumbnails[index]
                 val shape = RoundedCornerShape(12.dp)
                 AsyncImage(
-                    model = url,
+                    model = rememberMediaTreeImageRequest(imageUrl = url),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -1072,7 +1123,7 @@ private fun StillImageViewer(imageUrls: List<String>, initialPage: Int, onDismis
                     contentAlignment = Alignment.Center,
                 ) {
                     AsyncImage(
-                        model = imageUrls[page],
+                        model = rememberMediaTreeImageRequest(imageUrl = imageUrls[page]),
                         contentDescription = "剧照预览",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier

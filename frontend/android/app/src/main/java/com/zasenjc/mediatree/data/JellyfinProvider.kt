@@ -193,22 +193,23 @@ open class JellyfinProvider(
         return moviesFromItems(items(session.requireUserId(), params), session)
     }
 
-    override suspend fun favorites(limit: Int, offset: Int, sort: String): MoviesResponseDto {
+    override suspend fun favorites(limit: Int, offset: Int, sort: String, mediaRoot: String): MoviesResponseDto {
         val session = currentSession()
         val (sortBy, sortOrder) = sort.toJellyfinSort()
         return moviesFromItems(
             items(
                 userId = session.requireUserId(),
-                params = listOf(
-                    "Recursive" to "true",
-                    "IncludeItemTypes" to "Movie,Episode",
-                    "Filters" to "IsFavorite",
-                    "StartIndex" to offset.toString(),
-                    "Limit" to limit.toString(),
-                    "Fields" to ItemFields,
-                    "SortBy" to sortBy,
-                    "SortOrder" to sortOrder,
-                ),
+                params = buildList {
+                    mediaRoot.takeIf { it.isNotBlank() }?.let { add("ParentId" to it) }
+                    add("Recursive" to "true")
+                    add("IncludeItemTypes" to "Movie,Episode")
+                    add("Filters" to "IsFavorite")
+                    add("StartIndex" to offset.toString())
+                    add("Limit" to limit.toString())
+                    add("Fields" to ItemFields)
+                    add("SortBy" to sortBy)
+                    add("SortOrder" to sortOrder)
+                },
             ),
             session = session,
         )
@@ -329,6 +330,9 @@ open class JellyfinProvider(
     override fun episodeStillUrl(serverUrl: String, movieId: Int): String =
         "${UrlUtils.normalizeServerUrl(serverUrl)}/Items/${providerItemId(movieId)}/Images/Backdrop"
 
+    override fun thumbnailUrl(serverUrl: String, movieId: Int, index: Int): String =
+        episodeStillUrl(serverUrl, movieId)
+
     override fun streamUrl(serverUrl: String, movieId: Int): String =
         "${UrlUtils.normalizeServerUrl(serverUrl)}/Videos/${providerItemId(movieId)}/stream?static=true"
 
@@ -347,6 +351,7 @@ open class JellyfinProvider(
         movieId: Int,
         token: String,
         userId: String,
+        mediaToken: String,
         subtitleTracks: List<SubtitleTrackDto>,
     ): PlaybackSource =
         PlaybackSource.jellyfin(

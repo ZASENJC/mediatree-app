@@ -25,6 +25,7 @@ class JellyfinEmbyProviderSourceTest {
         assertTrue(source.contains("/Sessions/Playing/Progress"))
         assertTrue(source.contains("/Users/${'$'}{session.requireUserId()}/PlayedItems/${'$'}{providerItemId(movieId)}"))
         assertTrue(source.contains("/Users/${'$'}{session.requireUserId()}/FavoriteItems/${'$'}{providerItemId(movieId)}"))
+        assertTrue(source.contains("override fun thumbnailUrl"))
         assertTrue(source.contains("AccessToken"))
         assertTrue(source.contains("User"))
     }
@@ -114,6 +115,7 @@ class JellyfinEmbyProviderSourceTest {
     @Test
     fun jellyfinFoldersUseMediaBrowserFolderCompatMapping() {
         val source = dataRoot.resolve("JellyfinProvider.kt").readText()
+        val compat = dataRoot.resolve("MediaBrowserCompat.kt").readText()
 
         assertTrue(source.contains("\"IncludeItemTypes\" to MediaBrowserFolderItemTypes"))
         assertTrue(source.contains("toMediaTreeFolderNodeDto"))
@@ -122,5 +124,6 @@ class JellyfinEmbyProviderSourceTest {
         assertTrue(source.contains("Video"))
         assertTrue(source.contains("RecursiveItemCount"))
         assertTrue(source.contains("CollectionType"))
+        assertTrue(compat.contains("videoCount = childCount ?: recursiveItemCount ?: 0"))
     }
 }

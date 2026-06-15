@@ -114,7 +114,12 @@ class FavoritesViewModel(private val container: AppContainer) : ViewModel() {
                     _state.update { it.copy(page = 0, loading = false, movies = movies, total = movies.size) }
                     return@launch
                 }
-                val response = container.mediaProviderFor(providerType).favorites(limit = 48, offset = page * 48, sort = "release_date_desc")
+                val response = container.mediaProviderFor(providerType).favorites(
+                    limit = 48,
+                    offset = page * 48,
+                    sort = "release_date_desc",
+                    mediaRoot = activeLibrary,
+                )
                 _state.update {
                     it.copy(
                         page = page,

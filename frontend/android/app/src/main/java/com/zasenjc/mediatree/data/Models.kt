@@ -106,6 +106,7 @@ private fun List<ServerProfile>.activeProfile(activeProfileId: String): ServerPr
 @Serializable
 data class AuthStatusDto(
     @SerialName("need_auth") val needAuth: Boolean = true,
+    @SerialName("auth_configured") val authConfigured: Boolean = true,
 )
 
 @Serializable
@@ -114,6 +115,12 @@ data class LoginResponseDto(
     val ok: Boolean = false,
     val userId: String = "",
     val userName: String = "",
+)
+
+@Serializable
+data class MediaTokenDto(
+    val token: String = "",
+    @SerialName("expires_at") val expiresAt: Long = 0L,
 )
 
 @Serializable
@@ -141,6 +148,7 @@ data class FolderNodeDto(
     val path: String = "",
     @SerialName("is_leaf") val isLeaf: Boolean = false,
     @SerialName("movie_count") val movieCount: Int = 0,
+    @SerialName("video_count") val videoCount: Int = 0,
     val cover: String? = null,
     @SerialName("random_cover") val randomCover: String? = null,
     val backdrop: String? = null,
@@ -152,6 +160,10 @@ data class FolderNodeDto(
     @SerialName("watched_count") val watchedCount: Int? = null,
     @SerialName("folder_watched") val folderWatched: Boolean? = null,
     @SerialName("progress_percent") val progressPercent: Double? = null,
+    @SerialName("tmdb_id") val tmdbId: Int? = null,
+    @SerialName("tmdb_type") val tmdbType: String? = null,
+    @SerialName("special_count") val specialCount: Int? = null,
+    @SerialName("show_specials") val showSpecials: Boolean? = null,
 )
 
 @Serializable
@@ -179,16 +191,24 @@ data class MovieDto(
     @SerialName("dvd_id") val dvdId: String? = null,
     @SerialName("release_date") val releaseDate: String? = null,
     val duration: Int? = null,
+    @SerialName("cover_local") val coverLocal: String? = null,
+    @SerialName("cover_remote") val coverRemote: String? = null,
+    @SerialName("fanart_local") val fanartLocal: String? = null,
+    @SerialName("javdb_url") val javdbUrl: String? = null,
     val keywords: String? = null,
     val studios: String? = null,
     val tagline: String? = null,
     val status: String? = null,
     @SerialName("content_rating") val contentRating: String? = null,
     @SerialName("scraper_source") val scraperSource: String? = null,
+    @SerialName("source_id") val sourceId: String? = null,
+    @SerialName("javdb_id") val javdbId: String? = null,
     @SerialName("javdb_score") val javdbScore: Double? = null,
     @SerialName("javdb_likes") val javdbLikes: Int? = null,
     @Serializable(with = StringListSerializer::class)
     @SerialName("javdb_thumbnails") val javdbThumbnails: List<String> = emptyList(),
+    @Serializable(with = StringListSerializer::class)
+    @SerialName("javdb_comments") val javdbComments: List<String> = emptyList(),
     @SerialName("folder_levels") val folderLevels: String? = null,
     @Serializable(with = StringListSerializer::class)
     val tags: List<String> = emptyList(),
@@ -202,6 +222,8 @@ data class MovieDto(
     @SerialName("episode_label") val episodeLabel: String? = null,
     @SerialName("episode_overview") val episodeOverview: String? = null,
     @SerialName("episode_still") val episodeStill: String? = null,
+    @SerialName("episode_still_local") val episodeStillLocal: String? = null,
+    @SerialName("clean_title") val cleanTitle: String? = null,
     @SerialName("display_title") val displayTitle: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
@@ -213,6 +235,22 @@ data class MovieDto(
     val cast: List<PersonCreditDto> = emptyList(),
     @Serializable(with = CrewCreditListSerializer::class)
     val crew: List<CrewCreditDto> = emptyList(),
+    @Serializable(with = ExternalAudioTrackListSerializer::class)
+    @SerialName("external_audio_tracks") val externalAudioTracks: List<ExternalAudioTrackDto> = emptyList(),
+    @SerialName("content_role") val contentRole: String? = null,
+    @SerialName("special_parent_levels") val specialParentLevels: String? = null,
+)
+
+@Serializable
+data class ExternalAudioTrackDto(
+    val path: String = "",
+    val name: String = "",
+    val source: String? = null,
+    val language: String? = null,
+    val codec: String? = null,
+    val format: String? = null,
+    val title: String? = null,
+    @SerialName("is_external") val isExternal: Boolean? = null,
 )
 
 @Serializable
@@ -273,6 +311,8 @@ data class MediaInfoDto(
     @SerialName("audio_codec") val audioCodec: String = "",
     @SerialName("audio_channels") val audioChannels: Int = 0,
     val container: String = "",
+    @Serializable(with = ExternalAudioTrackListSerializer::class)
+    @SerialName("external_audio_tracks") val externalAudioTracks: List<ExternalAudioTrackDto> = emptyList(),
 )
 
 @Serializable
@@ -285,6 +325,7 @@ data class ConfigDto(
 @Serializable
 data class ScanResponseDto(
     val total: Int = 0,
+    val codes: List<String> = emptyList(),
 )
 
 @Serializable
@@ -332,6 +373,18 @@ object CrewCreditListSerializer : KSerializer<List<CrewCreditDto>> {
         decodeFlexibleList(decoder, delegate)
 
     override fun serialize(encoder: Encoder, value: List<CrewCreditDto>) {
+        encoder.encodeSerializableValue(delegate, value)
+    }
+}
+
+object ExternalAudioTrackListSerializer : KSerializer<List<ExternalAudioTrackDto>> {
+    private val delegate = ListSerializer(ExternalAudioTrackDto.serializer())
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun deserialize(decoder: Decoder): List<ExternalAudioTrackDto> =
+        decodeFlexibleList(decoder, delegate)
+
+    override fun serialize(encoder: Encoder, value: List<ExternalAudioTrackDto>) {
         encoder.encodeSerializableValue(delegate, value)
     }
 }
