@@ -100,9 +100,13 @@ import com.zasenjc.mediatree.data.ProgressDto
 import com.zasenjc.mediatree.data.Session
 import com.zasenjc.mediatree.data.SubtitleTrackDto
 import com.zasenjc.mediatree.data.backendPlaybackResumePosition
+import com.zasenjc.mediatree.data.isFavorite
+import com.zasenjc.mediatree.data.isWatched
 import com.zasenjc.mediatree.data.mediaBrowserSeriesFolder
 import com.zasenjc.mediatree.data.rememberablePlaybackPosition
 import com.zasenjc.mediatree.data.viewModelFactory
+import com.zasenjc.mediatree.data.withTag
+import com.zasenjc.mediatree.data.withoutTag
 import com.zasenjc.mediatree.player.MediaTreePlayer
 import com.zasenjc.mediatree.player.PlaybackPositionSnapshot
 import com.zasenjc.mediatree.playback.PlaybackSource
@@ -237,12 +241,12 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
         val movie = _state.value.movie ?: return
         viewModelScope.launch {
             val provider = container.mediaProviderFor(providerType)
-            if (movie.tags.contains("favorite")) {
+            if (movie.isFavorite()) {
                 provider.removeTag(movie.id, "favorite")
-                _state.update { it.copy(movie = it.movie?.copy(tags = it.movie!!.tags - "favorite")) }
+                updateMovieTags(movie.id) { it.withoutTag("favorite") }
             } else {
                 provider.addTag(movie.id, "favorite")
-                _state.update { it.copy(movie = it.movie?.copy(tags = it.movie!!.tags + "favorite")) }
+                updateMovieTags(movie.id) { it.withTag("favorite") }
             }
         }
     }
@@ -252,7 +256,7 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.mediaProviderFor(providerType).addTag(movie.id, "watched")
             container.remotePlaybackMemoryCoordinator.markFinished(providerType, profileId, movie.id)
-            _state.update { it.copy(movie = it.movie?.copy(tags = it.movie!!.tags + "watched")) }
+            updateMovieTags(movie.id) { it.withTag("watched") }
         }
     }
 
@@ -302,6 +306,20 @@ class DetailViewModel(private val container: AppContainer) : ViewModel() {
             runCatching { container.remotePlaybackMemoryCoordinator.markFinished(providerType, profileId, movieId) }
             runCatching { provider.saveProgress(movieId, position, duration, stopped = true) }
             runCatching { provider.addTag(movieId, "watched") }
+                .onSuccess { updateMovieTags(movieId) { it.withTag("watched") } }
+        }
+    }
+
+    private fun updateMovieTags(movieId: Int, transform: (MovieDto) -> MovieDto) {
+        _state.update { state ->
+            state.copy(
+                movie = state.movie?.let { movie ->
+                    if (movie.id == movieId) transform(movie) else movie
+                },
+                seriesItems = state.seriesItems.map { item ->
+                    if (item.id == movieId) transform(item) else item
+                },
+            )
         }
     }
 
@@ -362,6 +380,13 @@ fun DetailScreen(
         leavingDetail = true
     }
 
+    fun exitFullscreen() {
+        capturePlaybackPosition()
+        fullscreenRequested = false
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+        onChromeVisibleChange(true)
+    }
+
     val playerFullscreen = fullscreenRequested || isLandscape
     FullscreenSystemBarsEffect(playerFullscreen)
     LaunchedEffect(playerFullscreen) {
@@ -376,9 +401,7 @@ fun DetailScreen(
     }
     BackHandler {
         if (playerFullscreen) {
-            capturePlaybackPosition()
-            fullscreenRequested = false
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+            exitFullscreen()
         } else {
             leaveDetail()
         }
@@ -539,10 +562,8 @@ fun DetailScreen(
                     showOrientationToggle = playerFullscreen,
                     showAspectRatioControls = playerFullscreen,
                     onFullscreenRequest = {
-                        capturePlaybackPosition()
                         if (playerFullscreen) {
-                            fullscreenRequested = false
-                            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                            exitFullscreen()
                         } else {
                             fullscreenRequested = true
                             requestFullscreenOrientation(activity, fullscreenModePreference)
@@ -824,7 +845,7 @@ private fun MovieInfoHeader(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            val favorite = movie.tags.contains("favorite")
+            val favorite = movie.isFavorite()
             FilledTonalButton(
                 onClick = onFavorite,
                 modifier = Modifier.weight(1f),
@@ -844,7 +865,7 @@ private fun MovieInfoHeader(
             FilledTonalButton(onClick = onWatched, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Default.CheckCircle, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(if (movie.tags.contains("watched")) "已看" else "标记已看")
+                Text(if (movie.isWatched()) "已看" else "标记已看")
             }
         }
     }
@@ -1009,7 +1030,7 @@ private fun EpisodeCoverCard(
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f),
                 )
-                if (movie.tags.contains("watched")) {
+                if (movie.isWatched()) {
                     WatchFlag(Modifier.align(Alignment.TopEnd).padding(6.dp))
                 }
             }

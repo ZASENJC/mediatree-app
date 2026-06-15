@@ -92,6 +92,7 @@ import com.zasenjc.mediatree.data.MoviesResponseDto
 import com.zasenjc.mediatree.data.RemotePlaybackMemory
 import com.zasenjc.mediatree.data.SmbEntry
 import com.zasenjc.mediatree.data.WebDavEntry
+import com.zasenjc.mediatree.data.isWatched
 import com.zasenjc.mediatree.data.smbLibraryPath
 import com.zasenjc.mediatree.data.smbLibrarySourceId
 import com.zasenjc.mediatree.data.ProviderType
@@ -816,14 +817,19 @@ private fun HomeMoviePosterCard(
             colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
-            MediaAsyncImage(
-                imageUrl = imageUrl,
-                contentDescription = title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f),
-                cornerRadius = 16.dp,
-            )
+            Box {
+                MediaAsyncImage(
+                    imageUrl = imageUrl,
+                    contentDescription = title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(2f / 3f),
+                    cornerRadius = 16.dp,
+                )
+                if (movie.isWatched()) {
+                    WatchFlag(Modifier.align(Alignment.TopEnd).padding(7.dp))
+                }
+            }
         }
         Text(
             text = title,
@@ -925,7 +931,7 @@ private fun RecentWatchingCard(
                         .aspectRatio(16f / 9f),
                     cornerRadius = 16.dp,
                 )
-                if (movie.tags.contains("watched")) {
+                if (movie.isWatched()) {
                     WatchFlag(Modifier.align(Alignment.TopEnd).padding(7.dp))
                 }
             }
@@ -1574,7 +1580,7 @@ private fun homePlaybackSeasonFromFolder(folderLevels: String?): Int? {
 }
 
 private fun MovieDto.isUnfinishedForHomePlayback(): Boolean =
-    tags.none { it.equals("watched", ignoreCase = true) } &&
+    !isWatched() &&
         (progressPercent == null || progressPercent < 95.0)
 
 private fun List<MovieDto>.sortedMoviesForHome(sort: String): List<MovieDto> = when (sort) {

@@ -206,6 +206,29 @@ class PlayerUiCompletenessSourceTest {
     }
 
     @Test
+    fun fullscreenLifecycleKeepsSystemUiAndOrientationInSync() {
+        val detailScreen = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/screens/DetailScreen.kt")
+            .readText()
+        val shared = appRoot
+            .resolve("src/main/java/com/zasenjc/mediatree/ui/components/SharedComponents.kt")
+            .readText()
+
+        assertTrue(detailScreen.contains("DisposableEffect(activeMovieId, session.activeProviderType)"))
+        assertTrue(detailScreen.contains("BackHandler"))
+        assertTrue(detailScreen.contains("capturePlaybackPosition(syncToBackend = true)"))
+        assertTrue(detailScreen.contains("fun exitFullscreen()"))
+        assertTrue(detailScreen.contains("fullscreenRequested = false"))
+        assertTrue(detailScreen.contains("activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT"))
+        assertTrue(detailScreen.contains("onChromeVisibleChange(true)"))
+        assertTrue(shared.contains("fun FullscreenSystemBarsEffect(enabled: Boolean)"))
+        assertTrue(shared.contains("controller?.hide(WindowInsetsCompat.Type.systemBars())"))
+        assertTrue(shared.contains("controller?.show(WindowInsetsCompat.Type.systemBars())"))
+        assertTrue(shared.contains("Lifecycle.Event.ON_RESUME"))
+        assertTrue(shared.contains("handler.post { applySystemBars() }"))
+    }
+
+    @Test
     fun fullscreenControlStaysOnBottomRowTrailingEdge() {
         val player = appRoot
             .resolve("src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt")
@@ -421,9 +444,15 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(loadBlock.contains("deferredStartSeekSeconds = deferredPlaybackStartSeek(startPosition)"))
         assertTrue(loadBlock.contains("seekingPositionSeconds = null"))
         assertTrue(loadBlock.contains("completedReported = false"))
-        assertTrue(loadBlock.contains("startPositionSeconds = 0.0"))
+        assertFalse(loadBlock.contains("startPositionSeconds"))
         assertTrue(player.contains("val pendingResumePosition = deferredStartSeekSeconds"))
+        assertTrue(player.contains("deferredPlaybackStartSeekAction("))
+        assertTrue(player.contains("controllerDurationSeconds = controllerDuration"))
+        assertTrue(player.contains("controllerPercentPosition = controllerPercent"))
+        assertTrue(player.contains("DeferredPlaybackStartSeekAction.Wait -> continue"))
+        assertTrue(player.contains("DeferredPlaybackStartSeekAction.Seek ->"))
         assertTrue(player.contains("controller.seekTo(pendingResumePosition)"))
+        assertTrue(player.contains("deferredStartSeekAttempts += 1"))
     }
 
     @Test

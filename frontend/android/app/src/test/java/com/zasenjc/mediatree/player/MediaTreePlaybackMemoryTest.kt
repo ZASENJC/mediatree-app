@@ -15,6 +15,60 @@ class MediaTreePlaybackMemoryTest {
     }
 
     @Test
+    fun deferredPlaybackStartSeekWaitsForMpvReadinessBeforeRetrying() {
+        assertEquals(
+            DeferredPlaybackStartSeekAction.Wait,
+            deferredPlaybackStartSeekAction(
+                targetPositionSeconds = 171.32,
+                controllerPositionSeconds = 0.0,
+                controllerDurationSeconds = 0.0,
+                controllerPercentPosition = 0.0,
+                attempts = 0,
+            ),
+        )
+        assertEquals(
+            DeferredPlaybackStartSeekAction.Seek,
+            deferredPlaybackStartSeekAction(
+                targetPositionSeconds = 171.32,
+                controllerPositionSeconds = 0.0,
+                controllerDurationSeconds = 1_000.0,
+                controllerPercentPosition = 0.0,
+                attempts = 0,
+            ),
+        )
+        assertEquals(
+            DeferredPlaybackStartSeekAction.Seek,
+            deferredPlaybackStartSeekAction(
+                targetPositionSeconds = 171.32,
+                controllerPositionSeconds = 40.0,
+                controllerDurationSeconds = 1_000.0,
+                controllerPercentPosition = 4.0,
+                attempts = 4,
+            ),
+        )
+        assertEquals(
+            DeferredPlaybackStartSeekAction.Complete,
+            deferredPlaybackStartSeekAction(
+                targetPositionSeconds = 171.32,
+                controllerPositionSeconds = 170.5,
+                controllerDurationSeconds = 1_000.0,
+                controllerPercentPosition = 17.0,
+                attempts = 4,
+            ),
+        )
+        assertEquals(
+            DeferredPlaybackStartSeekAction.Complete,
+            deferredPlaybackStartSeekAction(
+                targetPositionSeconds = 171.32,
+                controllerPositionSeconds = 0.0,
+                controllerDurationSeconds = 1_000.0,
+                controllerPercentPosition = 0.0,
+                attempts = DeferredPlaybackStartSeekMaxAttempts,
+            ),
+        )
+    }
+
+    @Test
     fun resumesBackendPositionOnlyWhenVideoIsUnfinished() {
         assertEquals(
             120.0,

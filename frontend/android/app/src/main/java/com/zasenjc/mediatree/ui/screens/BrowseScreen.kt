@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Image
@@ -978,6 +979,9 @@ private fun FolderPosterCard(
                         cornerRadius = 12.dp,
                     )
                 }
+                if (folder.folderWatched == true) {
+                    WatchFlag(Modifier.align(Alignment.TopEnd).padding(7.dp))
+                }
             }
             Text(
                 title,
@@ -995,6 +999,23 @@ private fun FolderPosterCard(
                 modifier = Modifier.padding(horizontal = 2.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun WatchFlag(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 10.dp, bottomEnd = 10.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        tonalElevation = 3.dp,
+    ) {
+        Icon(
+            Icons.Default.Flag,
+            contentDescription = "已观看",
+            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp).size(16.dp),
+        )
     }
 }
 

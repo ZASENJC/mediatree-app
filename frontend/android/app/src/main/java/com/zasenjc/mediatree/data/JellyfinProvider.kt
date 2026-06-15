@@ -228,7 +228,7 @@ open class JellyfinProvider(
         val position = item.playbackPosition ?: 0.0
         return ProgressDto(
             position = position,
-            played = item.tags.contains("watched"),
+            played = item.isWatched(),
             progressPercent = item.progressPercent ?: 0.0,
         )
     }

@@ -246,6 +246,19 @@ data class MovieDto(
     @SerialName("special_parent_levels") val specialParentLevels: String? = null,
 )
 
+fun MovieDto.hasTag(tag: String): Boolean =
+    tags.any { it.equals(tag, ignoreCase = true) }
+
+fun MovieDto.withTag(tag: String): MovieDto =
+    if (hasTag(tag)) this else copy(tags = tags + tag)
+
+fun MovieDto.withoutTag(tag: String): MovieDto =
+    copy(tags = tags.filterNot { it.equals(tag, ignoreCase = true) })
+
+fun MovieDto.isFavorite(): Boolean = hasTag("favorite")
+
+fun MovieDto.isWatched(): Boolean = hasTag("watched")
+
 @Serializable
 data class ExternalAudioTrackDto(
     val path: String = "",

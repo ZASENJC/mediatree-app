@@ -2,8 +2,6 @@ package com.zasenjc.mediatree.player
 
 import android.content.Context
 import android.view.Surface
-import com.zasenjc.mediatree.data.PlaybackMemoryLogger
-import com.zasenjc.mediatree.data.memoryLogValue
 import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -89,7 +87,6 @@ class MpvPlayerController(
     private data class PendingLoad(
         val url: String,
         val headers: Map<String, String>,
-        val startPositionSeconds: Double,
     )
 
     private var initialized = false
@@ -143,20 +140,12 @@ class MpvPlayerController(
     fun loadUrl(
         url: String,
         headers: Map<String, String> = emptyMap(),
-        startPositionSeconds: Double = 0.0,
     ) {
         initialize()
-        val startPosition = rememberableStartPosition(startPositionSeconds)
         if (loadedSource?.sameMediaRequest(url, headers) == true && pendingLoad == null) {
-            PlaybackMemoryLogger.debug(
-                "mpv-load-skip sameSource=true start=${startPosition.memoryLogValue()}",
-            )
             return
         }
-        pendingLoad = PendingLoad(url, headers, startPosition)
-        PlaybackMemoryLogger.debug(
-            "mpv-load-queue hasSurface=$surfaceAttached start=${startPosition.memoryLogValue()} headers=${headers.size}",
-        )
+        pendingLoad = PendingLoad(url, headers)
         if (!surfaceAttached) return
         flushPendingLoad()
     }
@@ -174,16 +163,10 @@ class MpvPlayerController(
         backend.command(loadFileCommand(request))
         fileLoaded = true
         loadedSource = request
-        PlaybackMemoryLogger.debug(
-            "mpv-load-dispatch start=${request.startPositionSeconds.memoryLogValue()} deferredSeek=${request.startPositionSeconds > 0.0}",
-        )
     }
 
     private fun loadFileCommand(request: PendingLoad): Array<String> =
         arrayOf("loadfile", request.url, "replace")
-
-    private fun rememberableStartPosition(positionSeconds: Double): Double =
-        positionSeconds.takeIf { it.isFinite() && it > 0.0 } ?: 0.0
 
     fun play() {
         if (!initialized) return

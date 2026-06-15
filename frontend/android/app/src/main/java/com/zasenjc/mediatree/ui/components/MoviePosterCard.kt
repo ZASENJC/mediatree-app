@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
@@ -40,6 +41,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zasenjc.mediatree.data.MovieDto
+import com.zasenjc.mediatree.data.isFavorite
+import com.zasenjc.mediatree.data.isWatched
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -61,8 +64,9 @@ fun MoviePosterCard(
             imageUrl = imageUrl,
             aspectRatio = aspectRatio,
             showFavorite = showFavorite,
-            favorite = movie.tags.contains("favorite"),
-            progress = progress.takeIf { it > 0.0 && !movie.tags.contains("watched") },
+            favorite = movie.isFavorite(),
+            watched = movie.isWatched(),
+            progress = progress.takeIf { it > 0.0 && !movie.isWatched() },
             onClick = onClick,
             onLongClick = { sheetOpen = true },
         )
@@ -110,8 +114,9 @@ fun EpisodeLandscapeCard(
             imageUrl = imageUrl,
             aspectRatio = 16f / 9f,
             showFavorite = showFavorite,
-            favorite = movie.tags.contains("favorite"),
-            progress = progress.takeIf { it > 0.0 && !movie.tags.contains("watched") },
+            favorite = movie.isFavorite(),
+            watched = movie.isWatched(),
+            progress = progress.takeIf { it > 0.0 && !movie.isWatched() },
             onClick = onClick,
             onLongClick = onClick,
             leadingPlayIcon = true,
@@ -128,6 +133,7 @@ private fun PosterImageFrame(
     aspectRatio: Float,
     showFavorite: Boolean,
     favorite: Boolean,
+    watched: Boolean,
     progress: Double?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -169,6 +175,11 @@ private fun PosterImageFrame(
                     modifier = Modifier.align(Alignment.TopEnd).padding(top = 7.dp, end = 8.dp),
                 )
             }
+            if (watched) {
+                WatchRibbon(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 7.dp, end = if (showFavorite) 34.dp else 8.dp),
+                )
+            }
             if (progress != null) {
                 LinearProgressIndicator(
                     progress = { (progress / 100.0).toFloat() },
@@ -182,6 +193,22 @@ private fun PosterImageFrame(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun WatchRibbon(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp, bottomStart = 10.dp, bottomEnd = 10.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.92f),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Flag,
+            contentDescription = "已观看",
+            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 5.dp).size(16.dp),
+        )
     }
 }
 

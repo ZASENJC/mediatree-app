@@ -38,6 +38,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,6 +49,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 const val BackendSetupRequiredMessage = "请先在设置页中配置后端服务"
 
@@ -173,16 +178,40 @@ fun InfoLine(label: String, value: String) {
 @Composable
 fun FullscreenSystemBarsEffect(enabled: Boolean) {
     val activity = LocalContext.current.findActivity()
-    DisposableEffect(enabled, activity) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val enabledState by rememberUpdatedState(enabled)
+    DisposableEffect(enabled, activity, lifecycleOwner) {
         val window = activity?.window
         val controller = window?.let { WindowInsetsControllerCompat(it, it.decorView) }
-        if (enabled) {
-            controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            controller?.hide(WindowInsetsCompat.Type.systemBars())
-        } else {
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        fun applySystemBars() {
+            if (enabledState) {
+                controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller?.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller?.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START,
+                Lifecycle.Event.ON_RESUME,
+                -> {
+                    applySystemBars()
+                    if (enabledState) {
+                        handler.post { applySystemBars() }
+                    }
+                }
+                else -> Unit
+            }
+        }
+        applySystemBars()
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            handler.removeCallbacksAndMessages(null)
             controller?.show(WindowInsetsCompat.Type.systemBars())
         }
-        onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
     }
 }
 

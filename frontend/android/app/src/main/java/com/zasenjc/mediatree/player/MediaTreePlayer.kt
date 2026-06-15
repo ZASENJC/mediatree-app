@@ -88,6 +88,14 @@ private const val LockedButtonAutoHideMillis = 5_000L
 private const val HorizontalSeekSecondsPerScreen = 90.0
 private const val DoubleTapSideZoneFraction = 0.22f
 private const val TemporaryFastForwardSpeed = 2.0
+const val DeferredPlaybackStartSeekMaxAttempts = 12
+private const val DeferredPlaybackStartSeekToleranceSeconds = 1.5
+
+enum class DeferredPlaybackStartSeekAction {
+    Wait,
+    Seek,
+    Complete,
+}
 
 private val PlayerSpeeds = listOf(0.75, 1.0, 1.25, 1.5, 2.0)
 private val AspectRatioOptions = listOf(
@@ -119,6 +127,29 @@ fun restoredPlaybackSpeed(speedBeforeHold: Double, currentSpeed: Double): Double
 
 fun deferredPlaybackStartSeek(startPositionSeconds: Double): Double? =
     startPositionSeconds.takeIf { it.isFinite() && it > 0.0 }
+
+fun deferredPlaybackStartSeekAction(
+    targetPositionSeconds: Double,
+    controllerPositionSeconds: Double,
+    controllerDurationSeconds: Double,
+    controllerPercentPosition: Double,
+    attempts: Int,
+): DeferredPlaybackStartSeekAction {
+    if (!targetPositionSeconds.isFinite() || targetPositionSeconds <= 0.0) {
+        return DeferredPlaybackStartSeekAction.Complete
+    }
+    val hasPlaybackState = controllerPositionSeconds > 0.0 ||
+        controllerDurationSeconds > 0.0 ||
+        controllerPercentPosition > 0.0
+    if (!hasPlaybackState) return DeferredPlaybackStartSeekAction.Wait
+    if (attempts >= DeferredPlaybackStartSeekMaxAttempts) return DeferredPlaybackStartSeekAction.Complete
+    val distance = kotlin.math.abs(controllerPositionSeconds.coerceAtLeast(0.0) - targetPositionSeconds)
+    return if (distance > DeferredPlaybackStartSeekToleranceSeconds) {
+        DeferredPlaybackStartSeekAction.Seek
+    } else {
+        DeferredPlaybackStartSeekAction.Complete
+    }
+}
 
 data class PlaybackPositionSnapshot(
     val positionSeconds: Double,
@@ -156,6 +187,7 @@ fun MediaTreePlayer(
     var durationSeconds by remember { mutableDoubleStateOf(0.0) }
     var percentPosition by remember { mutableDoubleStateOf(0.0) }
     var deferredStartSeekSeconds by remember { mutableStateOf<Double?>(null) }
+    var deferredStartSeekAttempts by remember { mutableStateOf(0) }
     var seekingPositionSeconds by remember { mutableStateOf<Double?>(null) }
     var tickCount by remember { mutableStateOf(0) }
     var completedReported by remember(playbackSource) { mutableStateOf(false) }
@@ -274,6 +306,7 @@ fun MediaTreePlayer(
         durationSeconds = 0.0
         percentPosition = 0.0
         deferredStartSeekSeconds = deferredPlaybackStartSeek(startPosition)
+        deferredStartSeekAttempts = 0
         seekingPositionSeconds = null
         audioTracks = emptyList()
         selectedAudioTrackId = ""
@@ -284,7 +317,6 @@ fun MediaTreePlayer(
             controller.loadUrl(
                 url = playbackSource.uri,
                 headers = playbackSource.headers,
-                startPositionSeconds = 0.0,
             )
             controller.play()
             isPlaying = true
@@ -328,12 +360,30 @@ fun MediaTreePlayer(
             val controllerPercent = playbackState.percentPosition.coerceIn(0.0, 100.0)
             val pendingResumePosition = deferredStartSeekSeconds
             if (pendingResumePosition != null) {
-                controller.seekTo(pendingResumePosition)
-                deferredStartSeekSeconds = null
-                seekingPositionSeconds = null
-                positionSeconds = pendingResumePosition
-                percentPosition = playbackPercent(pendingResumePosition, controllerDuration, controllerPercent)
-                continue
+                when (deferredPlaybackStartSeekAction(
+                        targetPositionSeconds = pendingResumePosition,
+                        controllerPositionSeconds = controllerPosition,
+                        controllerDurationSeconds = controllerDuration,
+                        controllerPercentPosition = controllerPercent,
+                        attempts = deferredStartSeekAttempts,
+                    )
+                ) {
+                    DeferredPlaybackStartSeekAction.Wait -> continue
+                    DeferredPlaybackStartSeekAction.Seek -> {
+                        controller.seekTo(pendingResumePosition)
+                        deferredStartSeekAttempts += 1
+                        seekingPositionSeconds = null
+                        positionSeconds = pendingResumePosition
+                        percentPosition = playbackPercent(pendingResumePosition, controllerDuration, controllerPercent)
+                        continue
+                    }
+                    DeferredPlaybackStartSeekAction.Complete -> {
+                        deferredStartSeekSeconds = null
+                        seekingPositionSeconds = null
+                        positionSeconds = if (controllerPosition > 0.0) controllerPosition else pendingResumePosition
+                        percentPosition = playbackPercent(positionSeconds, controllerDuration, controllerPercent)
+                    }
+                }
             }
             val resolvedPosition = if (controllerPosition > 0.0) {
                 controllerPosition
