@@ -19,19 +19,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +64,8 @@ import com.zasenjc.mediatree.playback.PlaybackSource
 import com.zasenjc.mediatree.ui.components.ErrorPane
 import com.zasenjc.mediatree.ui.components.FullscreenSystemBarsEffect
 import com.zasenjc.mediatree.ui.components.LoadingPane
+import com.zasenjc.mediatree.ui.components.MediaAsyncImage
+import com.zasenjc.mediatree.ui.components.shapeAwareClickable
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -259,9 +261,6 @@ private fun M3uChannelSwitcher(
 ) {
     val currentIndex = channels.indexOfFirst { it.id == currentChannel.id }
     if (channels.isEmpty() || currentIndex < 0) return
-    val canStep = channels.size > 1
-    val previous = channels[(currentIndex - 1 + channels.size) % channels.size]
-    val next = channels[(currentIndex + 1) % channels.size]
 
     Column(
         modifier = modifier,
@@ -277,54 +276,106 @@ private fun M3uChannelSwitcher(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalIconButton(
-                    enabled = canStep,
-                    onClick = { onSelect(previous) },
-                ) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "上一台")
-                }
-                FilledTonalIconButton(
-                    enabled = canStep,
-                    onClick = { onSelect(next) },
-                ) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "下一台")
-                }
-            }
         }
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(108.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 300.dp),
             contentPadding = PaddingValues(vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(channels, key = { it.id }) { candidate ->
                 val selected = candidate.id == currentChannel.id
-                FilterChip(
+                M3uChannelMiniCard(
+                    channel = candidate,
                     selected = selected,
-                    onClick = {
-                        if (!selected) onSelect(candidate)
-                    },
-                    label = {
-                        Text(
-                            text = candidate.name,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.widthIn(max = 168.dp),
-                        )
-                    },
-                    leadingIcon = if (selected) {
-                        {
-                            Icon(
-                                Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                            )
-                        }
-                    } else {
-                        null
-                    },
+                    onClick = { if (!selected) onSelect(candidate) },
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun M3uChannelMiniCard(
+    channel: M3uChannel,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Card(
+            modifier = Modifier.shapeAwareClickable(shape = shape, onClick = onClick),
+            shape = shape,
+            colors = CardDefaults.cardColors(
+                containerColor = if (selected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+                } else {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                },
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 10f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (channel.logoUrl.isNotBlank()) {
+                    MediaAsyncImage(
+                        imageUrl = channel.logoUrl,
+                        contentDescription = channel.name,
+                        modifier = Modifier.fillMaxWidth(),
+                        cornerRadius = 12.dp,
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.LiveTv,
+                        contentDescription = null,
+                        tint = if (selected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+                if (selected) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(5.dp)
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(999.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = "播放中",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+        Text(
+            text = channel.name,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = channel.group.ifBlank { "直播频道" },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
