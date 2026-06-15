@@ -175,16 +175,12 @@ class MpvPlayerController(
         fileLoaded = true
         loadedSource = request
         PlaybackMemoryLogger.debug(
-            "mpv-load-dispatch start=${request.startPositionSeconds.memoryLogValue()} option=${request.startPositionSeconds > 0.0}",
+            "mpv-load-dispatch start=${request.startPositionSeconds.memoryLogValue()} deferredSeek=${request.startPositionSeconds > 0.0}",
         )
     }
 
     private fun loadFileCommand(request: PendingLoad): Array<String> =
-        if (request.startPositionSeconds > 0.0) {
-            arrayOf("loadfile", request.url, "replace", "-1", "start=${request.startPositionSeconds}")
-        } else {
-            arrayOf("loadfile", request.url, "replace")
-        }
+        arrayOf("loadfile", request.url, "replace")
 
     private fun rememberableStartPosition(positionSeconds: Double): Double =
         positionSeconds.takeIf { it.isFinite() && it > 0.0 } ?: 0.0

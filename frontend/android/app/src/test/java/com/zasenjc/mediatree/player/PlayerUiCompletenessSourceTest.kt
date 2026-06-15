@@ -370,9 +370,12 @@ class PlayerUiCompletenessSourceTest {
         val loadBlock = player.substringAfter("LaunchedEffect(playbackSource.uri, playbackSource.headers)").substringBefore("DisposableEffect(controller, playbackSource, selectedSubtitle)")
 
         assertTrue(loadBlock.contains("positionSeconds = startPosition.coerceAtLeast(0.0)"))
+        assertTrue(loadBlock.contains("deferredStartSeekSeconds = deferredPlaybackStartSeek(startPosition)"))
         assertTrue(loadBlock.contains("seekingPositionSeconds = null"))
         assertTrue(loadBlock.contains("completedReported = false"))
-        assertTrue(loadBlock.contains("startPositionSeconds = startPosition"))
+        assertTrue(loadBlock.contains("startPositionSeconds = 0.0"))
+        assertTrue(player.contains("val pendingResumePosition = deferredStartSeekSeconds"))
+        assertTrue(player.contains("controller.seekTo(pendingResumePosition)"))
     }
 
     @Test

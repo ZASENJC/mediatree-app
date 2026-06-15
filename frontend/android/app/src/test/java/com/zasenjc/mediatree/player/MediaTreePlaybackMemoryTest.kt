@@ -8,6 +8,13 @@ import org.junit.Test
 
 class MediaTreePlaybackMemoryTest {
     @Test
+    fun deferredPlaybackStartSeekKeepsPositiveResumePointsOutOfInitialLoad() {
+        assertEquals(171.32, deferredPlaybackStartSeek(171.32) ?: 0.0, 0.001)
+        assertEquals(null, deferredPlaybackStartSeek(0.0))
+        assertEquals(null, deferredPlaybackStartSeek(Double.NaN))
+    }
+
+    @Test
     fun resumesBackendPositionOnlyWhenVideoIsUnfinished() {
         assertEquals(
             120.0,

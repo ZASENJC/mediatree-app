@@ -30,7 +30,7 @@ class MpvPlayerControllerTest {
             listOf(
                 listOf("change-list", "http-header-fields", "clr", ""),
                 listOf("change-list", "http-header-fields", "append", "Authorization: Bearer token"),
-                listOf("loadfile", "http://media.local/api/stream/42", "replace", "-1", "start=12.5"),
+                listOf("loadfile", "http://media.local/api/stream/42", "replace"),
             ),
             backend.commands,
         )
@@ -55,7 +55,7 @@ class MpvPlayerControllerTest {
             listOf(
                 listOf("change-list", "http-header-fields", "clr", ""),
                 listOf("change-list", "http-header-fields", "append", "Authorization: Bearer token"),
-                listOf("loadfile", "http://media.local/api/stream/42", "replace", "-1", "start=12.5"),
+                listOf("loadfile", "http://media.local/api/stream/42", "replace"),
             ),
             backend.commands,
         )
