@@ -130,6 +130,7 @@ class PlaybackSourceTest {
         assertTrue(detailScreen.contains("mediaTokenExpiresAt"))
         assertTrue(detailScreen.contains("mediaTokenShouldRefresh"))
         assertTrue(detailScreen.contains("ensureMediaToken("))
-        assertTrue(detailScreen.contains("thumbnailUrl(serverUrl, movie.id, index)"))
+        assertTrue(detailScreen.contains("detailStillImages("))
+        assertTrue(detailScreen.contains("thumbnailUrl = { movieId, index -> provider.thumbnailUrl(serverUrl, movieId, index) }"))
     }
 }

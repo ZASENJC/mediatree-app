@@ -1057,39 +1057,42 @@ private fun ThumbnailStrip(
     var selectedThumbnailUrl by remember(movie.id) { mutableStateOf<String?>(null) }
     var selectedThumbnailIndex by remember(movie.id) { mutableStateOf(0) }
     val thumbnails = remember(movie.id, movie.episodeStill, movie.javdbThumbnails, serverUrl, provider, providerType, fallbackStill) {
-        buildList {
-            add(movie.episodeStill?.let { UrlUtils.resolveApiUrl(serverUrl, it) } ?: fallbackStill)
-            movie.javdbThumbnails.forEachIndexed { index, value ->
-                if (providerType == ProviderType.MediaTree) {
-                    add(provider.thumbnailUrl(serverUrl, movie.id, index))
-                } else {
-                    UrlUtils.resolveApiUrl(serverUrl, value)?.let { add(it) }
-                }
-            }
-        }.distinct().take(10)
+        detailStillImages(
+            movie = movie,
+            serverUrl = serverUrl,
+            providerType = providerType,
+            fallbackStill = fallbackStill,
+            thumbnailUrl = { movieId, index -> provider.thumbnailUrl(serverUrl, movieId, index) },
+        )
     }
     if (thumbnails.isEmpty()) return
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(thumbnails.size, key = { thumbnails[it] }) { index ->
-                val url = thumbnails[index]
+                val still = thumbnails[index]
                 val shape = RoundedCornerShape(12.dp)
+                var imageUrl by remember(still) { mutableStateOf(still.url) }
                 AsyncImage(
-                    model = rememberMediaTreeImageRequest(imageUrl = url),
+                    model = rememberMediaTreeImageRequest(imageUrl = imageUrl),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    onError = {
+                        if (still.fallbackUrl != null && imageUrl != still.fallbackUrl) {
+                            imageUrl = still.fallbackUrl
+                        }
+                    },
                     modifier = Modifier
                         .width(132.dp)
                         .aspectRatio(16f / 9f)
                         .shapeAwareClickable(shape = shape) {
                             selectedThumbnailIndex = index
-                            selectedThumbnailUrl = url
+                            selectedThumbnailUrl = still.viewerUrl
                         },
                 )
             }
         }
     }
-    selectedThumbnailUrl?.let { url ->
+    selectedThumbnailUrl?.let {
         StillImageViewer(
             imageUrls = thumbnails,
             initialPage = selectedThumbnailIndex,
@@ -1099,7 +1102,7 @@ private fun ThumbnailStrip(
 }
 
 @Composable
-private fun StillImageViewer(imageUrls: List<String>, initialPage: Int, onDismiss: () -> Unit) {
+private fun StillImageViewer(imageUrls: List<DetailStillImage>, initialPage: Int, onDismiss: () -> Unit) {
     if (imageUrls.isEmpty()) return
     val pagerState = rememberPagerState(
         initialPage = initialPage.coerceIn(0, imageUrls.lastIndex),
@@ -1118,14 +1121,21 @@ private fun StillImageViewer(imageUrls: List<String>, initialPage: Int, onDismis
             contentAlignment = Alignment.Center,
         ) {
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                val still = imageUrls[page]
+                var imageUrl by remember(still) { mutableStateOf(still.url) }
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
                     AsyncImage(
-                        model = rememberMediaTreeImageRequest(imageUrl = imageUrls[page]),
+                        model = rememberMediaTreeImageRequest(imageUrl = imageUrl),
                         contentDescription = "剧照预览",
                         contentScale = ContentScale.Fit,
+                        onError = {
+                            if (still.fallbackUrl != null && imageUrl != still.fallbackUrl) {
+                                imageUrl = still.fallbackUrl
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .fillMaxHeight(),

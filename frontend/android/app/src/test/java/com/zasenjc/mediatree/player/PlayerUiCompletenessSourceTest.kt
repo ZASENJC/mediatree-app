@@ -477,10 +477,11 @@ class PlayerUiCompletenessSourceTest {
         assertTrue(detailScreen.contains("selectedThumbnailIndex"))
         assertTrue(detailScreen.contains("imageUrls = thumbnails"))
         assertTrue(detailScreen.contains("initialPage = selectedThumbnailIndex"))
+        assertTrue(detailScreen.contains("still.fallbackUrl"))
         assertTrue(viewerBlock.contains("val pagerState = rememberPagerState("))
         assertTrue(viewerBlock.contains("pageCount = { imageUrls.size }"))
         assertTrue(viewerBlock.contains("HorizontalPager("))
-        assertTrue(viewerBlock.contains("imageUrls[page]"))
+        assertTrue(viewerBlock.contains("val still = imageUrls[page]"))
     }
 
     @Test
