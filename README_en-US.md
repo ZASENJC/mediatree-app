@@ -35,6 +35,7 @@ Deploying with the [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) b
 
 - Connect to `MediaTree`, `Jellyfin`, `Emby`, `SMB`, and `WebDAV` from one app
 - Poster-first library browsing with recent watching, folders, favorites, and detail pages
+- Optional source-filename Home display keeps the poster grid while browsing by original folder and file names
 - Detail-page stills use a compact multi-row grid and open into swipeable, zoomable, pannable previews
 - SMB/WebDAV mounted folders support video and image browsing, with image thumbnails, swiping, and zooming
 - Native playback with subtitles, progress memory, gestures, and landscape mode

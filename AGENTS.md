@@ -104,8 +104,8 @@ Prefer app-side compatibility for response shape differences. If an API mismatch
 
 ### App screens
 
-- `HomeScreen.kt` — MD3 home feed, recent watching, poster grid, search, sort, and scroll-aware overlay chrome.
-- `BrowseScreen.kt` — folder browsing, movie/image lists, mounted SMB/WebDAV media thumbnails, breadcrumbs, search, sort, and scroll-aware overlay chrome.
+- `HomeScreen.kt` — MD3 home feed, recent watching, poster grid, source-filename display mode, search, sort, and scroll-aware overlay chrome.
+- `BrowseScreen.kt` — folder browsing, movie/image lists, source-filename poster drilldown, mounted SMB/WebDAV media thumbnails, breadcrumbs, search, sort, and scroll-aware overlay chrome.
 - `FavoritesScreen.kt` — favorite-tagged media with mixed episode/poster grid and scroll-aware overlay chrome.
 - `DetailScreen.kt` — player, subtitle selector, metadata, favorite/watched actions, cast, episodes, stills, and staff.
 - `ImageViewerScreen.kt` — fullscreen image viewing for detail stills and mounted images, with hidden bottom chrome, same-folder swiping, zoom, and pan.

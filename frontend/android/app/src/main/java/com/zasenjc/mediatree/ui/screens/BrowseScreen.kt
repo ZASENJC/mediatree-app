@@ -502,6 +502,7 @@ fun BrowseScreen(
     sourceFileNameMode: Boolean = false,
     viewMode: String,
     onViewModeChange: (String) -> Unit,
+    onExitToHome: () -> Unit = {},
     browseScrollPositions: MutableMap<String, BrowseScrollPosition>,
     chromeVisible: Boolean = true,
     onChromeVisibleChange: (Boolean) -> Unit = {},
@@ -855,13 +856,15 @@ fun BrowseScreen(
                     navigationIcon = {
                         if (initialFolder.isNotBlank()) {
                             IconButton(onClick = {
-                                val parent = initialFolder.trimEnd('/').substringBeforeLast("/", missingDelimiterValue = "")
-                                if (parent.isNotBlank()) {
-                                    onNavigate("browse?folder=${Uri.encode(parent)}${sourceFileNameRouteSuffix(sourceFileNameMode)}")
-                                } else if (sourceFileNameMode) {
-                                    onNavigate("browse?folder=&sourceFileName=true")
+                                if (sourceFileNameMode) {
+                                    onExitToHome()
                                 } else {
-                                    onNavigate("browse")
+                                    val parent = initialFolder.trimEnd('/').substringBeforeLast("/", missingDelimiterValue = "")
+                                    if (parent.isNotBlank()) {
+                                        onNavigate("browse?folder=${Uri.encode(parent)}")
+                                    } else {
+                                        onNavigate("browse")
+                                    }
                                 }
                             }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回上级")
@@ -1588,9 +1591,6 @@ private fun BrowseContentSnapshot.scrollMemoryKey(
     recursiveVideosOnly.toString(),
     sourceFileNameMode.toString(),
 ).joinToString("|")
-
-private fun sourceFileNameRouteSuffix(enabled: Boolean): String =
-    if (enabled) "&sourceFileName=true" else ""
 
 private fun androidx.compose.foundation.lazy.LazyListState.toBrowseScrollPosition(): BrowseScrollPosition =
     BrowseScrollPosition(

@@ -12,6 +12,7 @@ All notable changes to MediaTree are documented here.
 
 - Changed detail-page stills from a single horizontal strip to a compact multi-row grid
 - Reused the fullscreen image viewer zoom and pan gestures for detail-page still previews
+- Added a homepage display mode that keeps the poster grid but shows source filenames, and made source-file-name folder browsing return to Home from that mode
 
 ---
 

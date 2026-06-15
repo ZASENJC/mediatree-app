@@ -224,6 +224,13 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
         .trimEnd('/')
         .substringBeforeLast("/", missingDelimiterValue = "")
 
+    fun exitSourceFileNameBrowseToHome() {
+        browseFolder = ""
+        browseRecursiveVideos = false
+        browseSourceFileName = false
+        navigateTopDestination("home")
+    }
+
     fun handleAppNavigate(route: String) {
         when {
             route.startsWith("detail/") -> navController.navigate(route) { launchSingleTop = true }
@@ -247,13 +254,14 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
     }
 
     BackHandler(enabled = pagerState.currentPage == topDestinations.indexOfFirst { it.route == "browse" } && browseFolder.isNotBlank()) {
-        val parent = browseParentFolder()
-        browseFolder = parent
-        browseRecursiveVideos = false
-        if (parent.isBlank()) {
-            browseSourceFileName = false
+        if (browseSourceFileName) {
+            exitSourceFileNameBrowseToHome()
+        } else {
+            val parent = browseParentFolder()
+            browseFolder = parent
+            browseRecursiveVideos = false
+            navigateTopDestination("browse")
         }
-        navigateTopDestination("browse")
     }
 
     LaunchedEffect(initialMovieId, session.serverUrl, session.activeProviderType, session.token, session.activeUserId) {
@@ -332,6 +340,7 @@ private fun MainShell(container: AppContainer, session: Session, deepLinkData: U
                                 sourceFileNameMode = browseSourceFileName,
                                 viewMode = browseViewMode,
                                 onViewModeChange = { browseViewMode = it },
+                                onExitToHome = ::exitSourceFileNameBrowseToHome,
                                 browseScrollPositions = browseScrollPositions,
                                 chromeVisible = chromeVisible,
                                 onChromeVisibleChange = { chromeVisible = it },
