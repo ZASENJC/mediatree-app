@@ -2,7 +2,7 @@
 
 Native Android client for MediaTree.
 
-This project builds the Android app only. It connects to an existing MediaTree backend by server URL and does not bundle backend services, Python runtime, SQLite data, Docker assets, scanners, or scrapers into the APK.
+This project builds the Android app only. It connects to existing MediaTree/Jellyfin/Emby servers, M3U subscription URLs, and SMB/WebDAV storage sources without bundling backend services, Python runtime, SQLite data, Docker assets, scanners, or scrapers into the APK.
 
 ## Build
 
@@ -46,6 +46,12 @@ http://192.168.1.10:27580
 ```
 
 The app uses the backend API for auth, library browsing, metadata, subtitles, streaming, and playback progress.
+
+Additional sources can be configured from Settings:
+
+- Jellyfin/Emby backends with separate connection profiles.
+- M3U subscription URLs for IPTV/live channels, search, favorites, and native playback.
+- SMB/WebDAV storage sources for mounted video and image browsing.
 
 ## Player
 

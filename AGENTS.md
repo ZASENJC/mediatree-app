@@ -6,7 +6,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 - This repository is for `mediatree-app`, the Android client app for MediaTree.
 - Build the app only. Do not package, embed, start, or ship the backend inside the APK.
-- The app adapts to existing media-server APIs by server URL, starting with MediaTree backend compatibility. Backend deployment, media scanning, scraping, transcoding, database storage, and Jellyfin compatibility remain server-side.
+- The app adapts to existing media-server APIs by server URL, starting with MediaTree backend compatibility, and also supports app-side M3U subscriptions plus SMB/WebDAV storage sources. Backend deployment, media scanning, scraping, transcoding, database storage, and Jellyfin compatibility remain server-side.
 - The Git tree should contain app code only. Local backend/upstream reference files belong under ignored `_reference/` directories, and must not be added back to Git or modified unless the user explicitly asks for backend changes.
 - Avoid adding Docker image build/push workflows for app releases. App release artifacts should be APK/AAB or app-specific assets.
 
@@ -72,9 +72,10 @@ This project expects Python 3.12 if backend tests are run.
 
 - `frontend/android/` — native Android project.
 - `frontend/android/app/src/main/java/com/zasenjc/mediatree/MainActivity.kt` — Compose entrypoint and deep-link handling.
-- `frontend/android/app/src/main/java/com/zasenjc/mediatree/data/` — API client, DTOs, session persistence, and ViewModel factory helpers.
+- `frontend/android/app/src/main/java/com/zasenjc/mediatree/data/` — API client, DTOs, session persistence, M3U subscription/cache/favorites models, and ViewModel factory helpers.
 - `frontend/android/app/src/main/java/com/zasenjc/mediatree/ui/` — Compose shell, theme, components, navigation, and screens.
 - `frontend/android/app/src/main/java/com/zasenjc/mediatree/player/MediaTreePlayer.kt` — mpv playback UI layer, subtitle selection, gestures, progress callbacks.
+- `frontend/android/app/src/main/java/com/zasenjc/mediatree/playback/PlaybackSource.kt` — playable source routing for MediaTree, Jellyfin/Emby, M3U, WebDAV, and SMB proxy streams.
 - `frontend/android/app/src/main/java/com/zasenjc/mediatree/util/UrlUtils.kt` — server URL normalization and API URL helpers.
 - `frontend/android/app/src/main/jniLibs/` — bundled native playback libraries. Keep ABI contents intentional and documented.
 
@@ -104,12 +105,13 @@ Prefer app-side compatibility for response shape differences. If an API mismatch
 
 ### App screens
 
-- `HomeScreen.kt` — MD3 home feed, recent watching, poster grid, source-filename display mode, search, sort, and scroll-aware overlay chrome.
+- `HomeScreen.kt` — MD3 home feed, recent watching, poster grid, M3U channel grid/search/favorites, source-filename display mode, search, sort, and scroll-aware overlay chrome.
 - `BrowseScreen.kt` — folder browsing, movie/image lists, source-filename poster drilldown, mounted SMB/WebDAV media thumbnails, breadcrumbs, search, sort, and scroll-aware overlay chrome.
-- `FavoritesScreen.kt` — favorite-tagged media with mixed episode/poster grid and scroll-aware overlay chrome.
+- `FavoritesScreen.kt` — favorite-tagged media and M3U favorite channels with mixed episode/poster/channel grids and scroll-aware overlay chrome.
 - `DetailScreen.kt` — player, subtitle selector, metadata, favorite/watched actions, cast, episodes, stills, and staff.
 - `ImageViewerScreen.kt` — fullscreen image viewing for detail stills and mounted images, with hidden bottom chrome, same-folder swiping, zoom, and pan.
-- `SettingsScreen.kt` — backend connection profiles, multiple Jellyfin/Emby backends, per-profile logout, SMB/WebDAV sources, active library selection, and release update checks.
+- `M3uPlayerScreen.kt` — live channel playback, favorite toggles, and in-player channel switching for M3U subscriptions.
+- `SettingsScreen.kt` — backend connection profiles, M3U subscriptions, multiple Jellyfin/Emby backends, per-profile logout, SMB/WebDAV sources, active library selection, and release update checks.
 - `LoginScreen.kt` — server URL and credential login flow.
 
 ## Packaging Boundaries
@@ -124,6 +126,7 @@ Prefer app-side compatibility for response shape differences. If an API mismatch
 
 - New backend endpoint consumption: `frontend/android/app/src/main/java/com/zasenjc/mediatree/data/MediaTreeApi.kt` + `Models.kt`
 - Login/session behavior: `SessionStore.kt`, `LoginScreen.kt`, `MediaTreeApp.kt`
+- M3U subscriptions/channels/favorites: `M3uModels.kt`, `SessionStore.kt`, `HomeScreen.kt`, `FavoritesScreen.kt`, `M3uPlayerScreen.kt`
 - Server URL handling: `UrlUtils.kt`
 - Player/subtitles/progress: `MediaTreePlayer.kt`, `DetailScreen.kt`
 - Image viewing and mounted image browsing: `ImageViewerScreen.kt`, `BrowseScreen.kt`, `MediaFileTypes.kt`

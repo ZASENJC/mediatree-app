@@ -4,7 +4,7 @@
 
 <h1 align="center">MediaTree App</h1>
 
-<p align="center"><strong>A media library app for MediaTree, Jellyfin, Emby, SMB, and WebDAV.</strong></p>
+<p align="center"><strong>A media library app for MediaTree, Jellyfin, Emby, M3U, SMB, and WebDAV.</strong></p>
 
 <p align="center">
   <strong>English</strong> | <a href="README.md">简体中文</a>
@@ -33,9 +33,10 @@ Deploying with the [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) b
 
 ## Why Use It
 
-- Connect to `MediaTree`, `Jellyfin`, `Emby`, `SMB`, and `WebDAV` from one app
+- Connect to `MediaTree`, `Jellyfin`, `Emby`, `M3U`, `SMB`, and `WebDAV` from one app
 - Poster-first library browsing with recent watching, folders, favorites, and detail pages
 - Optional source-filename Home display keeps the poster grid while browsing by original folder and file names
+- M3U subscriptions support live channel lists, channel search, favorites, and native playback
 - Detail-page stills use a compact multi-row grid and open into swipeable, zoomable, pannable previews
 - SMB/WebDAV mounted folders support video and image browsing, with image thumbnails, swiping, and zooming
 - Native playback with subtitles, progress memory, gestures, and landscape mode
@@ -56,6 +57,7 @@ Deploying with the [`ZASENJC/mediatree`](https://github.com/ZASENJC/mediatree) b
 | `MediaTree` | Server-side media library, metadata, playback, progress, favorites |
 | `Jellyfin` | MediaBrowser-compatible login, multiple backend profiles, library, metadata, playback stream, progress, favorites |
 | `Emby` | Emby-compatible login, multiple backend profiles, library, metadata, playback stream, progress, favorites |
+| `M3U` | IPTV/M3U subscriptions, channel lists, channel search, live playback, channel favorites |
 | `SMB` | Storage source setup, video/image browsing, thumbnails, image viewing |
 | `WebDAV` | Storage source setup, video/image browsing, thumbnails, image viewing |
 

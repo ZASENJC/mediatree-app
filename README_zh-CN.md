@@ -4,7 +4,7 @@
 
 <h1 align="center">MediaTree App</h1>
 
-<p align="center"><strong>一个支持 MediaTree、Jellyfin、Emby、SMB 和 WebDAV 的媒体库 App。</strong></p>
+<p align="center"><strong>一个支持 MediaTree、Jellyfin、Emby、M3U、SMB 和 WebDAV 的媒体库 App。</strong></p>
 
 <p align="center">
   <a href="README_en-US.md">English</a> | <strong>简体中文</strong>
@@ -28,9 +28,10 @@
 
 ## 为什么用它
 
-- 一个 app 连接 `MediaTree`、`Jellyfin`、`Emby`、`SMB` 和 `WebDAV`
+- 一个 app 连接 `MediaTree`、`Jellyfin`、`Emby`、`M3U`、`SMB` 和 `WebDAV`
 - 海报优先的媒体库浏览，支持最近观看、文件夹、收藏和详情页
 - 首页可切换为源文件名显示模式，在保留海报网格的同时按原始文件夹/文件名浏览
+- M3U 订阅支持直播频道列表、频道搜索、收藏和原生播放器播放
 - 详情页剧照使用多行小网格展示，点开后可左右切换、缩放和平移查看
 - SMB/WebDAV 挂载目录支持视频和图片浏览，图片可查看缩略图、左右切换和缩放
 - 原生播放，支持字幕、进度记忆、手势和横屏模式
@@ -56,6 +57,7 @@
 | [`MediaTree`](https://github.com/ZASENJC/mediatree) | 服务端媒体库、元数据、播放、进度、收藏 |
 | `Jellyfin` | MediaBrowser 兼容登录、多后端配置、媒体库、元数据、播放流、进度、收藏 |
 | `Emby` | Emby 兼容登录、多后端配置、媒体库、元数据、播放流、进度、收藏 |
+| `M3U` | IPTV/M3U 订阅、频道列表、频道搜索、直播播放、频道收藏 |
 | `SMB` | 存储源设置、视频/图片浏览、缩略图、图片查看 |
 | `WebDAV` | 存储源设置、视频/图片浏览、缩略图、图片查看 |
 

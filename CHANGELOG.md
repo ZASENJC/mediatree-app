@@ -8,10 +8,14 @@ All notable changes to MediaTree are documented here.
 
 ## Unreleased
 
-## 0.1.07 (2026-06-16) — Home Source Filename Display
+## 0.1.07 (2026-06-16) — M3U Live and Home Source Filename Display
 
 <!-- release-notes:start -->
 
+- Settings can now add, edit, switch, and remove M3U subscription profiles
+- M3U channels now appear on Home with search, cached refreshes, logos, group labels, and channel favorites
+- M3U favorites now have their own Favorites view and open directly into the native player
+- M3U playback now uses the native player with direct stream URLs and an in-player channel switcher
 - Home can now keep the poster grid while showing original source folder and file names
 - Source-filename folder browsing now returns to Home when leaving that Home-launched drilldown
 - Detail-page stills now use a compact multi-row grid
@@ -21,6 +25,7 @@ All notable changes to MediaTree are documented here.
 ### Android App
 
 - Updated Android `versionCode` to `8` and `versionName` to `0.1.07`
+- Added M3U subscription parsing, cache persistence, favorites persistence, profile switching, and direct playback routing
 
 ---
 
