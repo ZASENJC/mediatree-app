@@ -8,6 +8,21 @@ All notable changes to MediaTree are documented here.
 
 ## Unreleased
 
+## 0.1.09 (2026-06-16) — Playback Resume and Watched Flags
+
+<!-- release-notes:start -->
+- Playback resume is reliable again: videos now wait until the native player is ready before jumping to the remembered position
+- Watched flags now appear consistently across Home, Detail episodes, Browse posters, and source-filename folder browsing
+- Exiting fullscreen after the screen has been off for a while now restores the app chrome and system bars correctly
+<!-- release-notes:end -->
+
+### Android App
+
+- Updated Android `versionCode` to `10` and `versionName` to `0.1.09`
+- Centralized watched tag helpers so MediaTree, Jellyfin, and Emby metadata use the same case-insensitive watched/favorite detection
+- Removed mpv `loadfile start=...` resume handling and moved playback memory jumps into a readiness-gated player seek state machine
+- Added regression coverage for watched ribbons, playback resume seeking, mpv load commands, fullscreen lifecycle recovery, and detail progress sync
+
 ## 0.1.08 (2026-06-16) — Player Controls Polish
 
 <!-- release-notes:start -->

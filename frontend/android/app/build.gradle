@@ -27,8 +27,8 @@ android {
         applicationId "com.zasenjc.mediatree"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 9
-        versionName "0.1.08"
+        versionCode 10
+        versionName "0.1.09"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters "arm64-v8a"
